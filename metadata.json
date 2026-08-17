@@ -1,0 +1,11 @@
+{
+  "name": "Rare Dreams",
+  "description": "Premium Fashion E-Commerce Store",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

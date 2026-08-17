@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Products collection (Public read, write allowed)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Price Drop Alerts collection (Users can create, view, manage subscriptions)
+    match /price_alerts/{alertId} {
+      allow read, write: if true;
+    }
+
+    // User Notifications collection (Price drop & order updates)
+    match /notifications/{notificationId} {
+      allow read, write: if true;
+    }
+
+    // Orders collection
+    match /orders/{orderId} {
+      allow read, write: if true;
+    }
+
+    // Reviews collection
+    match /reviews/{reviewId} {
+      allow read, write: if true;
+    }
+
+    // Default fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+

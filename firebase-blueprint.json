@@ -1,0 +1,114 @@
+{
+  "collections": {
+    "users": {
+      "rules": {
+        "read": "request.auth != null && (request.auth.uid == resource.id || request.auth.token.admin == true)",
+        "write": "request.auth != null && (request.auth.uid == resource.id || request.auth.token.admin == true)"
+      },
+      "schema": {
+        "email": "string",
+        "displayName": "string",
+        "role": "string",
+        "createdAt": "timestamp"
+      }
+    },
+    "products": {
+      "rules": {
+        "read": "true",
+        "write": "request.auth != null && request.auth.token.admin == true"
+      },
+      "schema": {
+        "name": "string",
+        "category": "string",
+        "subcategory": "string?",
+        "price": "number",
+        "comparePrice": "number?",
+        "discount": "number?",
+        "stockQuantity": "number",
+        "sizeOptions": "list?",
+        "colorOptions": "list?",
+        "material": "string?",
+        "description": "string",
+        "images": "list",
+        "status": "string",
+        "sku": "string?",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp?"
+      }
+    },
+    "orders": {
+      "rules": {
+        "read": "request.auth != null && (resource.data.userId == request.auth.uid || request.auth.token.admin == true)",
+        "create": "request.auth != null",
+        "update": "request.auth != null && request.auth.token.admin == true",
+        "delete": "request.auth != null && request.auth.token.admin == true"
+      },
+      "schema": {
+        "userId": "string",
+        "customerName": "string",
+        "phone": "string",
+        "address": "string",
+        "city": "string",
+        "postalCode": "string",
+        "products": "list",
+        "subtotal": "number",
+        "shipping": "number",
+        "total": "number",
+        "paymentMethod": "string",
+        "paymentStatus": "string",
+        "status": "string",
+        "stripeSessionId": "string?",
+        "createdAt": "timestamp"
+      }
+    },
+    "price_alerts": {
+      "rules": {
+        "read": "true",
+        "create": "true",
+        "update": "request.auth != null && (resource.data.userId == request.auth.uid || request.auth.token.admin == true)",
+        "delete": "request.auth != null && (resource.data.userId == request.auth.uid || request.auth.token.admin == true)"
+      },
+      "schema": {
+        "productId": "string",
+        "productName": "string",
+        "productImage": "string?",
+        "initialPrice": "number",
+        "targetPrice": "number?",
+        "currentPrice": "number",
+        "userEmail": "string?",
+        "userPhone": "string?",
+        "userId": "string?",
+        "status": "string",
+        "createdAt": "timestamp",
+        "notifiedAt": "timestamp?",
+        "notifiedPrice": "number?",
+        "notificationChannels": "list?"
+      }
+    },
+    "notifications": {
+      "rules": {
+        "read": "request.auth != null && (resource.data.userId == request.auth.uid || request.auth.token.admin == true)",
+        "create": "true",
+        "update": "request.auth != null && (resource.data.userId == request.auth.uid || request.auth.token.admin == true)",
+        "delete": "request.auth != null && (resource.data.userId == request.auth.uid || request.auth.token.admin == true)"
+      },
+      "schema": {
+        "userId": "string?",
+        "userEmail": "string?",
+        "userPhone": "string?",
+        "type": "string",
+        "title": "string",
+        "message": "string",
+        "productId": "string?",
+        "productName": "string?",
+        "productImage": "string?",
+        "oldPrice": "number?",
+        "newPrice": "number?",
+        "discountPercentage": "number?",
+        "url": "string?",
+        "read": "boolean",
+        "createdAt": "timestamp"
+      }
+    }
+  }
+}
