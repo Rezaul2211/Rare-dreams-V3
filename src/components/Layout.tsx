@@ -23,6 +23,7 @@ import { FlyToCartProvider, useFlyToCart } from '../context/FlyToCartContext';
 import { HeaderSearch } from './HeaderSearch';
 import Footer from './Footer';
 import WhatsAppSupportWidget from './WhatsAppSupportWidget';
+import PushNotificationPrompt from './PushNotificationPrompt';
 import Logo from './Logo';
 
 // Navigation Subcategory Structure
@@ -554,6 +555,9 @@ function LayoutInner() {
 
       {/* Floating WhatsApp Support Widget */}
       <WhatsAppSupportWidget />
+
+      {/* Background Push Notification Opt-in Prompt */}
+      <PushNotificationPrompt />
 
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 flex justify-around items-center h-16 z-50 px-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">

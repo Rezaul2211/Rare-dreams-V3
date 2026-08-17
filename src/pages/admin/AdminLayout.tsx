@@ -49,6 +49,7 @@ export default function AdminLayout() {
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Products List', path: '/admin/products', icon: Package },
     { name: 'Order History', path: '/admin/orders', icon: ShoppingCart },
+    { name: 'Push Alerts', path: '/admin/notifications', icon: Bell },
     { name: 'Customers', path: '/admin/customers', icon: Users },
     { name: 'Banners & Styling', path: '/admin/settings', icon: Image },
     { name: 'System Setup', path: '/admin/system', icon: Settings },

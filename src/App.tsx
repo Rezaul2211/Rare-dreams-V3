@@ -36,6 +36,7 @@ const ProductForm = lazy(() => import('./pages/admin/ProductForm'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminCustomers = lazy(() => import('./pages/admin/AdminCustomers'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+const AdminPushNotifications = lazy(() => import('./pages/admin/AdminPushNotifications'));
 const AdminSystem = lazy(() => import('./pages/admin/AdminSystem'));
 
 function PageFallback() {
@@ -91,6 +92,7 @@ export default function App() {
             <Route path="products/new" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
             <Route path="products/edit/:id" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="notifications" element={<AdminPushNotifications />} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="system" element={<AdminSystem />} />

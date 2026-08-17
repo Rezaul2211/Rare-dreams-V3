@@ -8,6 +8,7 @@ import { useStoreConfigStore } from '../store/useStoreConfigStore';
 import { useLanguageStore } from '../store/useLanguageStore';
 import { trackInitiateCheckout, trackPurchase } from '../lib/pixel';
 import { requestLocationAddress } from '../lib/geolocation';
+import { requestPushNotificationPermission } from '../lib/pushNotifications';
 import { BD_DISTRICTS, DistrictInfo } from '../lib/bdData';
 import { 
   ShieldCheck, 
@@ -356,6 +357,13 @@ export default function Checkout() {
         value: total,
         num_items: sanitizedProducts.reduce((acc, item) => acc + item.quantity, 0),
       });
+
+      // Prompt or associate background push notification token for live delivery tracking
+      try {
+        requestPushNotificationPermission(user?.uid, cleanPhone, user?.role || 'customer');
+      } catch (e) {
+        console.warn('Push permission after order:', e);
+      }
 
       // Clear Cart State cleanly
       if (directCheckoutItem) {

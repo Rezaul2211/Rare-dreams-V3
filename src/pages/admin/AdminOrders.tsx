@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, orderBy, query, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Order } from '../../types';
 import { 
@@ -56,6 +56,44 @@ export default function AdminOrders() {
     setUpdatingId(orderId);
     try {
       await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
+
+      const targetOrder = orders.find(o => o.id === orderId);
+
+      // Trigger automatic customer push notification log
+      try {
+        const statusBengali: Record<string, string> = {
+          Confirmed: 'কনফার্ম করা হয়েছে',
+          Processing: 'প্যাকিং ও প্রসেসিং চলছে',
+          Shipped: 'কুরিয়ারে পাঠানো হয়েছে',
+          Delivered: 'সফলভাবে ডেলিভারি সম্পন্ন হয়েছে',
+          Cancelled: 'বাতিল করা হয়েছে'
+        };
+
+        const title = `📦 অর্ডার আপডেট (#${orderId.slice(-6).toUpperCase()})`;
+        const body = `আপনার অর্ডারটি ${statusBengali[newStatus] || newStatus}। বিস্তারিত জানতে ক্লিক করুন।`;
+
+        await addDoc(collection(db, 'notifications'), {
+          orderId,
+          userId: targetOrder?.userId || 'guest',
+          userPhone: targetOrder?.phone || '',
+          title,
+          message: body,
+          type: 'order_status',
+          status: newStatus,
+          read: false,
+          createdAt: serverTimestamp()
+        });
+
+        // Trigger local notification if in admin preview
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, {
+            body,
+            icon: '/icon-192.png'
+          });
+        }
+      } catch (e) {
+        console.warn('Could not record customer status notification:', e);
+      }
       
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
       if (selectedOrder && selectedOrder.id === orderId) {
