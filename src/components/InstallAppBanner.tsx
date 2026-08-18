@@ -73,9 +73,11 @@ export const InstallAppBanner: React.FC = () => {
     };
   }, []);
 
+  const [showAndroidInstructions, setShowAndroidInstructions] = useState(false);
+
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      // Chrome / Edge / Samsung Internet
+      // Native Chrome / Edge / Samsung Internet prompt
       try {
         await deferredPrompt.prompt();
         const choice = await deferredPrompt.userChoice;
@@ -91,11 +93,8 @@ export const InstallAppBanner: React.FC = () => {
       // Show guided modal for Safari
       setShowIOSInstructions(true);
     } else {
-      // Generic fallback (e.g. Chrome desktop / Opera)
-      alert(language === 'bn' 
-        ? 'ব্রাউজারের ৩ ডট মেনু (⋮) তে ক্লিক করে "Add to Home screen" বা "Install App" সিলেক্ট করুন।' 
-        : 'Click on browser menu (⋮) and choose "Add to Home screen" or "Install App".'
-      );
+      // Show guided modal for Android Chrome
+      setShowAndroidInstructions(true);
     }
   };
 
@@ -155,6 +154,54 @@ export const InstallAppBanner: React.FC = () => {
           </div>
         </motion.div>
       </AnimatePresence>
+
+      {/* Android Chrome Instructions Modal */}
+      {showAndroidInstructions && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white text-neutral-900 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-amber-500" />
+                <span>{language === 'bn' ? 'অ্যান্ড্রয়েড ফোনে অ্যাপ ইনস্টল করার নিয়ম' : 'Install App on Android'}</span>
+              </h3>
+              <button
+                onClick={() => setShowAndroidInstructions(false)}
+                className="p-1 rounded-full text-neutral-400 hover:bg-neutral-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-neutral-700">
+              <div className="flex items-start gap-3 p-2.5 rounded-2xl bg-neutral-50 border border-neutral-200/60">
+                <span className="w-6 h-6 rounded-full bg-amber-500 text-white font-bold flex items-center justify-center shrink-0 text-xs">1</span>
+                <div>
+                  ব্রাউজারের একদম উপরে ডানে থাকা <strong>৩ ডট মেনুতে (⋮)</strong> ক্লিক করুন।
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-2.5 rounded-2xl bg-neutral-50 border border-neutral-200/60">
+                <span className="w-6 h-6 rounded-full bg-amber-500 text-white font-bold flex items-center justify-center shrink-0 text-xs">2</span>
+                <div>
+                  মেনু থেকে <strong>"Install app"</strong> অথবা <strong>"Add to Home screen"</strong> নির্বাচন করুন।
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-2.5 rounded-2xl bg-neutral-50 border border-neutral-200/60">
+                <span className="w-6 h-6 rounded-full bg-amber-500 text-white font-bold flex items-center justify-center shrink-0 text-xs">3</span>
+                <div>
+                  নিচে <strong>"Install"</strong> বাটনে ট্যাপ করলেই অ্যাপটি সরাসরি আপনার ফোনের অ্যাপ ড্রয়ার ও হোম স্ক্রিনে ইনস্টল হয়ে যাবে!
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAndroidInstructions(false)}
+              className="w-full py-3 rounded-2xl bg-amber-500 text-neutral-950 font-bold text-xs hover:bg-amber-400 transition-colors shadow-md"
+            >
+              {language === 'bn' ? 'ঠিক আছে, বুঝেছি' : 'Got it'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* iOS Safari Instructions Modal */}
       {showIOSInstructions && (
