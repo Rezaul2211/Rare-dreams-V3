@@ -3,17 +3,13 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Register PWA Service Worker for Chrome Installability
+// Clean up any previously registered Service Workers
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then((reg) => {
-        console.log('PWA Service Worker registered:', reg.scope);
-      })
-      .catch((err) => {
-        console.warn('PWA Service Worker registration warning:', err);
-      });
-  });
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
+  }).catch(() => {});
 }
 
 createRoot(document.getElementById('root')!).render(
