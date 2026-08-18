@@ -12,6 +12,7 @@ export interface Product {
   stockQuantity: number;
   sizeOptions?: string[];
   colorOptions?: string[];
+  brand?: string;
   material?: string;
   description: string;
   images: string[];

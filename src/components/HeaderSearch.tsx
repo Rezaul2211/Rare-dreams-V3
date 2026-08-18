@@ -11,11 +11,18 @@ import { motion, AnimatePresence } from 'motion/react';
 interface HeaderSearchProps {
   variant?: 'desktop' | 'mobile';
   className?: string;
+  autoFocus?: boolean;
   onCloseMobileModal?: () => void;
   onSelect?: () => void;
 }
 
-export function HeaderSearch({ variant = 'desktop', className = '', onCloseMobileModal, onSelect }: HeaderSearchProps) {
+export function HeaderSearch({ 
+  variant = 'desktop', 
+  className = '', 
+  autoFocus = false,
+  onCloseMobileModal, 
+  onSelect 
+}: HeaderSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -150,17 +157,18 @@ export function HeaderSearch({ variant = 'desktop', className = '', onCloseMobil
             </button>
           </div>
         ) : (
-          // MOBILE: Clean Full-Width Pill Search Input
-          <div className="relative flex items-center w-full bg-[#F5F7FA] hover:bg-[#EEF2F6] focus-within:bg-white rounded-full border border-neutral-200 focus-within:border-neutral-400 focus-within:shadow-xs transition-all px-4 py-2.5 shadow-2xs">
+          // MOBILE: Clean Expandable Pill Search Input
+          <div className="relative flex items-center w-full bg-white hover:bg-neutral-50/80 focus-within:bg-white rounded-full border border-neutral-300 focus-within:border-neutral-900 focus-within:ring-2 focus-within:ring-neutral-900/10 transition-all px-3.5 py-2 shadow-2xs">
             <Search size={17} className="text-neutral-400 shrink-0 mr-2.5 pointer-events-none" />
             <input
               ref={inputRef}
               type="text"
+              autoFocus={autoFocus}
               value={searchQuery}
               onChange={handleInputChange}
               onFocus={handleFocus}
-              placeholder="Search for products, categories or brands..."
-              className="w-full bg-transparent text-neutral-900 placeholder-neutral-400 text-xs sm:text-sm font-medium focus:outline-none"
+              placeholder={language === 'bn' ? 'পণ্য, ক্যাটাগরি বা ব্র্যান্ড খুঁজুন...' : 'Search for products, categories or brands...'}
+              className="w-full bg-transparent text-neutral-900 placeholder-neutral-400 text-xs sm:text-sm font-medium focus:outline-none pr-1"
             />
 
             {searchQuery && (
@@ -169,10 +177,12 @@ export function HeaderSearch({ variant = 'desktop', className = '', onCloseMobil
                 onClick={() => {
                   setSearchQuery('');
                   setIsOpen(false);
+                  if (inputRef.current) inputRef.current.focus();
                 }}
-                className="p-1 text-neutral-400 hover:text-neutral-700 rounded-full hover:bg-neutral-200/60 transition-colors cursor-pointer"
+                className="p-1 text-neutral-400 hover:text-neutral-700 rounded-full hover:bg-neutral-100 transition-colors cursor-pointer shrink-0"
+                aria-label="Clear Search"
               >
-                <X size={15} />
+                <X size={16} />
               </button>
             )}
           </div>

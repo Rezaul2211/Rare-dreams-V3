@@ -5,6 +5,8 @@ import {
   ShoppingBag, 
   User, 
   ChevronDown, 
+  ChevronLeft,
+  Search,
   Home, 
   Grid, 
   ShieldCheck, 
@@ -114,6 +116,12 @@ function LayoutInner() {
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const location = useLocation();
   const { isCartBouncing } = useFlyToCart();
+  const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
+
+  // Automatically collapse search when navigating to a new page
+  useEffect(() => {
+    setIsMobileSearchExpanded(false);
+  }, [location.pathname]);
 
   // Smart Search Visibility Logic:
   // Hide full-width search bar on focused transactional and utility pages (Checkout, Cart, Account, Login, Admin, etc.)
@@ -161,57 +169,122 @@ function LayoutInner() {
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
           
           {/* ----------------- MOBILE HEADER ----------------- */}
-          <div className="md:hidden pt-3 pb-3 space-y-2.5">
-            {/* Top Row: 3-line Dark Menu | Centered Logo | Shopping Bag with Badge */}
-            <div className="flex items-center justify-between">
-              {/* Left: 3-Line Dark Menu Icon */}
-              <button 
-                className="p-1.5 -ml-1 text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
-                onClick={() => setIsMobileMenuOpen(prev => !prev)}
-                aria-label="Toggle Navigation Menu"
-              >
-                {isMobileMenuOpen ? (
-                  <X size={26} strokeWidth={2.4} className="text-neutral-900" />
-                ) : (
-                  <Menu size={26} strokeWidth={2.4} className="text-neutral-900" />
-                )}
-              </button>
+          <div className="md:hidden py-2.5">
+            <AnimatePresence mode="wait" initial={false}>
+              {isMobileSearchExpanded ? (
+                /* 2 & 3. EXPANDED / TYPING STATE (Search Bar Full Width with Back button) */
+                <motion.div 
+                  key="mobile-search-expanded"
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -8 }}
+                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                  className="flex items-center gap-2 h-11 w-full"
+                >
+                  {/* Left: Back Button (<) to Collapse Search */}
+                  <button 
+                    onClick={() => setIsMobileSearchExpanded(false)}
+                    className="p-1.5 -ml-1 text-neutral-900 hover:bg-neutral-100 rounded-full transition-colors cursor-pointer shrink-0"
+                    aria-label="Back to normal header"
+                  >
+                    <ChevronLeft size={26} strokeWidth={2.4} className="text-neutral-900" />
+                  </button>
 
-              {/* Center: Dynamic Brand Logo (Seamless without background boxes) */}
-              <Link 
-                to="/" 
-                onClick={scrollToTop}
-                className="flex items-center justify-center hover:opacity-95 transition-opacity px-2"
-                aria-label="Rare Dreams Home"
-              >
-                <Logo size="md" />
-              </Link>
+                  {/* Center: Full Width Search Input */}
+                  <div className="flex-1 min-w-0">
+                    <HeaderSearch 
+                      variant="mobile" 
+                      autoFocus={true}
+                      onCloseMobileModal={() => setIsMobileSearchExpanded(false)} 
+                    />
+                  </div>
 
-              {/* Right: Shopping Bag in website color with item count badge */}
-              <Link 
-                id="header-cart-icon-mobile"
-                to="/cart" 
-                onClick={scrollToTop}
-                className={`p-1.5 -mr-1 relative text-neutral-900 hover:bg-neutral-100 rounded-xl transition-all ${
-                  isCartBouncing ? 'scale-125' : ''
-                }`}
-                aria-label="Cart"
-              >
-                <div className="relative inline-flex items-center justify-center">
-                  <ShoppingBag size={26} strokeWidth={2} className="text-neutral-900" />
-                  <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 bg-neutral-900 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
-                    {itemCount}
-                  </span>
-                </div>
-              </Link>
-            </div>
+                  {/* Right: Shopping Bag in website color with item count badge */}
+                  <Link 
+                    id="header-cart-icon-mobile"
+                    to="/cart" 
+                    onClick={scrollToTop}
+                    className={`p-1.5 -mr-1 relative text-neutral-900 hover:bg-neutral-100 rounded-xl transition-all shrink-0 ${
+                      isCartBouncing ? 'scale-125' : ''
+                    }`}
+                    aria-label="Cart"
+                  >
+                    <div className="relative inline-flex items-center justify-center">
+                      <ShoppingBag size={24} strokeWidth={2} className="text-neutral-900" />
+                      <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 bg-neutral-900 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
+                        {itemCount}
+                      </span>
+                    </div>
+                  </Link>
+                </motion.div>
+              ) : (
+                /* 1 & 4. NORMAL / COLLAPSED STATE (Menu | Centered Logo | Search + Bag) */
+                <motion.div 
+                  key="mobile-header-normal"
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 8 }}
+                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                  className="flex items-center justify-between h-11 w-full"
+                >
+                  {/* Left: 3-Line Dark Menu Icon */}
+                  <button 
+                    className="p-2 -ml-1 text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+                    onClick={() => setIsMobileMenuOpen(prev => !prev)}
+                    aria-label="Toggle Navigation Menu"
+                  >
+                    {isMobileMenuOpen ? (
+                      <X size={26} strokeWidth={2.4} className="text-neutral-900" />
+                    ) : (
+                      <Menu size={26} strokeWidth={2.4} className="text-neutral-900" />
+                    )}
+                  </button>
 
-            {/* Bottom Row: Full-width Rounded-Full Pill Search Input (Only shown on browsing/shop pages) */}
-            {!hideSearchBar && (
-              <div className="w-full pt-0.5">
-                <HeaderSearch variant="mobile" />
-              </div>
-            )}
+                  {/* Center: Brand Logo centered perfectly */}
+                  <Link 
+                    to="/" 
+                    onClick={scrollToTop}
+                    className="flex items-center justify-center hover:opacity-95 transition-opacity px-2"
+                    aria-label="Rare Dreams Home"
+                  >
+                    <Logo size="md" />
+                  </Link>
+
+                  {/* Right: Search Icon + Shopping Bag Icon */}
+                  <div className="flex items-center space-x-3 -mr-1">
+                    {/* Search Trigger Button */}
+                    <button 
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        setIsMobileSearchExpanded(true);
+                      }}
+                      className="p-1.5 text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+                      aria-label="Search"
+                    >
+                      <Search size={24} strokeWidth={2.2} className="text-neutral-900" />
+                    </button>
+
+                    {/* Shopping Bag in website color with item count badge */}
+                    <Link 
+                      id="header-cart-icon-mobile"
+                      to="/cart" 
+                      onClick={scrollToTop}
+                      className={`p-1.5 relative text-neutral-900 hover:bg-neutral-100 rounded-xl transition-all ${
+                        isCartBouncing ? 'scale-125' : ''
+                      }`}
+                      aria-label="Cart"
+                    >
+                      <div className="relative inline-flex items-center justify-center">
+                        <ShoppingBag size={24} strokeWidth={2} className="text-neutral-900" />
+                        <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 bg-neutral-900 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
+                          {itemCount}
+                        </span>
+                      </div>
+                    </Link>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
 

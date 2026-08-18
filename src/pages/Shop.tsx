@@ -565,6 +565,8 @@ export default function Shop() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [minPrice, setMinPrice] = useState<number | ''>('');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [onlyInStock, setOnlyInStock] = useState(false);
 
   // Pagination state
@@ -669,6 +671,33 @@ export default function Shop() {
     return list;
   }, [dbProducts, collectionKey, currentMeta]);
 
+  // Extract all available brands dynamically
+  const availableBrands = useMemo(() => {
+    const brandsSet = new Set<string>();
+    allCategoryProducts.forEach(p => {
+      if (p.brand?.trim()) {
+        brandsSet.add(p.brand.trim());
+      }
+    });
+    ['Rare Dreams', 'Zara', 'Gucci', 'Nike', "Levi's", 'H&M'].forEach(b => brandsSet.add(b));
+    return Array.from(brandsSet);
+  }, [allCategoryProducts]);
+
+  // Extract standard size options
+  const availableSizes = useMemo(() => {
+    return ['XS', 'S', 'M', 'L', 'XL', 'XXL', '38', '40', '42', '44'];
+  }, []);
+
+  // Count active filters
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (minPrice !== '' || maxPrice !== '') count++;
+    if (selectedBrands.length > 0) count += selectedBrands.length;
+    if (selectedSizes.length > 0) count += selectedSizes.length;
+    if (onlyInStock) count++;
+    return count;
+  }, [minPrice, maxPrice, selectedBrands, selectedSizes, onlyInStock]);
+
   // Apply Subcategory, Search, Price, Stock & Sort filters
   const filteredProducts = useMemo(() => {
     let result = [...allCategoryProducts];
@@ -704,12 +733,38 @@ export default function Shop() {
       result = result.filter(p => p.price <= maxPrice);
     }
 
-    // 4. In stock only
+    // 4. Brand Filter
+    if (selectedBrands.length > 0) {
+      result = result.filter(p => {
+        const pBrand = (p.brand || 'Rare Dreams').toLowerCase().trim();
+        const pName = (p.name || '').toLowerCase().trim();
+        const pDesc = (p.description || '').toLowerCase().trim();
+        return selectedBrands.some(b => {
+          const bLower = b.toLowerCase().trim();
+          return pBrand === bLower || pName.includes(bLower) || pDesc.includes(bLower);
+        });
+      });
+    }
+
+    // 5. Size Filter
+    if (selectedSizes.length > 0) {
+      result = result.filter(p => {
+        if (p.sizeOptions && Array.isArray(p.sizeOptions) && p.sizeOptions.length > 0) {
+          const pSizes = p.sizeOptions.map(s => s.toUpperCase().trim());
+          return selectedSizes.some(s => pSizes.includes(s.toUpperCase().trim()));
+        }
+        // Fallback for sample/lifestyle products
+        const text = `${p.name} ${p.description || ''}`.toUpperCase();
+        return selectedSizes.some(s => text.includes(s) || ['M', 'L', 'XL'].includes(s));
+      });
+    }
+
+    // 6. In stock only
     if (onlyInStock) {
       result = result.filter(p => (p.stockQuantity === undefined || p.stockQuantity > 0));
     }
 
-    // 5. Sorting
+    // 7. Sorting
     result.sort((a, b) => {
       if (sortBy === 'price-low') return a.price - b.price;
       if (sortBy === 'price-high') return b.price - a.price;
@@ -719,7 +774,7 @@ export default function Shop() {
     });
 
     return result;
-  }, [allCategoryProducts, activeSubcat, searchQuery, minPrice, maxPrice, onlyInStock, sortBy]);
+  }, [allCategoryProducts, activeSubcat, searchQuery, minPrice, maxPrice, selectedBrands, selectedSizes, onlyInStock, sortBy]);
 
   // Total items display count (e.g. "Showing 1-8 of 50 items" or actual items count)
   const totalCount = Math.max(filteredProducts.length, currentMeta.defaultItemsCount);
@@ -807,12 +862,18 @@ export default function Shop() {
           {/* Filter Toggle Button */}
           <button
             onClick={() => setIsFilterOpen(prev => !prev)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 hover:border-neutral-300 text-neutral-800 text-xs font-semibold cursor-pointer active:scale-95 transition-all bg-white shadow-2xs"
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-2xs ${
+              isFilterOpen || activeFilterCount > 0
+                ? 'border-neutral-900 bg-neutral-900 text-white'
+                : 'border-neutral-200 hover:border-neutral-300 text-neutral-800 bg-white'
+            }`}
           >
-            <SlidersHorizontal size={13} className="text-neutral-600" />
+            <SlidersHorizontal size={13} className={isFilterOpen || activeFilterCount > 0 ? 'text-white' : 'text-neutral-600'} />
             <span>Filter</span>
-            {(minPrice || maxPrice || onlyInStock) && (
-              <span className="w-1.5 h-1.5 bg-red-600 rounded-full" />
+            {activeFilterCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-amber-400 text-neutral-950 font-black text-[10px] flex items-center justify-center">
+                {activeFilterCount}
+              </span>
             )}
           </button>
 
@@ -841,69 +902,270 @@ export default function Shop() {
 
         {/* Filter Drawer / Panel (Expandable) */}
         {isFilterOpen && (
-          <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3.5 space-y-3 transition-all animate-fadeIn">
-            <div className="flex items-center justify-between pb-2 border-b border-neutral-200">
-              <span className="text-xs font-bold uppercase tracking-wider text-neutral-800">Refine Products</span>
-              <button 
-                onClick={() => setIsFilterOpen(false)}
-                className="text-neutral-400 hover:text-neutral-700 text-xs cursor-pointer"
-              >
-                <X size={15} />
-              </button>
+          <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 sm:p-5 space-y-4 transition-all animate-fadeIn">
+            <div className="flex items-center justify-between pb-2.5 border-b border-neutral-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-neutral-900">Filter Products</span>
+                {activeFilterCount > 0 && (
+                  <span className="text-[11px] font-bold text-neutral-500">({activeFilterCount} active)</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => {
+                      setMinPrice('');
+                      setMaxPrice('');
+                      setSelectedBrands([]);
+                      setSelectedSizes([]);
+                      setOnlyInStock(false);
+                    }}
+                    className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+                <button 
+                  onClick={() => setIsFilterOpen(false)}
+                  className="text-neutral-400 hover:text-neutral-700 p-1 cursor-pointer"
+                  aria-label="Close Filter"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Price Range */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Price Range (৳)</label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    value={minPrice}
-                    onChange={(e) => setMinPrice(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 text-xs text-neutral-800 outline-none focus:border-black"
-                  />
-                  <span className="text-neutral-400 text-xs">-</span>
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 text-xs text-neutral-800 outline-none focus:border-black"
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* 1. Price Range Filter */}
+              <div className="space-y-2.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600">Price Range (৳)</label>
+                
+                {/* Quick Presets */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: 'Under ৳1,000', min: 0, max: 1000 },
+                    { label: '৳1k - ৳2.5k', min: 1000, max: 2500 },
+                    { label: '৳2.5k - ৳5k', min: 2500, max: 5000 },
+                    { label: '৳5,000+', min: 5000, max: '' },
+                  ].map((preset, idx) => {
+                    const isSelected = minPrice === preset.min && maxPrice === preset.max;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setMinPrice('');
+                            setMaxPrice('');
+                          } else {
+                            setMinPrice(preset.min);
+                            setMaxPrice(preset.max);
+                          }
+                          setCurrentPage(1);
+                        }}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer border ${
+                          isSelected 
+                            ? 'bg-neutral-900 text-white border-neutral-900' 
+                            : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Custom Min - Max Inputs */}
+                <div className="flex items-center space-x-2 pt-1">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-medium">৳</span>
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={minPrice}
+                      onChange={(e) => {
+                        setMinPrice(e.target.value ? Number(e.target.value) : '');
+                        setCurrentPage(1);
+                      }}
+                      className="w-full bg-white border border-neutral-300 rounded-lg pl-6 pr-2.5 py-1.5 text-xs text-neutral-800 outline-none focus:border-neutral-900"
+                    />
+                  </div>
+                  <span className="text-neutral-400 text-xs font-bold">-</span>
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-medium">৳</span>
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={maxPrice}
+                      onChange={(e) => {
+                        setMaxPrice(e.target.value ? Number(e.target.value) : '');
+                        setCurrentPage(1);
+                      }}
+                      className="w-full bg-white border border-neutral-300 rounded-lg pl-6 pr-2.5 py-1.5 text-xs text-neutral-800 outline-none focus:border-neutral-900"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* In Stock Toggle */}
-              <div className="flex items-center space-x-2 pt-4">
-                <input
-                  type="checkbox"
-                  id="inStockCheck"
-                  checked={onlyInStock}
-                  onChange={(e) => setOnlyInStock(e.target.checked)}
-                  className="rounded text-black focus:ring-black cursor-pointer"
-                />
-                <label htmlFor="inStockCheck" className="text-xs font-semibold text-neutral-800 cursor-pointer">
-                  In Stock Only
-                </label>
+              {/* 2. Brand Filter */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600">Brand</label>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                  {availableBrands.map((b) => {
+                    const isChecked = selectedBrands.includes(b);
+                    return (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => {
+                          if (isChecked) {
+                            setSelectedBrands(prev => prev.filter(item => item !== b));
+                          } else {
+                            setSelectedBrands(prev => [...prev, b]);
+                          }
+                          setCurrentPage(1);
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer border flex items-center gap-1.5 ${
+                          isChecked
+                            ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
+                            : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                        }`}
+                      >
+                        {isChecked && <Check size={11} strokeWidth={3} />}
+                        <span>{b}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Reset Action */}
-              <div className="flex items-end justify-end">
+              {/* 3. Size Filter & In-stock */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600 mb-1.5">Size</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableSizes.map((s) => {
+                      const isSelected = selectedSizes.includes(s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedSizes(prev => prev.filter(item => item !== s));
+                            } else {
+                              setSelectedSizes(prev => [...prev, s]);
+                            }
+                            setCurrentPage(1);
+                          }}
+                          className={`w-9 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center ${
+                            isSelected
+                              ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
+                              : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* In-Stock Toggle */}
+                <div className="flex items-center space-x-2 pt-1 border-t border-neutral-200/80">
+                  <input
+                    type="checkbox"
+                    id="inStockCheck"
+                    checked={onlyInStock}
+                    onChange={(e) => {
+                      setOnlyInStock(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="w-4 h-4 rounded text-black focus:ring-black cursor-pointer accent-neutral-900"
+                  />
+                  <label htmlFor="inStockCheck" className="text-xs font-semibold text-neutral-800 cursor-pointer">
+                    In Stock Only (উপলব্ধ স্টক)
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active Filters Pill Bar (When filters are active) */}
+        {activeFilterCount > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap py-1">
+            <span className="text-xs font-medium text-neutral-400 mr-1">Active:</span>
+            
+            {/* Price Filter Tag */}
+            {(minPrice !== '' || maxPrice !== '') && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
+                <span>
+                  ৳{minPrice || 0} - ৳{maxPrice || '∞'}
+                </span>
                 <button
                   onClick={() => {
                     setMinPrice('');
                     setMaxPrice('');
-                    setOnlyInStock(false);
-                    setActiveSubcat('All');
                   }}
-                  className="text-xs font-bold text-red-600 hover:underline cursor-pointer py-1.5"
+                  className="hover:text-black p-0.5 cursor-pointer"
                 >
-                  Reset All Filters
+                  <X size={12} />
                 </button>
-              </div>
-            </div>
+              </span>
+            )}
+
+            {/* Brand Tags */}
+            {selectedBrands.map(b => (
+              <span key={b} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
+                <span>Brand: {b}</span>
+                <button
+                  onClick={() => setSelectedBrands(prev => prev.filter(item => item !== b))}
+                  className="hover:text-black p-0.5 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+
+            {/* Size Tags */}
+            {selectedSizes.map(s => (
+              <span key={s} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
+                <span>Size: {s}</span>
+                <button
+                  onClick={() => setSelectedSizes(prev => prev.filter(item => item !== s))}
+                  className="hover:text-black p-0.5 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+
+            {/* In Stock Tag */}
+            {onlyInStock && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
+                <span>In Stock Only</span>
+                <button
+                  onClick={() => setOnlyInStock(false)}
+                  className="hover:text-black p-0.5 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+
+            <button
+              onClick={() => {
+                setMinPrice('');
+                setMaxPrice('');
+                setSelectedBrands([]);
+                setSelectedSizes([]);
+                setOnlyInStock(false);
+              }}
+              className="text-xs font-bold text-red-600 hover:underline ml-1 cursor-pointer"
+            >
+              Reset all
+            </button>
           </div>
         )}
 
