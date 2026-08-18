@@ -3,41 +3,42 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, lazy, Suspense } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import ScrollToTop from './components/ScrollToTop';
 import Home from './pages/Home';
+import Account from './pages/Account';
 import OrderSuccess from './pages/OrderSuccess';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from './store/useAuthStore';
 import { seedProductsIfEmpty } from './lib/seed';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
-// Lazy loaded non-critical routes for faster initial load
-const Shop = lazy(() => import('./pages/Shop'));
-const ProductDetail = lazy(() => import('./pages/ProductDetail'));
-const Cart = lazy(() => import('./pages/Cart'));
-const Checkout = lazy(() => import('./pages/Checkout'));
-const Login = lazy(() => import('./pages/Login'));
-const Account = lazy(() => import('./pages/Account'));
-const Contact = lazy(() => import("./pages/Contact"));
-const Returns = lazy(() => import("./pages/Returns"));
-const License = lazy(() => import("./pages/License"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Terms = lazy(() => import("./pages/Terms"));
-const TrackOrder = lazy(() => import("./pages/TrackOrder"));
+// Lazy loaded routes with automatic retry to prevent dynamic import fetch errors
+const Shop = lazyWithRetry(() => import('./pages/Shop'));
+const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
+const Cart = lazyWithRetry(() => import('./pages/Cart'));
+const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
+const Login = lazyWithRetry(() => import('./pages/Login'));
+const Contact = lazyWithRetry(() => import("./pages/Contact"));
+const Returns = lazyWithRetry(() => import("./pages/Returns"));
+const License = lazyWithRetry(() => import("./pages/License"));
+const Privacy = lazyWithRetry(() => import("./pages/Privacy"));
+const Terms = lazyWithRetry(() => import("./pages/Terms"));
+const TrackOrder = lazyWithRetry(() => import("./pages/TrackOrder"));
 
 // Admin routes lazy loaded to prevent loading heavy backend code on client visits
-const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
-const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'));
-const ProductForm = lazy(() => import('./pages/admin/ProductForm'));
-const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
-const AdminCustomers = lazy(() => import('./pages/admin/AdminCustomers'));
-const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
-const AdminPushNotifications = lazy(() => import('./pages/admin/AdminPushNotifications'));
-const AdminSystem = lazy(() => import('./pages/admin/AdminSystem'));
+const AdminLayout = lazyWithRetry(() => import('./pages/admin/AdminLayout'));
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'));
+const AdminProducts = lazyWithRetry(() => import('./pages/admin/AdminProducts'));
+const ProductForm = lazyWithRetry(() => import('./pages/admin/ProductForm'));
+const AdminOrders = lazyWithRetry(() => import('./pages/admin/AdminOrders'));
+const AdminCustomers = lazyWithRetry(() => import('./pages/admin/AdminCustomers'));
+const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'));
+const AdminPushNotifications = lazyWithRetry(() => import('./pages/admin/AdminPushNotifications'));
+const AdminSystem = lazyWithRetry(() => import('./pages/admin/AdminSystem'));
 
 function PageFallback() {
   return (

@@ -1,6 +1,7 @@
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { fetchClientNetworkInfo, parseUserAgent } from '../utils/deviceParser';
 
 export interface PushNotificationSubscription {
   token: string;
@@ -10,6 +11,14 @@ export interface PushNotificationSubscription {
   createdAt: any;
   updatedAt: any;
   deviceInfo: string;
+  ip?: string;
+  city?: string;
+  country?: string;
+  isp?: string;
+  browser?: string;
+  os?: string;
+  deviceType?: 'mobile' | 'tablet' | 'desktop';
+  screen?: string;
 }
 
 /**
@@ -53,6 +62,25 @@ export async function requestPushNotificationPermission(userId?: string, userPho
     if (currentToken) {
       console.log("FCM Device Token retrieved:", currentToken);
       
+      // Parse device info
+      const parsedDevice = parseUserAgent(navigator.userAgent);
+      
+      // Fetch public IP in background
+      let networkData: { ip?: string; city?: string; country?: string; isp?: string } = {};
+      try {
+        const net = await fetchClientNetworkInfo();
+        if (net && net.ip) {
+          networkData = {
+            ip: net.ip,
+            city: net.city,
+            country: net.country,
+            isp: net.isp
+          };
+        }
+      } catch (e) {
+        console.warn("Could not fetch network info:", e);
+      }
+
       // Save or update token in Firestore under fcm_tokens collection
       const tokenDocRef = doc(db, 'fcm_tokens', currentToken);
       await setDoc(tokenDocRef, {
@@ -61,6 +89,13 @@ export async function requestPushNotificationPermission(userId?: string, userPho
         userPhone: userPhone || '',
         role: role || 'customer',
         deviceInfo: navigator.userAgent,
+        browser: parsedDevice.browser,
+        browserVersion: parsedDevice.browserVersion,
+        os: parsedDevice.os,
+        deviceType: parsedDevice.deviceType,
+        deviceModel: parsedDevice.deviceModel,
+        screen: typeof window !== 'undefined' ? `${window.screen.width}x${window.screen.height}` : '',
+        ...networkData,
         updatedAt: serverTimestamp(),
         createdAt: serverTimestamp()
       }, { merge: true });
