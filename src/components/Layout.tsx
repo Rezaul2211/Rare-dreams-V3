@@ -24,6 +24,7 @@ import { HeaderSearch } from './HeaderSearch';
 import Footer from './Footer';
 import WhatsAppSupportWidget from './WhatsAppSupportWidget';
 import PushNotificationPrompt from './PushNotificationPrompt';
+import InstallAppBanner from './InstallAppBanner';
 import Logo from './Logo';
 
 // Navigation Subcategory Structure
@@ -154,6 +155,9 @@ function LayoutInner() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC] font-sans text-neutral-900 pb-16 md:pb-0">
+      {/* Top Mobile/Desktop Install App Banner */}
+      <InstallAppBanner />
+
       {/* ========================================================= */}
       {/* HEADER: MATCHING EXACT REFERENCE WITH WEBSITE THEME COLORS */}
       {/* ========================================================= */}

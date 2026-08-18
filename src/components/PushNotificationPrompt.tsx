@@ -44,6 +44,19 @@ export const PushNotificationPrompt: React.FC = () => {
   const handleEnable = async () => {
     setLoading(true);
     try {
+      if (!('Notification' in window)) {
+        setShowPrompt(false);
+        return;
+      }
+
+      if (Notification.permission === 'denied') {
+        alert(language === 'bn' 
+          ? 'আপনার ব্রাউজার সেটিংসে নোটিফিকেশন ব্লক করা আছে। সাইট সেটিংসে গিয়ে Notifications Allow করুন।' 
+          : 'Notifications are blocked in your browser settings. Please enable them in site settings.');
+        setShowPrompt(false);
+        return;
+      }
+
       const token = await requestPushNotificationPermission(user?.id, user?.phone, user?.role);
       if (token) {
         setGranted(true);
