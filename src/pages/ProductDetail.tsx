@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product } from '../types';
 import { useCartStore } from '../store/useCartStore';
@@ -18,6 +18,8 @@ import { ProductSkeleton } from '../components/ProductSkeleton';
 import { ProductReviews } from '../components/ProductReviews';
 import SEO from '../components/SEO';
 import { usePriceAlertStore } from '../store/usePriceAlertStore';
+import { calculateDiscount, formatPrice } from '../utils/productUtils';
+import { usePublishedProducts } from '../hooks/usePublishedProducts';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -34,9 +36,6 @@ export default function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'contact'>('description');
-  
-  const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
-  const [loadingRecommended, setLoadingRecommended] = useState(true);
 
   // AI Size Recommender Modal State
   const [isSizeModalOpen, setIsSizeModalOpen] = useState(false);
@@ -99,11 +98,22 @@ export default function ProductDetail() {
   const { addItem, setDirectCheckoutItem } = useCartStore();
   const favorited = product ? isWishlisted(product.id) : false;
 
-  // Calculate discount percentage if not explicitly defined
-  let discountPct = product?.discount;
-  if (!discountPct && product?.comparePrice && product.comparePrice > product.price) {
-    discountPct = Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100);
-  }
+  // Calculate discount percentage using centralized utility
+  const discountPct = calculateDiscount(product);
+
+  // Use cached published products for recommendations
+  const { products: allPublishedProducts, loading: loadingPublished } = usePublishedProducts();
+
+  // Compute recommended products algorithmically by category
+  const recommendedProducts = useMemo(() => {
+    if (!product || !allPublishedProducts.length) return [];
+    const others = allPublishedProducts.filter(p => p.id !== product.id);
+    const sameCat = others.filter(p => p.category?.toLowerCase() === product.category?.toLowerCase());
+    const otherCat = others.filter(p => p.category?.toLowerCase() !== product.category?.toLowerCase());
+    return [...sameCat, ...otherCat].slice(0, 4);
+  }, [product, allPublishedProducts]);
+
+  const loadingRecommended = loadingPublished && recommendedProducts.length === 0;
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -146,41 +156,6 @@ export default function ProductDetail() {
     };
     fetchProduct();
   }, [id]);
-
-  // Fetch Recommended Products algorithmically by Category
-  useEffect(() => {
-    const fetchRecommended = async () => {
-      if (!product) return;
-      try {
-        setLoadingRecommended(true);
-        const q = query(
-          collection(db, 'products'),
-          where('status', '==', 'published')
-        );
-        const querySnapshot = await getDocs(q);
-        const all: Product[] = [];
-        querySnapshot.forEach((doc) => {
-          if (doc.id !== product.id) {
-            all.push({ id: doc.id, ...doc.data() } as Product);
-          }
-        });
-
-        // Same category priority
-        const sameCat = all.filter(p => p.category?.toLowerCase() === product.category?.toLowerCase());
-        const otherCat = all.filter(p => p.category?.toLowerCase() !== product.category?.toLowerCase());
-
-        // Algorithmic merge: show same category first, fill up to 4 items with other products
-        const combined = [...sameCat, ...otherCat].slice(0, 4);
-        setRecommendedProducts(combined);
-      } catch (err) {
-        console.error("Error loading recommended products", err);
-      } finally {
-        setLoadingRecommended(false);
-      }
-    };
-
-    fetchRecommended();
-  }, [product]);
 
   const handleAddToCart = (e?: React.MouseEvent<HTMLElement>) => {
     if (!product) return;
@@ -383,13 +358,15 @@ export default function ProductDetail() {
 
               {/* Price */}
               <div className="flex items-end gap-3 pt-1">
-                <span className="text-3xl font-bold text-neutral-900 tracking-tight">৳ {product.price.toFixed(2)}</span>
+                <span className="text-3xl font-bold text-neutral-900 tracking-tight">{formatPrice(product.price)}</span>
                 {product.comparePrice && product.comparePrice > product.price && (
                   <>
-                    <span className="text-lg text-neutral-400 line-through mb-1 font-medium">৳ {product.comparePrice.toFixed(2)}</span>
-                    <span className="bg-[#FFF8ED] text-[#B48538] text-xs font-bold px-2.5 py-1 rounded-full mb-1 border border-[#F3E8D6]">
-                      SAVE {Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100)}%
-                    </span>
+                    <span className="text-lg text-neutral-400 line-through mb-1 font-medium">{formatPrice(product.comparePrice)}</span>
+                    {discountPct > 0 && (
+                      <span className="bg-[#FFF8ED] text-[#B48538] text-xs font-bold px-2.5 py-1 rounded-full mb-1 border border-[#F3E8D6]">
+                        SAVE {discountPct}%
+                      </span>
+                    )}
                   </>
                 )}
               </div>

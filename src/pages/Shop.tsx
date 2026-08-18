@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { useParams, useSearchParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { 
   ArrowLeft, 
@@ -11,31 +9,373 @@ import {
   SlidersHorizontal, 
   ChevronDown, 
   ChevronLeft, 
-  ChevronRight,
+  ChevronRight, 
   X,
   Check,
   Star,
-  Sparkles
+  Sparkles,
+  Percent,
+  Flame,
+  Award
 } from 'lucide-react';
 import { ProductSkeleton } from '../components/ProductSkeleton';
 import { ProductCard } from '../components/ProductCard';
 import { useCartStore } from '../store/useCartStore';
 import { useWishlistStore } from '../store/useWishlistStore';
 import SEO from '../components/SEO';
+import { usePublishedProducts } from '../hooks/usePublishedProducts';
+import { calculateDiscount, matchesCategoryGroup } from '../utils/productUtils';
 
-// Category Definitions matching user blueprint screenshot exactly
+// Category & Dynamic Collection Definitions matching user blueprint screenshot exactly
 interface CollectionMeta {
   title: string;
+  badge?: string;
   subtitle: string;
+  bannerBg: string;
+  textColor: string;
+  badgeColor?: string;
+  bannerImage?: string;
+  hasDiscountTag?: boolean;
   subcategories: string[];
   defaultItemsCount: number;
   sampleProducts: Product[];
+  defaultSort?: 'popular' | 'newest' | 'price-low' | 'price-high' | 'rating' | 'best-selling' | 'discount-high';
 }
 
 const COLLECTIONS_CONFIG: Record<string, CollectionMeta> = {
+  'daily-drops': {
+    title: 'Daily Drops',
+    badge: 'NEW ARRIVALS',
+    subtitle: "Fresh styles, added every day.\nDon't miss out!",
+    bannerBg: 'bg-[#111113] border border-neutral-800 text-white',
+    textColor: 'text-white',
+    badgeColor: 'bg-white/10 text-neutral-300 border border-white/15',
+    bannerImage: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=600&auto=format&fit=crop',
+    subcategories: ['All', 'Clothing', 'Jeans', 'Tees', 'Footwear', 'Streetwear'],
+    defaultItemsCount: 24,
+    defaultSort: 'newest',
+    sampleProducts: [
+      {
+        id: 'daily-hoodie-1',
+        name: 'Streetwear Hoodie',
+        category: 'Streetwear',
+        subcategory: 'Clothing',
+        price: 1990,
+        comparePrice: 2590,
+        discount: 23,
+        rating: 4.6,
+        stockQuantity: 35,
+        isNew: true,
+        daily_drop: true,
+        images: ['https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Heavyweight organic cotton premium fleece streetwear hoodie.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'daily-shirt-2',
+        name: 'Printed Shirt',
+        category: 'Men',
+        subcategory: 'Clothing',
+        price: 1190,
+        comparePrice: 1690,
+        discount: 29,
+        rating: 4.7,
+        stockQuantity: 28,
+        isNew: true,
+        daily_drop: true,
+        images: ['https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Casual resort-collar printed cotton shirt in modern geometric pattern.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'daily-jeans-3',
+        name: 'Relaxed Fit Jeans',
+        category: 'Men',
+        subcategory: 'Jeans',
+        price: 1690,
+        comparePrice: 2490,
+        discount: 32,
+        rating: 4.6,
+        stockQuantity: 40,
+        isNew: true,
+        daily_drop: true,
+        images: ['https://images.unsplash.com/photo-1542272604-780c96856592?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Vintage-washed authentic denim relaxed fit jeans.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'daily-tee-4',
+        name: 'Graphic Tee',
+        category: 'Men',
+        subcategory: 'Tees',
+        price: 790,
+        comparePrice: 990,
+        discount: 20,
+        rating: 4.5,
+        stockQuantity: 50,
+        isNew: true,
+        daily_drop: true,
+        images: ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Drop-shoulder soft combed cotton graphic print t-shirt.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'daily-jacket-5',
+        name: 'Classic Leather Jacket',
+        category: 'Men',
+        subcategory: 'Clothing',
+        price: 4990,
+        comparePrice: 6500,
+        discount: 23,
+        rating: 4.9,
+        stockQuantity: 18,
+        isNew: true,
+        daily_drop: true,
+        images: ['https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Iconic biker style premium faux leather jacket with heavy silver zips.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'daily-joggers-6',
+        name: 'Cargo Joggers',
+        category: 'Men',
+        subcategory: 'Clothing',
+        price: 1450,
+        comparePrice: 1890,
+        discount: 23,
+        rating: 4.7,
+        stockQuantity: 32,
+        isNew: true,
+        daily_drop: true,
+        images: ['https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Tapered fit cargo joggers with elastic drawstring waistband.',
+        status: 'published',
+        createdAt: new Date()
+      }
+    ]
+  },
+  'most-loved': {
+    title: 'Most Loved',
+    badge: 'BEST OF OUR COLLECTION',
+    subtitle: "Our most loved pieces,\nchosen by you.",
+    bannerBg: 'bg-gradient-to-r from-[#ECDAB0] via-[#F8EED7] to-[#E2C78E] border border-[#D1B36C]/40 text-neutral-900',
+    textColor: 'text-neutral-950',
+    badgeColor: 'bg-neutral-900 text-amber-300',
+    bannerImage: 'https://images.unsplash.com/photo-1578269174936-2709b6aeb913?q=80&w=600&auto=format&fit=crop',
+    subcategories: ['All', 'Suits', 'Watches', 'Bags', 'Shoes', 'Dresses'],
+    defaultItemsCount: 36,
+    defaultSort: 'rating',
+    sampleProducts: [
+      {
+        id: 'loved-suit-1',
+        name: 'Classic Suit Jacket',
+        category: 'Men',
+        subcategory: 'Suits',
+        price: 4900,
+        comparePrice: 6790,
+        discount: 28,
+        rating: 4.8,
+        stockQuantity: 45,
+        images: ['https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Tailored classic suit jacket crafted from breathable wool-blend fabric.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'loved-watch-2',
+        name: 'Luxury Watch',
+        category: 'Accessories',
+        subcategory: 'Watches',
+        price: 3650,
+        comparePrice: 4450,
+        discount: 18,
+        rating: 4.9,
+        stockQuantity: 25,
+        images: ['https://images.unsplash.com/photo-1524805444758-089113d48a6d?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Chronograph luxury wristwatch with sapphire crystal and genuine leather strap.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'loved-bag-3',
+        name: 'Premium Handbag',
+        category: 'Women',
+        subcategory: 'Bags',
+        price: 1990,
+        comparePrice: 2990,
+        discount: 18,
+        rating: 4.9,
+        stockQuantity: 30,
+        images: ['https://images.unsplash.com/photo-1566150905458-1bf1fc113f0d?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Top-handle structured handbag with gold-tone accents.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'loved-shoes-4',
+        name: 'Oxford Shoes',
+        category: 'Men',
+        subcategory: 'Shoes',
+        price: 1360,
+        comparePrice: 1580,
+        discount: 18,
+        rating: 4.7,
+        stockQuantity: 30,
+        images: ['https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Handcrafted genuine leather Oxford shoes for formal elegance.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'loved-dress-5',
+        name: 'Velvet Evening Gown',
+        category: 'Women',
+        subcategory: 'Dresses',
+        price: 3890,
+        comparePrice: 4900,
+        discount: 20,
+        rating: 4.9,
+        stockQuantity: 22,
+        images: ['https://images.unsplash.com/photo-1566174053879-31528523f8ae?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Royal velvet floor-length formal evening gown with side slit.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'loved-aviator-6',
+        name: 'Vintage Aviator Shades',
+        category: 'Accessories',
+        subcategory: 'Accessories',
+        price: 990,
+        comparePrice: 1350,
+        discount: 26,
+        rating: 4.8,
+        stockQuantity: 34,
+        images: ['https://images.unsplash.com/photo-1572635196237-14b3f281503f?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Retro gold frame aviator sunglasses with tinted gradient lenses.',
+        status: 'published',
+        createdAt: new Date()
+      }
+    ]
+  },
+  'best-sellers': {
+    title: 'Best Sellers',
+    badge: 'MEGA SAVINGS',
+    subtitle: "Top picks loved by thousands.\nGrab yours now!",
+    bannerBg: 'bg-gradient-to-r from-[#0A3423] via-[#0F4932] to-[#1B6347] border border-emerald-700/60 text-white',
+    textColor: 'text-white',
+    badgeColor: 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/30',
+    bannerImage: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=600&auto=format&fit=crop',
+    hasDiscountTag: true,
+    subcategories: ['All', 'Bags', 'Dresses', 'Watches', 'Footwear', 'Sale'],
+    defaultItemsCount: 36,
+    defaultSort: 'popular',
+    sampleProducts: [
+      {
+        id: 'seller-bag-1',
+        name: 'Elegant Shoulder Bag',
+        category: 'Women',
+        subcategory: 'Bags',
+        price: 1490,
+        comparePrice: 2190,
+        discount: 32,
+        rating: 4.8,
+        stockQuantity: 40,
+        images: ['https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Spacious structured shoulder bag with dual gold-toned metallic hardware.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'seller-dress-2',
+        name: 'Premium Maxi Dress',
+        category: 'Women',
+        subcategory: 'Dresses',
+        price: 1890,
+        comparePrice: 2250,
+        discount: 19,
+        rating: 4.7,
+        stockQuantity: 35,
+        images: ['https://images.unsplash.com/photo-1496747611176-843222e1e57c?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Floor-length flowy maxi dress in soft blush pink crepe.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'seller-watch-3',
+        name: 'Classic Watch',
+        category: 'Accessories',
+        subcategory: 'Watches',
+        price: 3650,
+        comparePrice: 4550,
+        discount: 28,
+        rating: 4.8,
+        stockQuantity: 25,
+        images: ['https://images.unsplash.com/photo-1524805444758-089113d48a6d?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Precision chronograph timepiece with stainless steel band.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'seller-pink-bag-4',
+        name: 'Chic Pink Handbag',
+        category: 'Women',
+        subcategory: 'Bags',
+        price: 1280,
+        comparePrice: 1600,
+        discount: 20,
+        rating: 4.9,
+        stockQuantity: 42,
+        images: ['https://images.unsplash.com/photo-1566150905458-1bf1fc113f0d?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Iconic rose handbag with detachable shoulder strap and tassel charm.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'seller-kurti-5',
+        name: 'Embroidered Kurti Set',
+        category: 'Women',
+        subcategory: 'Clothing',
+        price: 1750,
+        comparePrice: 2500,
+        discount: 30,
+        rating: 4.8,
+        stockQuantity: 50,
+        images: ['https://images.unsplash.com/photo-1610030469983-98e550d6193c?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Fine silk-blend embroidered festive kurti set with matching dupatta.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'seller-loafers-6',
+        name: 'Designer Leather Loafers',
+        category: 'Men',
+        subcategory: 'Shoes',
+        price: 2100,
+        comparePrice: 2900,
+        discount: 27,
+        rating: 4.7,
+        stockQuantity: 30,
+        images: ['https://images.unsplash.com/photo-1533867617858-e7b97e060509?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Italian style horsebit slip-on dress loafers in burnished calfskin.',
+        status: 'published',
+        createdAt: new Date()
+      }
+    ]
+  },
   men: {
     title: "Men's Collection",
+    badge: 'EXCLUSIVE FOR MEN',
     subtitle: "Explore our latest collection for men.\nPremium quality, timeless style.",
+    bannerBg: 'bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 border border-neutral-700 text-white',
+    textColor: 'text-white',
+    badgeColor: 'bg-white/10 text-neutral-300 border border-white/20',
+    bannerImage: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=400&q=60&auto=format&fit=crop',
     subcategories: ['All', 'Clothing', 'Shoes', 'Accessories', 'Watches'],
     defaultItemsCount: 50,
     sampleProducts: [
@@ -164,6 +504,11 @@ const COLLECTIONS_CONFIG: Record<string, CollectionMeta> = {
   women: {
     title: "Women's Collection",
     subtitle: "Trendy, elegant & comfortable styles\nfor every occasion.",
+    bannerBg: 'bg-gradient-to-r from-rose-950 via-neutral-900 to-stone-900',
+    textColor: 'text-white',
+    badge: "WOMEN'S EDIT",
+    badgeColor: "bg-rose-500/20 text-rose-300 border border-rose-500/30",
+    bannerImage: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop",
     subcategories: ['All', 'Dresses', 'Tops', 'Bags', 'Shoes', 'Jewelry'],
     defaultItemsCount: 36,
     sampleProducts: [
@@ -292,6 +637,11 @@ const COLLECTIONS_CONFIG: Record<string, CollectionMeta> = {
   kids: {
     title: "Kids Collection",
     subtitle: "Stylish, comfortable & playful\nlooks for your little ones.",
+    bannerBg: 'bg-gradient-to-r from-sky-950 via-neutral-900 to-indigo-950',
+    textColor: 'text-white',
+    badge: "KIDS PLAY & PARTY",
+    badgeColor: "bg-sky-500/20 text-sky-300 border border-sky-500/30",
+    bannerImage: "https://images.unsplash.com/photo-1503945438517-f65904a52ce6?q=80&w=400&auto=format&fit=crop",
     subcategories: ['All', 'Boys', 'Girls', 'Footwear', 'Accessories'],
     defaultItemsCount: 32,
     sampleProducts: [
@@ -420,6 +770,11 @@ const COLLECTIONS_CONFIG: Record<string, CollectionMeta> = {
   accessories: {
     title: "Accessories",
     subtitle: "Complete your look with our\npremium accessories.",
+    bannerBg: 'bg-gradient-to-r from-emerald-950 via-neutral-900 to-stone-900',
+    textColor: 'text-white',
+    badge: "PREMIUM FINISHES",
+    badgeColor: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
+    bannerImage: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop",
     subcategories: ['All', 'Bags', 'Watches', 'Belts', 'Sunglasses', 'Jewelry'],
     defaultItemsCount: 36,
     sampleProducts: [
@@ -544,12 +899,86 @@ const COLLECTIONS_CONFIG: Record<string, CollectionMeta> = {
         createdAt: new Date()
       }
     ]
+  },
+  all: {
+    title: "All Collections",
+    badge: "EXCLUSIVE CATALOG",
+    subtitle: "Discover our full range of luxury apparel,\nfootwear, and timeless accessories.",
+    bannerBg: "bg-gradient-to-r from-neutral-950 via-neutral-900 to-stone-900 border border-neutral-800 text-white",
+    textColor: "text-white",
+    badgeColor: "bg-white/10 text-neutral-300 border border-white/15",
+    bannerImage: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=400&auto=format&fit=crop",
+    subcategories: ['All', 'Men', 'Women', 'Kids', 'Accessories'],
+    defaultItemsCount: 50,
+    sampleProducts: [
+      {
+        id: 'all-suit-1',
+        name: 'Classic Suit Jacket',
+        category: 'Men',
+        subcategory: 'Clothing',
+        price: 4900,
+        comparePrice: 6790,
+        discount: 28,
+        rating: 4.8,
+        stockQuantity: 45,
+        images: ['https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Tailored classic suit jacket crafted from breathable wool-blend fabric.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'all-bag-2',
+        name: 'Elegant Shoulder Bag',
+        category: 'Women',
+        subcategory: 'Bags',
+        price: 1490,
+        comparePrice: 2190,
+        discount: 32,
+        rating: 4.8,
+        stockQuantity: 40,
+        images: ['https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Spacious structured shoulder bag with dual gold-toned metallic hardware.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'all-watch-3',
+        name: 'Luxury Watch',
+        category: 'Accessories',
+        subcategory: 'Watches',
+        price: 3650,
+        comparePrice: 4450,
+        discount: 18,
+        rating: 4.9,
+        stockQuantity: 25,
+        images: ['https://images.unsplash.com/photo-1524805444758-089113d48a6d?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Chronograph luxury wristwatch with sapphire crystal and genuine leather strap.',
+        status: 'published',
+        createdAt: new Date()
+      },
+      {
+        id: 'all-kids-4',
+        name: 'Kids Sneakers',
+        category: 'Kids',
+        subcategory: 'Footwear',
+        price: 990,
+        comparePrice: 1200,
+        discount: 18,
+        rating: 4.8,
+        stockQuantity: 30,
+        images: ['https://images.unsplash.com/photo-1514989940723-e8e51635b782?q=80&w=400&q=60&auto=format&fit=crop'],
+        description: 'Cushioned breathable sporty sneakers with velcro strap for kids.',
+        status: 'published',
+        createdAt: new Date()
+      }
+    ]
   }
 };
 
 export default function Shop() {
   const { category } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const searchQuery = searchParams.get('search') || searchParams.get('q') || '';
@@ -561,107 +990,82 @@ export default function Shop() {
 
   // Active subcategory filter (e.g., 'All', 'Clothing', 'Shoes')
   const [activeSubcat, setActiveSubcat] = useState('All');
-  const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high' | 'rating' | 'newest'>('popular');
+  const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high' | 'rating' | 'newest' | 'discount-high' | 'best-selling'>('popular');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [minPrice, setMinPrice] = useState<number | ''>('');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [minRating, setMinRating] = useState<number | null>(null);
   const [onlyInStock, setOnlyInStock] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 12;
 
-  // DB Products and loading state
-  const [dbProducts, setDbProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  // DB Products and loading state from centralized hook
+  const { products: dbProducts, loading } = usePublishedProducts();
 
-  // Resolve collection key
+  // Resolve collection key based on pathname or route params or query parameters
   const collectionKey = useMemo(() => {
+    const path = location.pathname.toLowerCase();
+    const filterParam = searchParams.get('filter')?.toLowerCase() || '';
+    const collectionParam = searchParams.get('collection')?.toLowerCase() || '';
+
+    if (path.includes('daily-drops') || filterParam === 'new' || collectionParam === 'daily-drops') return 'daily-drops';
+    if (path.includes('most-loved') || collectionParam === 'most-loved') return 'most-loved';
+    if (path.includes('best-sellers') || filterParam === 'sale' || collectionParam === 'best-sellers') return 'best-sellers';
+
     if (!category) return 'all';
     const c = category.toLowerCase().trim();
-    if (c.includes('men') && !c.includes('women')) return 'men';
-    if (c.includes('women')) return 'women';
-    if (c.includes('kid') || c.includes('boy') || c.includes('girl') || c.includes('baby')) return 'kids';
-    if (c.includes('access')) return 'accessories';
+    if (c.includes('daily') || c.includes('drop')) return 'daily-drops';
+    if (c.includes('most') || c.includes('loved')) return 'most-loved';
+    if (c.includes('best') || c.includes('seller')) return 'best-sellers';
+    if (matchesCategoryGroup(c, 'men')) return 'men';
+    if (matchesCategoryGroup(c, 'women')) return 'women';
+    if (matchesCategoryGroup(c, 'kids')) return 'kids';
+    if (matchesCategoryGroup(c, 'accessories')) return 'accessories';
     return 'all';
-  }, [category]);
+  }, [category, location.pathname, searchParams]);
 
   const currentMeta = useMemo(() => {
     if (COLLECTIONS_CONFIG[collectionKey]) {
       return COLLECTIONS_CONFIG[collectionKey];
     }
-    return {
-      title: category ? `${category} Collection` : "All Collections",
-      subtitle: "Discover our full range of premium apparel, accessories, and footwear.",
-      subcategories: ['All', 'Men', 'Women', 'Kids', 'Accessories'],
-      defaultItemsCount: 50,
-      sampleProducts: [
-        ...COLLECTIONS_CONFIG.men.sampleProducts.slice(0, 2),
-        ...COLLECTIONS_CONFIG.women.sampleProducts.slice(0, 2),
-        ...COLLECTIONS_CONFIG.kids.sampleProducts.slice(0, 2),
-        ...COLLECTIONS_CONFIG.accessories.sampleProducts.slice(0, 2),
-      ]
-    };
-  }, [collectionKey, category]);
+    return COLLECTIONS_CONFIG.all;
+  }, [collectionKey]);
 
-  // Reset pagination & subcat when category param changes
+  // Set default sort and reset pagination when collection or category changes
   useEffect(() => {
     setActiveSubcat('All');
+    setSelectedCategory('All');
     setCurrentPage(1);
-  }, [category]);
+    if (currentMeta.defaultSort) {
+      setSortBy(currentMeta.defaultSort);
+    }
+  }, [collectionKey, category, currentMeta]);
 
-  // Fetch Firestore products
-  useEffect(() => {
-    let isMounted = true;
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        const q = query(
-          collection(db, 'products'),
-          where('status', '==', 'published')
-        );
-        const querySnapshot = await getDocs(q);
-        const fetched = querySnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) } as Product));
-        if (isMounted) {
-          setDbProducts(fetched);
-        }
-      } catch (error) {
-        console.error("Error fetching products", error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-    fetchProducts();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Merge Firestore products with authentic fallback sample products if DB is empty for this category
+  // Merge Firestore products with authentic fallback sample products
   const allCategoryProducts = useMemo(() => {
     let list: Product[] = [];
 
-    // Filter DB products for current category
+    // Filter DB products for current category or dynamic collection
     if (dbProducts.length > 0) {
       if (collectionKey === 'all') {
         list = [...dbProducts];
+      } else if (collectionKey === 'daily-drops') {
+        list = dbProducts.filter(p => p.daily_drop || p.isNew || p.subcategory === 'Streetwear' || matchesCategoryGroup(p.category, 'men') || matchesCategoryGroup(p.category, 'women'));
+      } else if (collectionKey === 'most-loved') {
+        list = dbProducts.filter(p => p.isMostLoved || (p.rating && p.rating >= 4.7) || (p.stockQuantity && p.stockQuantity > 20));
+      } else if (collectionKey === 'best-sellers') {
+        list = dbProducts.filter(p => p.isBestSeller || calculateDiscount(p) > 0 || p.isFlashSale || p.mega_sale);
       } else {
-        const target = collectionKey;
-        list = dbProducts.filter(p => {
-          if (!p.category) return false;
-          const c = p.category.toLowerCase().trim();
-          if (target === 'men') return (c.includes('men') && !c.includes('women')) || c.includes('boy');
-          if (target === 'women') return c.includes('women') || c.includes('girl');
-          if (target === 'kids') return c.includes('kid') || c.includes('baby') || c.includes('boy') || c.includes('girl');
-          if (target === 'accessories') return c.includes('access') || c.includes('watch') || c.includes('bag') || c.includes('belt');
-          return c.includes(target);
-        });
+        list = dbProducts.filter(p => matchesCategoryGroup(p.category, collectionKey as any));
       }
     }
 
-    // If DB has fewer than 6 items for this specific collection, supplement with exact sample products from screenshot
+    // Supplement with sample products for rich initial catalog
     if (list.length < 6 && currentMeta.sampleProducts) {
       const existingIds = new Set(list.map(p => p.id));
       const neededSamples = currentMeta.sampleProducts.filter(p => !existingIds.has(p.id));
@@ -694,11 +1098,13 @@ export default function Shop() {
     if (minPrice !== '' || maxPrice !== '') count++;
     if (selectedBrands.length > 0) count += selectedBrands.length;
     if (selectedSizes.length > 0) count += selectedSizes.length;
+    if (selectedCategory !== 'All') count++;
+    if (minRating !== null) count++;
     if (onlyInStock) count++;
     return count;
-  }, [minPrice, maxPrice, selectedBrands, selectedSizes, onlyInStock]);
+  }, [minPrice, maxPrice, selectedBrands, selectedSizes, selectedCategory, minRating, onlyInStock]);
 
-  // Apply Subcategory, Search, Price, Stock & Sort filters
+  // Apply Subcategory, Search, Price, Brand, Size, Rating, Stock & Sort filters
   const filteredProducts = useMemo(() => {
     let result = [...allCategoryProducts];
 
@@ -713,7 +1119,13 @@ export default function Shop() {
       });
     }
 
-    // 2. Search query filter
+    // 2. Category filter inside drawer
+    if (selectedCategory !== 'All') {
+      const catLower = selectedCategory.toLowerCase().trim();
+      result = result.filter(p => (p.category || '').toLowerCase().includes(catLower));
+    }
+
+    // 3. Search query filter
     if (searchQuery.trim()) {
       const term = searchQuery.toLowerCase().trim();
       result = result.filter(p => {
@@ -725,7 +1137,7 @@ export default function Shop() {
       });
     }
 
-    // 3. Price Filters
+    // 4. Price Filters
     if (typeof minPrice === 'number' && minPrice > 0) {
       result = result.filter(p => p.price >= minPrice);
     }
@@ -733,7 +1145,7 @@ export default function Shop() {
       result = result.filter(p => p.price <= maxPrice);
     }
 
-    // 4. Brand Filter
+    // 5. Brand Filter
     if (selectedBrands.length > 0) {
       result = result.filter(p => {
         const pBrand = (p.brand || 'Rare Dreams').toLowerCase().trim();
@@ -746,7 +1158,7 @@ export default function Shop() {
       });
     }
 
-    // 5. Size Filter
+    // 6. Size Filter
     if (selectedSizes.length > 0) {
       result = result.filter(p => {
         if (p.sizeOptions && Array.isArray(p.sizeOptions) && p.sizeOptions.length > 0) {
@@ -759,30 +1171,36 @@ export default function Shop() {
       });
     }
 
-    // 6. In stock only
+    // 7. Rating Filter
+    if (minRating !== null) {
+      result = result.filter(p => (p.rating || 4.5) >= minRating);
+    }
+
+    // 8. In stock only
     if (onlyInStock) {
       result = result.filter(p => (p.stockQuantity === undefined || p.stockQuantity > 0));
     }
 
-    // 7. Sorting
+    // 9. Sorting
     result.sort((a, b) => {
       if (sortBy === 'price-low') return a.price - b.price;
       if (sortBy === 'price-high') return b.price - a.price;
       if (sortBy === 'rating') return (b.rating || 4.5) - (a.rating || 4.5);
-      if (sortBy === 'newest') return (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0);
+      if (sortBy === 'newest') return (new Date(b.createdAt || 0).getTime()) - (new Date(a.createdAt || 0).getTime());
+      if (sortBy === 'discount-high') return calculateDiscount(b) - calculateDiscount(a);
+      if (sortBy === 'best-selling') return (b.stockQuantity || 0) - (a.stockQuantity || 0);
       return 0; // Popular / Default
     });
 
     return result;
-  }, [allCategoryProducts, activeSubcat, searchQuery, minPrice, maxPrice, selectedBrands, selectedSizes, onlyInStock, sortBy]);
+  }, [allCategoryProducts, activeSubcat, selectedCategory, searchQuery, minPrice, maxPrice, selectedBrands, selectedSizes, minRating, onlyInStock, sortBy]);
 
-  // Total items display count (e.g. "Showing 1-8 of 50 items" or actual items count)
+  // Total items display count
   const totalCount = Math.max(filteredProducts.length, currentMeta.defaultItemsCount);
   const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
 
   // Current page sliced products
   const displayedProducts = useMemo(() => {
-    // If total filtered products is small, repeat or show all available
     if (filteredProducts.length <= itemsPerPage) {
       return filteredProducts;
     }
@@ -806,7 +1224,7 @@ export default function Shop() {
       />
 
       {/* Main Category Content Container */}
-      <main className="max-w-7xl mx-auto px-3.5 sm:px-6 md:px-8 pt-4 sm:pt-6 space-y-3.5 sm:space-y-4">
+      <main className="max-w-7xl mx-auto px-3.5 sm:px-6 md:px-8 pt-4 sm:pt-6 space-y-4 sm:space-y-5">
         
         {/* Navigation Breadcrumb / Back Button */}
         <div className="flex items-center space-x-2 text-xs font-medium text-neutral-500">
@@ -824,41 +1242,75 @@ export default function Shop() {
           <span className="text-neutral-900 font-semibold">{currentMeta.title}</span>
         </div>
 
-        {/* 2. CATEGORY TITLE & SUBTITLE */}
-        <section className="space-y-1">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-serif text-neutral-900 tracking-tight">
-            {currentMeta.title}
-          </h1>
-          <p className="text-[11px] sm:text-xs md:text-sm text-neutral-500 font-normal leading-relaxed whitespace-pre-line">
-            {currentMeta.subtitle}
-          </p>
-        </section>
+        {/* 2. DYNAMIC HERO BANNER MATCHING BLUEPRINT SCREENSHOT EXACTLY */}
+        {currentMeta && (
+          <section className={`relative overflow-hidden rounded-2xl ${currentMeta.bannerBg} shadow-sm px-4 py-3 sm:px-6 sm:py-4 md:px-7 md:py-5 min-h-[108px] xs:min-h-[118px] sm:min-h-[135px] flex items-center`}>
+            {/* Background Decorative Pattern */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_70%)] pointer-events-none" />
+            
+            <div className="relative z-10 w-full flex flex-row items-center justify-between gap-2.5 sm:gap-6">
+              {/* Left Text Content */}
+              <div className="flex-1 min-w-0 pr-1 sm:pr-2">
+                {currentMeta.badge && (
+                  <span className={`inline-block px-2 sm:px-2.5 py-0.5 mb-1 sm:mb-1.5 rounded-full text-[8px] xs:text-[9px] sm:text-[10px] font-bold tracking-wider uppercase ${currentMeta.badgeColor || 'bg-white/10 text-white border border-white/15'}`}>
+                    {currentMeta.badge}
+                  </span>
+                )}
+                <h1 className={`text-lg xs:text-xl sm:text-2xl md:text-3xl font-bold font-serif tracking-tight leading-tight mb-0.5 sm:mb-1 ${currentMeta.textColor}`}>
+                  {currentMeta.title}
+                </h1>
+                <p className={`text-[10px] xs:text-[11px] sm:text-xs md:text-sm font-normal leading-snug whitespace-pre-line opacity-90 ${currentMeta.textColor}`}>
+                  {currentMeta.subtitle}
+                </p>
+              </div>
 
-        {/* 3. SUB-CATEGORY FILTER PILLS ROW (e.g. All, Clothing, Shoes, Accessories, Watches) */}
-        <section className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
-          {currentMeta.subcategories.map((subcat) => {
-            const isActive = activeSubcat === subcat;
-            return (
-              <button
-                key={subcat}
-                onClick={() => {
-                  setActiveSubcat(subcat);
-                  setCurrentPage(1);
-                }}
-                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                  isActive
-                    ? 'bg-black text-white shadow-2xs'
-                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-neutral-900'
-                }`}
-              >
-                {subcat}
-              </button>
-            );
-          })}
-        </section>
+              {/* Right Visual / Product Element (Seamlessly integrated, NO box/nested frame) */}
+              {currentMeta.bannerImage && (
+                <div className="shrink-0 relative w-20 h-20 xs:w-24 xs:h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 flex items-center justify-center">
+                  <img 
+                    src={currentMeta.bannerImage} 
+                    alt={currentMeta.title}
+                    className="w-full h-full object-cover rounded-xl shadow-xs transition-transform duration-500"
+                    referrerPolicy="no-referrer"
+                  />
+                  {currentMeta.hasDiscountTag && (
+                    <div className="absolute -bottom-1 -right-1 sm:bottom-0 sm:right-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#E5B54F] text-neutral-950 flex items-center justify-center font-black text-xs shadow-md ring-2 ring-[#0C2417]">
+                      <Percent size={13} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
-        {/* 4. FILTER & SORT TOOLBAR (Filter button + Sort by: Popular dropdown) */}
-        <section className="flex items-center justify-between pt-1 pb-1 border-b border-neutral-100">
+        {/* 3. SUB-CATEGORY FILTER PILLS ROW (Only for standard broad categories, hidden for curated drops like Daily Drops, Most Loved, Best Sellers) */}
+        {currentMeta.subcategories && !['daily-drops', 'most-loved', 'best-sellers'].includes(collectionKey) && (
+          <section className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
+            {currentMeta.subcategories.map((subcat) => {
+              const isActive = activeSubcat === subcat;
+              return (
+                <button
+                  key={subcat}
+                  onClick={() => {
+                    setActiveSubcat(subcat);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                    isActive
+                      ? 'bg-black text-white shadow-2xs'
+                      : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-neutral-900'
+                  }`}
+                >
+                  {subcat}
+                </button>
+              );
+            })}
+          </section>
+        )}
+
+        {/* 4. FILTER & SORT TOOLBAR (Filter button + Sort by: dropdown) */}
+        <section className="flex items-center justify-between pt-1.5 pb-1.5 border-b border-neutral-100">
           {/* Filter Toggle Button */}
           <button
             onClick={() => setIsFilterOpen(prev => !prev)}
@@ -877,25 +1329,27 @@ export default function Shop() {
             )}
           </button>
 
-          {/* Sort By Dropdown */}
-          <div className="flex items-center space-x-1 text-xs">
-            <span className="text-neutral-500 font-medium hidden xs:inline">Sort by:</span>
-            <div className="relative inline-block">
+          {/* Sort By Dropdown - Flushed to right edge */}
+          <div className="flex items-center justify-end text-xs shrink-0 ml-auto">
+            <span className="text-neutral-500 font-medium mr-1.5 hidden xs:inline">Sort by:</span>
+            <div className="relative inline-flex items-center">
               <select
                 value={sortBy}
                 onChange={(e) => {
                   setSortBy(e.target.value as any);
                   setCurrentPage(1);
                 }}
-                className="appearance-none bg-transparent pr-5 pl-1.5 py-1 text-xs font-bold text-neutral-900 focus:outline-none cursor-pointer"
+                className="appearance-none bg-transparent pr-4.5 pl-1 py-1 text-xs font-bold text-neutral-900 focus:outline-none cursor-pointer text-right"
               >
                 <option value="popular">Popular</option>
                 <option value="newest">Newest</option>
+                <option value="best-selling">Best Selling</option>
+                <option value="discount-high">Discount: High to Low</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
                 <option value="rating">Top Rated</option>
               </select>
-              <ChevronDown size={12} className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500" />
+              <ChevronDown size={13} className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500" />
             </div>
           </div>
         </section>
@@ -918,6 +1372,8 @@ export default function Shop() {
                       setMaxPrice('');
                       setSelectedBrands([]);
                       setSelectedSizes([]);
+                      setSelectedCategory('All');
+                      setMinRating(null);
                       setOnlyInStock(false);
                     }}
                     className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
@@ -935,7 +1391,7 @@ export default function Shop() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {/* 1. Price Range Filter */}
               <div className="space-y-2.5">
                 <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600">Price Range (৳)</label>
@@ -1007,7 +1463,34 @@ export default function Shop() {
                 </div>
               </div>
 
-              {/* 2. Brand Filter */}
+              {/* 2. Category Filter */}
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600">Category</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {['All', 'Men', 'Women', 'Kids', 'Accessories', 'Streetwear'].map((cat) => {
+                    const isSelected = selectedCategory === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(cat);
+                          setCurrentPage(1);
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer border ${
+                          isSelected
+                            ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
+                            : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. Brand Filter */}
               <div className="space-y-2">
                 <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600">Brand</label>
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
@@ -1039,7 +1522,7 @@ export default function Shop() {
                 </div>
               </div>
 
-              {/* 3. Size Filter & In-stock */}
+              {/* 4. Size & Rating Filter & In-stock */}
               <div className="space-y-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600 mb-1.5">Size</label>
@@ -1058,13 +1541,44 @@ export default function Shop() {
                             }
                             setCurrentPage(1);
                           }}
-                          className={`w-9 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center ${
+                          className={`w-8 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center justify-center ${
                             isSelected
                               ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
                               : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
                           }`}
                         >
                           {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Rating Filter */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-neutral-600 mb-1">Customer Rating</label>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { label: 'All', val: null },
+                      { label: '4★ & up', val: 4.0 },
+                      { label: '4.5★ & up', val: 4.5 },
+                    ].map((rate, i) => {
+                      const isSelected = minRating === rate.val;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setMinRating(rate.val);
+                            setCurrentPage(1);
+                          }}
+                          className={`text-[11px] px-2 py-0.5 rounded-md font-medium border cursor-pointer ${
+                            isSelected 
+                              ? 'bg-neutral-900 text-white border-neutral-900' 
+                              : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                          }`}
+                        >
+                          {rate.label}
                         </button>
                       );
                     })}
@@ -1092,7 +1606,7 @@ export default function Shop() {
           </div>
         )}
 
-        {/* Active Filters Pill Bar (When filters are active) */}
+        {/* Active Filters Pill Bar */}
         {activeFilterCount > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap py-1">
             <span className="text-xs font-medium text-neutral-400 mr-1">Active:</span>
@@ -1108,6 +1622,19 @@ export default function Shop() {
                     setMinPrice('');
                     setMaxPrice('');
                   }}
+                  className="hover:text-black p-0.5 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+
+            {/* Category Tag */}
+            {selectedCategory !== 'All' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
+                <span>Category: {selectedCategory}</span>
+                <button
+                  onClick={() => setSelectedCategory('All')}
                   className="hover:text-black p-0.5 cursor-pointer"
                 >
                   <X size={12} />
@@ -1141,6 +1668,19 @@ export default function Shop() {
               </span>
             ))}
 
+            {/* Rating Tag */}
+            {minRating !== null && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
+                <span>Rating: {minRating}★+</span>
+                <button
+                  onClick={() => setMinRating(null)}
+                  className="hover:text-black p-0.5 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+
             {/* In Stock Tag */}
             {onlyInStock && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
@@ -1160,6 +1700,8 @@ export default function Shop() {
                 setMaxPrice('');
                 setSelectedBrands([]);
                 setSelectedSizes([]);
+                setSelectedCategory('All');
+                setMinRating(null);
                 setOnlyInStock(false);
               }}
               className="text-xs font-bold text-red-600 hover:underline ml-1 cursor-pointer"
@@ -1195,8 +1737,10 @@ export default function Shop() {
             <button 
               onClick={() => {
                 setActiveSubcat('All');
+                setSelectedCategory('All');
                 setMinPrice('');
                 setMaxPrice('');
+                setMinRating(null);
               }}
               className="px-4 py-2 bg-black text-white text-xs font-bold rounded-full hover:bg-neutral-800"
             >

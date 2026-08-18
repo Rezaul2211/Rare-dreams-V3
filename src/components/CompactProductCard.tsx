@@ -5,6 +5,7 @@ import { Product } from '../types';
 import { LazyImage } from './LazyImage';
 import { useWishlistStore } from '../store/useWishlistStore';
 import { useLanguageStore, translateCategory } from '../store/useLanguageStore';
+import { calculateDiscount, formatPrice } from '../utils/productUtils';
 
 interface CompactProductCardProps {
   product: Product;
@@ -15,11 +16,7 @@ export const CompactProductCard: React.FC<CompactProductCardProps> = React.memo(
   const { language, t } = useLanguageStore();
 
   const favorited = isWishlisted(product.id);
-
-  let discountPct = product.discountPercentage || product.discount;
-  if (!discountPct && product.comparePrice && product.comparePrice > product.price) {
-    discountPct = Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100);
-  }
+  const discountPct = calculateDiscount(product);
 
   const handleWishlistClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -80,39 +77,39 @@ export const CompactProductCard: React.FC<CompactProductCardProps> = React.memo(
         </button>
       </div>
 
-      {/* Product Details - ultra compact height */}
-      <div className="p-1 sm:p-2 flex flex-col flex-grow">
+      {/* Product Details - comfortable compact height */}
+      <div className="p-1.5 sm:p-2.5 flex flex-col flex-grow">
         <Link to={`/product/${product.id}`} className="block">
-          <h3 className="text-[9px] sm:text-[11px] font-bold text-neutral-900 line-clamp-1 group-hover:text-amber-800 transition-colors leading-tight">
+          <h3 className="text-[11px] sm:text-xs font-bold text-neutral-900 line-clamp-1 group-hover:text-amber-800 transition-colors leading-tight mb-0.5">
             {product.name}
           </h3>
         </Link>
 
         {/* Stock & Rating/Category inline */}
         <div className="flex items-center justify-between my-0.5">
-          <span className={`text-[6px] sm:text-[8px] font-bold uppercase tracking-wider ${product.stockQuantity && product.stockQuantity > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider ${product.stockQuantity && product.stockQuantity > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
             {product.stockQuantity && product.stockQuantity > 0 ? 'In Stock' : 'Out of Stock'}
           </span>
           {product.rating && product.rating > 0 ? (
             <div className="flex items-center space-x-0.5">
-              <Star size={7} className="fill-amber-400 text-amber-400 shrink-0" />
-              <span className="text-[7px] sm:text-[9px] font-bold text-neutral-800">{product.rating.toFixed(1)}</span>
+              <Star size={9} className="fill-amber-400 text-amber-400 shrink-0" />
+              <span className="text-[9px] sm:text-[10px] font-bold text-neutral-800">{product.rating.toFixed(1)}</span>
             </div>
           ) : product.category ? (
-            <span className="text-[6px] sm:text-[8px] font-bold text-neutral-400 uppercase tracking-wider line-clamp-1">
+            <span className="text-[8px] sm:text-[9px] font-bold text-neutral-400 uppercase tracking-wider line-clamp-1">
               {translateCategory(product.category)}
             </span>
           ) : null}
         </div>
 
         {/* Price */}
-        <div className="mt-auto flex items-baseline space-x-1 pt-0.5 border-t border-neutral-100">
-          <span className="font-black text-[9px] sm:text-xs text-neutral-900 truncate leading-none">
-            ৳ {product.price.toFixed(0)}
+        <div className="mt-auto flex items-baseline space-x-1 pt-1 border-t border-neutral-100">
+          <span className="font-black text-[11px] sm:text-xs text-neutral-900 truncate leading-none">
+            {formatPrice(product.price)}
           </span>
           {product.comparePrice && product.comparePrice > product.price && (
-            <span className="text-[7px] sm:text-[8px] text-neutral-400 line-through truncate leading-none">
-              ৳ {product.comparePrice.toFixed(0)}
+            <span className="text-[9px] sm:text-[10px] text-neutral-400 line-through truncate leading-none">
+              {formatPrice(product.comparePrice)}
             </span>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type Language = 'en';
+export type Language = 'en' | 'bn';
 
 interface LanguageState {
   language: Language;
@@ -10,7 +10,7 @@ interface LanguageState {
   t: (key: string, defaultText?: string) => string;
 }
 
-export const translations: Record<Language, Record<string, string>> = {
+export const translations: Partial<Record<Language, Record<string, string>>> = {
   en: {
     // Header & Nav
     'nav.home': 'Home',

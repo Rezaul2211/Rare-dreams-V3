@@ -8,6 +8,12 @@ export interface Product {
   discount?: number;
   discountPercentage?: number;
   isFlashSale?: boolean;
+  isNew?: boolean;
+  daily_drop?: boolean;
+  isBestSeller?: boolean;
+  isMostLoved?: boolean;
+  mega_sale?: boolean;
+  popularityScore?: number;
   rating?: number;
   stockQuantity: number;
   sizeOptions?: string[];
@@ -52,9 +58,11 @@ export interface PaymentMethodItem {
 
 export interface User {
   uid: string;
+  id?: string;
   email: string;
   displayName: string;
   phoneNumber?: string;
+  phone?: string;
   photoURL?: string;
   role: 'customer' | 'admin' | 'seller';
   addresses?: AddressItem[];

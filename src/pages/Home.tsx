@@ -22,6 +22,8 @@ import { DEFAULT_HERO_SLIDES, BannerSlide } from './admin/AdminSettings';
 import { useCategoryStore } from '../store/useCategoryStore';
 import { useLanguageStore, translateCategory } from '../store/useLanguageStore';
 import SEO from '../components/SEO';
+import { usePublishedProducts } from '../hooks/usePublishedProducts';
+import { matchesCategoryGroup } from '../utils/productUtils';
 
 // Pristine showcase items matching the reference blueprint screenshot exactly
 const MEN_SHOWCASE: Product[] = [
@@ -585,8 +587,7 @@ export default function Home() {
 
   const { categories: storeCategories } = useCategoryStore();
   const { language } = useLanguageStore();
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { products: allProducts, loading } = usePublishedProducts();
 
   // Fetch Homepage Customization Settings from Firestore & Cache in localStorage
   useEffect(() => {
@@ -649,67 +650,24 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [heroSlides.length]);
 
-  // Fetch all published products from Firestore
-  useEffect(() => {
-    let isMounted = true;
-    const fetchProducts = async () => {
-      try {
-        const q = query(
-          collection(db, 'products'),
-          where('status', '==', 'published')
-        );
-        const querySnapshot = await getDocs(q);
-        if (isMounted) {
-          const fetchedProducts = querySnapshot.docs.map(d => {
-            const data = d.data();
-            return {
-              id: d.id,
-              ...data,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-            } as Product;
-          });
-          setAllProducts(fetchedProducts);
-          setLoading(false);
-        }
-      } catch {
-        if (isMounted) {
-          setAllProducts([]);
-          setLoading(false);
-        }
-      }
-    };
-    fetchProducts();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Filter products by category or fall back to screenshot showcase items
+  // Filter products by category or fall back to showcase items
   const menProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => 
-      p.category?.toLowerCase().includes('men') && !p.category?.toLowerCase().includes('women')
-    );
+    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'men'));
     return matched.length > 0 ? matched : MEN_SHOWCASE;
   }, [allProducts]);
 
   const womenProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => 
-      p.category?.toLowerCase().includes('women')
-    );
+    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'women'));
     return matched.length > 0 ? matched : WOMEN_SHOWCASE;
   }, [allProducts]);
 
   const kidsProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => {
-      const c = p.category?.toLowerCase() || '';
-      return c.includes('kid') || c.includes('boy') || c.includes('girl') || c.includes('baby');
-    });
+    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'kids'));
     return matched.length > 0 ? matched : KIDS_SHOWCASE;
   }, [allProducts]);
 
   const accessoriesProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => {
-      const c = p.category?.toLowerCase() || '';
-      return c.includes('access') || c.includes('watch') || c.includes('bag') || c.includes('belt');
-    });
+    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'accessories'));
     return matched.length > 0 ? matched : ACCESSORIES_SHOWCASE;
   }, [allProducts]);
 
@@ -941,7 +899,7 @@ export default function Home() {
         <section className="grid grid-cols-3 gap-1 sm:gap-2.5">
           {/* Bento Card 1: Daily Drops */}
           <Link
-            to="/shop"
+            to="/daily-drops"
             className="group relative rounded-md sm:rounded-lg overflow-hidden bg-neutral-950 px-2 py-1.5 sm:px-3 sm:py-2 flex items-center justify-between shadow-2xs min-h-[48px] xs:min-h-[54px] sm:min-h-[66px] hover:shadow-xs transition-all"
           >
             <div className="relative z-10 min-w-0 pr-1 flex flex-col justify-center">
@@ -962,7 +920,7 @@ export default function Home() {
 
           {/* Bento Card 2: Most Loved */}
           <Link
-            to="/shop"
+            to="/most-loved"
             className="group relative rounded-md sm:rounded-lg overflow-hidden bg-gradient-to-br from-[#F6E7CF] to-[#EBD2AA] px-2 py-1.5 sm:px-3 sm:py-2 flex items-center justify-between shadow-2xs min-h-[48px] xs:min-h-[54px] sm:min-h-[66px] hover:shadow-xs transition-all"
           >
             <div className="relative z-10 min-w-0 pr-1 flex flex-col justify-center">
@@ -977,9 +935,9 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* Bento Card 3: Up to 50% Off */}
+          {/* Bento Card 3: Up to 50% Off / Best Sellers */}
           <Link
-            to="/shop"
+            to="/best-sellers"
             className="group relative rounded-md sm:rounded-lg overflow-hidden bg-gradient-to-br from-[#162419] to-[#1F2F23] px-2 py-1.5 sm:px-3 sm:py-2 flex items-center justify-between shadow-2xs min-h-[48px] xs:min-h-[54px] sm:min-h-[66px] hover:shadow-xs transition-all"
           >
             <div className="relative z-10 min-w-0 pr-1 flex flex-col justify-center">
