@@ -26,7 +26,6 @@ export default function ProductForm() {
   const [aiPromptHint, setAiPromptHint] = useState<string>('');
   const [showAiHintInput, setShowAiHintInput] = useState(false);
   const [aiGeneratedSuccess, setAiGeneratedSuccess] = useState(false);
-  const [autoAiOnUpload, setAutoAiOnUpload] = useState(true);
   const [generatingField, setGeneratingField] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -256,9 +255,6 @@ export default function ProductForm() {
                   ...prev,
                   images: [...(prev.images || []), result]
                 }));
-                if (fileIndex === 0 && autoAiOnUpload && !formData.name) {
-                  runAiAutoFill(result);
-                }
              } else {
                 alert("Image format not supported. Please use JPEG, PNG, or WEBP.");
              }
@@ -298,10 +294,6 @@ export default function ProductForm() {
                   ...prev,
                   images: [...(prev.images || []), compressedBase64]
                 }));
-
-                if (fileIndex === 0 && autoAiOnUpload && (!formData.name || formData.name.trim() === '')) {
-                  runAiAutoFill(compressedBase64);
-                }
               }
             } catch (err) {
               console.error("Canvas error:", err);
@@ -309,9 +301,6 @@ export default function ProductForm() {
                 ...prev,
                 images: [...(prev.images || []), result]
               }));
-              if (fileIndex === 0 && autoAiOnUpload && (!formData.name || formData.name.trim() === '')) {
-                runAiAutoFill(result);
-              }
             }
           };
           img.src = result;
@@ -344,9 +333,6 @@ export default function ProductForm() {
         const newImages = [...(prev.images || []), imageUrl];
         return { ...prev, images: newImages };
       });
-      if (autoAiOnUpload && (!formData.name || formData.name.trim() === '')) {
-        runAiAutoFill(imageUrl);
-      }
       setImageUrl('');
     }
   };
@@ -639,22 +625,9 @@ export default function ProductForm() {
                     <span>Product Images</span>
                   </h2>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    Upload product photos. AI will automatically scan the first image.
+                    Upload product photos. Click the AI Auto-Fill button above to generate details.
                   </p>
                 </div>
-                
-                {/* Auto-fill on upload toggle */}
-                <label className="flex items-center gap-2 cursor-pointer bg-neutral-50 px-2.5 py-1.5 rounded-xl border border-neutral-200 hover:bg-neutral-100 transition-colors shrink-0">
-                  <input
-                    type="checkbox"
-                    checked={autoAiOnUpload}
-                    onChange={(e) => setAutoAiOnUpload(e.target.checked)}
-                    className="rounded text-amber-500 focus:ring-amber-500 h-3.5 w-3.5"
-                  />
-                  <span className="text-[11px] font-semibold text-neutral-700">
-                    Auto-Fill on Upload
-                  </span>
-                </label>
               </div>
               
               {/* Local File Upload Box */}

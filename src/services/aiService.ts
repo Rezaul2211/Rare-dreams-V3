@@ -22,7 +22,7 @@ export interface SendMessageOptions {
  */
 export async function sendAiMessage({
   message,
-  minThinkingMs = 1200,
+  minThinkingMs = 100,
   history = []
 }: SendMessageOptions): Promise<AiChatResponse> {
   const trimmed = message.trim();

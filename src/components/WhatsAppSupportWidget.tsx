@@ -192,8 +192,8 @@ export default function WhatsAppSupportWidget() {
     setAiLoading(true);
 
     try {
-      // Uses aiService with a smooth thinking state timer (1.4s) and history
-      const res = await sendAiMessage({ message: query, minThinkingMs: 1400, history });
+      // Uses aiService with a short thinking state timer and history
+      const res = await sendAiMessage({ message: query, minThinkingMs: 100, history });
 
       const aiMsg: ChatMsg = {
         id: 'ai-' + Date.now(),
