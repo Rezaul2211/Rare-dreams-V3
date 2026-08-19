@@ -129,7 +129,12 @@ export default function ProductForm() {
       });
 
       if (!res.ok) {
-        throw new Error("AI Server responded with error");
+        let errMsg = "AI Server responded with an error.";
+        try {
+          const errData = await res.json();
+          if (errData && errData.error) errMsg = errData.error;
+        } catch(e) {}
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -163,7 +168,7 @@ export default function ProductForm() {
       }
     } catch (err: any) {
       console.error("AI Auto-fill failed:", err);
-      alert("AI generation encountered a temporary issue. Please try again.");
+      alert(`AI Generation Failed: ${err.message || "Please try again later."}`);
     } finally {
       setIsAiGenerating(false);
       setAiStatusStep("");

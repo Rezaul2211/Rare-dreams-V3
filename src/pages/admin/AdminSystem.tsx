@@ -132,7 +132,13 @@ export default function AdminSystem() {
         body: JSON.stringify({ apiKey: cleanKey })
       });
 
-      const data = await res.json();
+      let data;
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Server returned an invalid response. (Status: ${res.status})`);
+      }
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Verification failed. Please check your Gemini API key from Google AI Studio.');

@@ -9,7 +9,8 @@ import { getAuth } from "firebase-admin/auth";
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 let dynamicGeminiKey: string = process.env.GEMINI_API_KEY || "";
 let aiClient: GoogleGenAI | null = null;
@@ -106,7 +107,7 @@ Requirements:
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
+          model: "gemini-3.6-flash",
           contents: prompt
         });
         if (response?.text) {
@@ -148,7 +149,7 @@ Instructions:
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
+          model: "gemini-3.6-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json"
@@ -256,7 +257,7 @@ Required JSON Structure:
         const textPart = { text: visionPrompt };
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
+          model: "gemini-3.6-flash",
           contents: {
             parts: [imagePart, textPart]
           },
@@ -274,6 +275,7 @@ Required JSON Structure:
         }
       } catch (geminiVisionErr: any) {
         console.warn("Gemini vision analysis warning:", geminiVisionErr?.message || geminiVisionErr);
+        // Fall through to the default mock data instead of crashing the request
       }
     }
 
@@ -331,7 +333,7 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY_NAME", "tags": ["TAG1", "TAG2
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
+          model: "gemini-3.6-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json"
@@ -535,7 +537,7 @@ RESPONSE FORMAT:
         });
 
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3.6-flash",
           contents,
           config: { systemInstruction: systemPrompt }
         });
@@ -576,7 +578,7 @@ app.get("/api/ai-health-check", async (req, res) => {
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+          model: "gemini-3.6-flash",
           contents: [{ role: "user", parts: [{ text: "Respond 'OK' if reachable." }] }]
         });
         if (response?.text) {
@@ -618,7 +620,7 @@ app.post("/api/admin/save-gemini-key", async (req, res) => {
       });
 
       const testRes = await testAi.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
         contents: [{ role: "user", parts: [{ text: "Ping. Respond 'PONG'." }] }]
       });
 
@@ -635,7 +637,7 @@ app.post("/api/admin/save-gemini-key", async (req, res) => {
         success: true,
         message: "Gemini API Key successfully verified and activated!",
         keySnippet: `${cleanKey.substring(0, 7)}...${cleanKey.substring(cleanKey.length - 4)}`,
-        model: "gemini-2.5-flash & gemini-3.7-flash"
+        model: "gemini-3.6-flash & gemini-3.6-flash"
       });
     } catch (testErr: any) {
       console.warn("Gemini key verification failed:", testErr);
