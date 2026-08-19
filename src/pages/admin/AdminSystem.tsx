@@ -130,6 +130,50 @@ export default function AdminSystem() {
 
   const { config: storeConfig, updateConfig: updateStoreConfig } = useStoreConfigStore();
 
+  // Helper for calling Grok directly from the client when backend /api returns static HTML
+  const callDirectClientGrok = async (key: string, promptText: string) => {
+    const trimmedKey = key.trim();
+    const isGroq = trimmedKey.startsWith('gsk_');
+    const endpoint = isGroq 
+      ? 'https://api.groq.com/openai/v1/chat/completions' 
+      : 'https://api.x.ai/v1/chat/completions';
+    const model = isGroq ? 'llama-3.3-70b-versatile' : 'grok-beta';
+
+    const start = Date.now();
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${trimmedKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: promptText }],
+        temperature: 0.7,
+        max_tokens: 1024
+      })
+    });
+
+    const latencyMs = Date.now() - start;
+    if (!res.ok) {
+      let errText = '';
+      try {
+        const errJson = await res.json();
+        errText = JSON.stringify(errJson);
+      } catch {
+        errText = await res.text();
+      }
+      throw new Error(`Direct Grok API Error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    return {
+      content: data.choices?.[0]?.message?.content || '',
+      model: data.model || model,
+      latencyMs
+    };
+  };
+
   // Safe Fetch Diagnostics
   const fetchDiagnostics = async (silent = false) => {
     if (!silent) setLoadingDiagnostics(true);
@@ -148,10 +192,50 @@ export default function AdminSystem() {
             totalCheckTimeMs: data.totalCheckTimeMs
           });
           setLastCheckTime(new Date());
+          return;
         }
-      } else {
-        setLastCheckTime(new Date());
       }
+
+      // If backend returned HTML (e.g. static hosting on Vercel without active server process),
+      // check if we have a saved Grok API key in state or Firestore to test direct client connectivity
+      const localKey = integrations.grokApiKey?.trim();
+      if (localKey) {
+        try {
+          const directPing = await callDirectClientGrok(localKey, "Ping. Reply with 'PONG'.");
+          setDiagnostics(prev => ({
+            ...prev,
+            grok: {
+              configured: true,
+              keySnippet: `${localKey.substring(0, 6)}...${localKey.substring(localKey.length - 4)}`,
+              model: directPing.model,
+              provider: localKey.startsWith('gsk_') ? 'Groq Llama' : 'xAI Grok',
+              reachable: true,
+              latencyMs: directPing.latencyMs,
+              statusCode: 200,
+              errorCode: null,
+              message: `Connected & Active (Direct Mode - Latency: ${directPing.latencyMs}ms)`,
+              resolution: null
+            }
+          }));
+        } catch (e: any) {
+          setDiagnostics(prev => ({
+            ...prev,
+            grok: {
+              configured: true,
+              keySnippet: `${localKey.substring(0, 6)}...${localKey.substring(localKey.length - 4)}`,
+              model: 'grok-beta',
+              provider: 'xAI Grok',
+              reachable: false,
+              latencyMs: 0,
+              statusCode: 401,
+              errorCode: 'UNAUTHENTICATED_OR_KEY_ERROR',
+              message: e.message || 'Direct Grok Ping failed',
+              resolution: 'Please check your API key on https://console.x.ai/ or https://console.groq.com/keys.'
+            }
+          }));
+        }
+      }
+      setLastCheckTime(new Date());
     } catch (err) {
       console.warn("Diagnostics fetch safe fallback:", err);
       setLastCheckTime(new Date());
@@ -186,7 +270,8 @@ export default function AdminSystem() {
         body: JSON.stringify({ testPrompt })
       });
       const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
+      
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         setTestResult({
           ok: res.ok,
@@ -194,20 +279,72 @@ export default function AdminSystem() {
           ...data
         });
       } else {
-        setTestResult({
-          ok: false,
-          status: res.status,
-          errorCode: 'STATIC_SERVER_OR_ROUTE_ERROR',
-          error: 'Backend API returned HTML instead of JSON. Ensure your server is active or GROK_API_KEY is configured in Vercel Environment Variables.'
-        });
+        // Backend API returned HTML or non-JSON (typical on static Vercel SPA preview before serverless rebuild)
+        // Automatically perform direct client test with the saved Grok API key!
+        const keyToUse = integrations.grokApiKey?.trim();
+        if (!keyToUse) {
+          setTestResult({
+            ok: false,
+            status: 400,
+            errorCode: 'KEY_NOT_CONFIGURED',
+            error: 'Grok API key is not configured yet.',
+            resolution: 'Please go to the "Integration Keys (Grok & FB ID)" tab, paste your Grok API key (xai-... or gsk_...), and click "Save All Keys to Database".'
+          });
+        } else {
+          try {
+            const directResult = await callDirectClientGrok(keyToUse, testPrompt);
+            setTestResult({
+              ok: true,
+              status: 200,
+              model: directResult.model,
+              latencyMs: directResult.latencyMs,
+              prompt: testPrompt,
+              responseText: directResult.content
+            });
+            fetchDiagnostics(true);
+          } catch (directErr: any) {
+            setTestResult({
+              ok: false,
+              status: 401,
+              errorCode: 'GROK_API_ERROR',
+              error: directErr.message || 'Direct Grok call failed.',
+              resolution: 'Please check your key at https://console.x.ai/ or https://console.groq.com/keys and ensure it has active billing/quota.'
+            });
+          }
+        }
       }
       fetchDiagnostics(true);
     } catch (err: any) {
-      setTestResult({
-        ok: false,
-        status: 500,
-        error: err.message || "Network error while running test"
-      });
+      // If network fetch failed, attempt direct client test
+      const keyToUse = integrations.grokApiKey?.trim();
+      if (keyToUse) {
+        try {
+          const directResult = await callDirectClientGrok(keyToUse, testPrompt);
+          setTestResult({
+            ok: true,
+            status: 200,
+            model: directResult.model,
+            latencyMs: directResult.latencyMs,
+            prompt: testPrompt,
+            responseText: directResult.content
+          });
+          fetchDiagnostics(true);
+        } catch (directErr: any) {
+          setTestResult({
+            ok: false,
+            status: 500,
+            error: directErr.message || "Network error while running test",
+            resolution: 'Check your internet connection and API key validity.'
+          });
+        }
+      } else {
+        setTestResult({
+          ok: false,
+          status: 500,
+          error: err.message || "Network error while running test",
+          resolution: 'Please enter your Grok API key in the Integration Keys tab.'
+        });
+      }
     } finally {
       setRunningTest(false);
     }
