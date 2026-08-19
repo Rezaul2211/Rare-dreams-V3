@@ -14,20 +14,74 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 let aiClient: GoogleGenAI | null = null;
 
+// Real-Time System Log Store (in-memory circular buffer)
+interface SystemLogEntry {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+  module: 'GEMINI_API' | 'CHATBOT' | 'AUTO_FILL' | 'FIREBASE' | 'SERVER';
+  message: string;
+  endpoint?: string;
+  statusCode?: number;
+  errorCode?: string;
+  latencyMs?: number;
+  details?: any;
+}
+
+const systemLogs: SystemLogEntry[] = [];
+const MAX_LOGS = 150;
+
+function addSystemLog(entry: Omit<SystemLogEntry, 'id' | 'timestamp'>) {
+  const log: SystemLogEntry = {
+    id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: new Date().toISOString(),
+    ...entry
+  };
+  systemLogs.unshift(log);
+  if (systemLogs.length > MAX_LOGS) {
+    systemLogs.pop();
+  }
+  return log;
+}
+
+// Initial boot log
+addSystemLog({
+  level: 'info',
+  module: 'SERVER',
+  message: 'Server process started. Initializing services and routes.',
+  details: { nodeVersion: process.version, env: process.env.NODE_ENV || 'development' }
+});
+
 function getAI(): GoogleGenAI | null {
   const envKey = process.env.GEMINI_API_KEY || "";
   if (!envKey || envKey.startsWith("MY_")) {
     return null;
   }
   if (!aiClient) {
-    aiClient = new GoogleGenAI({
-      apiKey: envKey.trim(),
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
+    try {
+      aiClient = new GoogleGenAI({
+        apiKey: envKey.trim(),
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
         }
-      }
-    });
+      });
+      addSystemLog({
+        level: 'success',
+        module: 'GEMINI_API',
+        message: 'Gemini SDK initialized successfully with environment key.',
+        details: { keySnippet: `${envKey.substring(0, 6)}...${envKey.substring(envKey.length - 4)}` }
+      });
+    } catch (e: any) {
+      addSystemLog({
+        level: 'error',
+        module: 'GEMINI_API',
+        message: 'Failed to instantiate GoogleGenAI client.',
+        errorCode: 'INIT_FAILED',
+        details: { error: e.message || String(e) }
+      });
+    }
   }
   return aiClient;
 }
@@ -59,8 +113,41 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
+// Helper for parsing and categorizing Gemini errors
+function parseGeminiError(err: any): { code: string; status: number; message: string; resolution: string } {
+  const msg = err?.message || String(err);
+  let code = 'UNKNOWN_ERROR';
+  let status = err?.status || 500;
+  let resolution = 'Check server logs and API configuration.';
+
+  if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('Quota exceeded') || msg.includes('resource_exhausted')) {
+    code = 'RESOURCE_EXHAUSTED (429)';
+    status = 429;
+    resolution = 'Daily or per-minute token quota exceeded on Google AI Studio. Wait for quota reset or generate a new API key from https://aistudio.google.com/app/apikey.';
+  } else if (msg.includes('API_KEY_INVALID') || msg.includes('400') || msg.includes('INVALID_ARGUMENT') || msg.includes('API key not valid')) {
+    code = 'INVALID_ARGUMENT / API_KEY_INVALID (400)';
+    status = 400;
+    resolution = 'The Gemini API key appears invalid, malformed, or inactive. Please verify the key in your environment variables.';
+  } else if (msg.includes('403') || msg.includes('PERMISSION_DENIED')) {
+    code = 'PERMISSION_DENIED (403)';
+    status = 403;
+    resolution = 'Permission denied for this model or API key. Ensure the Generative Language API is enabled in your Google Cloud / AI Studio project.';
+  } else if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('overloaded')) {
+    code = 'MODEL_OVERLOADED (503)';
+    status = 503;
+    resolution = 'The Gemini model servers are temporarily experiencing high traffic. Retry in a few moments.';
+  } else if (msg.includes('ENOTFOUND') || msg.includes('fetch failed')) {
+    code = 'NETWORK_ERROR';
+    status = 502;
+    resolution = 'Cannot reach generativelanguage.googleapis.com. Check network and internet connectivity.';
+  }
+
+  return { code, status, message: msg, resolution };
+}
+
 // 1. AI Product Description Generator API Route (Admin Tool - English)
 app.post("/api/ai-generate-description", async (req, res) => {
+  const startTime = Date.now();
   try {
     const { name, category, subcategory, price, material } = req.body;
     const prompt = `Write a compelling, luxury, SEO-optimized English product description for an e-commerce fashion item with these details:
@@ -82,20 +169,48 @@ Requirements:
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents: prompt
         });
+        const latencyMs = Date.now() - startTime;
         if (response?.text) {
-          return res.json({ description: response.text.trim() });
+          addSystemLog({
+            level: 'success',
+            module: 'AUTO_FILL',
+            endpoint: '/api/ai-generate-description',
+            message: `Generated AI description for "${name || 'Product'}" (${response.text.length} chars)`,
+            latencyMs,
+            details: { name, category, price }
+          });
+          return res.json({ description: response.text.trim(), latencyMs });
         }
       } catch (err: any) {
+        const parsedErr = parseGeminiError(err);
+        addSystemLog({
+          level: 'error',
+          module: 'AUTO_FILL',
+          endpoint: '/api/ai-generate-description',
+          message: `Gemini description generation failed: ${parsedErr.message}`,
+          errorCode: parsedErr.code,
+          statusCode: parsedErr.status,
+          latencyMs: Date.now() - startTime,
+          details: { error: parsedErr.message, resolution: parsedErr.resolution }
+        });
         console.warn("Gemini description fallback active:", err?.message || err);
       }
+    } else {
+      addSystemLog({
+        level: 'warn',
+        module: 'AUTO_FILL',
+        endpoint: '/api/ai-generate-description',
+        message: 'Gemini API client not configured. Using fallback description.',
+        errorCode: 'KEY_NOT_CONFIGURED'
+      });
     }
 
     // High-quality English Fallback Description
     const fallbackDesc = `Elevate your wardrobe with the exquisite ${name || 'Designer Collection'} by Rare Dreams. Expertly crafted from ${material || 'ultra-fine premium fabric'}, this outfit blends timeless elegance with all-day comfort.\n\n✨ Key Highlights:\n- Premium grade breathable & durable fabric\n- Tailored precision finish with regal aesthetic\n- Perfect for weddings, festive occasions, and exclusive gatherings\n- Easy care & long-lasting vibrant color retention\n\n🧺 Care Instructions: Gentle machine wash or dry clean recommended.`;
-    res.json({ description: fallbackDesc });
+    res.json({ description: fallbackDesc, fallback: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to generate description" });
   }
@@ -103,6 +218,7 @@ Requirements:
 
 // 2. AI Size Helper / Recommender API Route (English)
 app.post("/api/ai-recommend-size", async (req, res) => {
+  const startTime = Date.now();
   try {
     const { productName, category, availableSizes, age, height, weight, fitPreference } = req.body;
     const prompt = `Act as an expert size consultant for the luxury fashion brand "Rare Dreams".
@@ -124,32 +240,51 @@ Instructions:
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json"
           }
         });
+        const latencyMs = Date.now() - startTime;
         if (response?.text) {
           const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
           try {
             const parsed = JSON.parse(cleanText);
-            return res.json(parsed);
+            addSystemLog({
+              level: 'success',
+              module: 'GEMINI_API',
+              endpoint: '/api/ai-recommend-size',
+              message: `Recommended size ${parsed.recommendedSize} for ${productName || 'item'}`,
+              latencyMs
+            });
+            return res.json({ ...parsed, latencyMs });
           } catch {
             return res.json({
               recommendedSize: availableSizes?.[0] || 'M',
-              explanation: response.text.trim()
+              explanation: response.text.trim(),
+              latencyMs
             });
           }
         }
       } catch (err: any) {
+        const parsedErr = parseGeminiError(err);
+        addSystemLog({
+          level: 'error',
+          module: 'GEMINI_API',
+          endpoint: '/api/ai-recommend-size',
+          message: `Size recommender failed: ${parsedErr.message}`,
+          errorCode: parsedErr.code,
+          statusCode: parsedErr.status,
+          latencyMs: Date.now() - startTime
+        });
         console.warn("Gemini size recommender fallback active:", err?.message || err);
       }
     }
 
     const defaultSize = availableSizes?.[0] || 'M';
     const fallbackExp = `Based on your provided measurements and desired fit preference, size '${defaultSize}' will provide the most comfortable and flattering silhouette.`;
-    res.json({ recommendedSize: defaultSize, explanation: fallbackExp });
+    res.json({ recommendedSize: defaultSize, explanation: fallbackExp, fallback: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Size recommendation failed" });
   }
@@ -157,6 +292,7 @@ Instructions:
 
 // 3. AI Product Multimodal Vision Auto-Fill API Route (Admin Tool - English)
 app.post("/api/ai-product-auto-fill", async (req, res) => {
+  const startTime = Date.now();
   try {
     const { image, categories: clientCategories, hints } = req.body;
     if (!image) {
@@ -232,7 +368,7 @@ Required JSON Structure:
         const textPart = { text: visionPrompt };
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents: {
             parts: [imagePart, textPart]
           },
@@ -241,25 +377,52 @@ Required JSON Structure:
           }
         });
 
+        const latencyMs = Date.now() - startTime;
         if (response?.text) {
           const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanText);
           if (parsed && parsed.name) {
-            return res.json(parsed);
+            addSystemLog({
+              level: 'success',
+              module: 'AUTO_FILL',
+              endpoint: '/api/ai-product-auto-fill',
+              message: `Multimodal auto-fill generated details for "${parsed.name}"`,
+              latencyMs,
+              details: { name: parsed.name, category: parsed.category, price: parsed.price }
+            });
+            return res.json({ ...parsed, latencyMs });
           }
         }
       } catch (geminiVisionErr: any) {
+        const parsedErr = parseGeminiError(geminiVisionErr);
+        addSystemLog({
+          level: 'error',
+          module: 'AUTO_FILL',
+          endpoint: '/api/ai-product-auto-fill',
+          message: `Multimodal auto-fill failed: ${parsedErr.message}`,
+          errorCode: parsedErr.code,
+          statusCode: parsedErr.status,
+          latencyMs: Date.now() - startTime,
+          details: { error: parsedErr.message, resolution: parsedErr.resolution }
+        });
         console.warn("Gemini vision analysis warning:", geminiVisionErr?.message || geminiVisionErr);
-        // Fall through to the default mock data instead of crashing the request
       }
+    } else {
+      addSystemLog({
+        level: 'warn',
+        module: 'AUTO_FILL',
+        endpoint: '/api/ai-product-auto-fill',
+        message: 'Gemini API not available for image vision analysis. Using fallback.',
+        errorCode: 'KEY_NOT_CONFIGURED'
+      });
     }
 
     // High-Quality English Default Fallback Data
     const defaultCat = availableCategories[0] || "Men";
     res.json({
-      name: "Exclusive Royal Designer Collection",
+      name: hints ? `Luxury ${hints}` : "Exclusive Royal Designer Collection",
       category: defaultCat,
-      subcategory: "Premium Collection",
+      subcategory: hints || "Premium Collection",
       description: "Designed for effortless elegance, this premium piece by Rare Dreams features meticulous tailoring and luxurious breathable fabric. Designed to provide unmatched comfort and sophisticated styling for all special occasions.\n\n✨ Key Highlights:\n- Premium quality long-lasting fabric\n- Elegant silhouette with flawless craftsmanship\n- Versatile styling for celebrations and everyday luxury\n- Soft on skin with breathable comfort\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.",
       material: "100% Premium Cotton Blend",
       price: 1450,
@@ -269,7 +432,8 @@ Required JSON Structure:
       sizeOptions: ["M", "L", "XL", "XXL"],
       colorOptions: ["Black", "Navy Blue", "White"],
       tags: ["Exclusive", "New Arrival", "Rare Dreams", "Premium Quality"],
-      isFlashSale: false
+      isFlashSale: false,
+      fallback: true
     });
   } catch (err: any) {
     console.error("AI Product Auto-fill error:", err);
@@ -286,7 +450,8 @@ Required JSON Structure:
       sizeOptions: ["M", "L", "XL", "XXL"],
       colorOptions: ["Navy Blue", "Black"],
       tags: ["Exclusive", "New Arrival", "Rare Dreams"],
-      isFlashSale: false
+      isFlashSale: false,
+      fallback: true
     });
   }
 });
@@ -430,6 +595,7 @@ app.post("/api/price-alerts/track-price-changes", async (req, res) => {
 
 
 app.post("/api/ai-chat", async (req, res) => {
+  const startTime = Date.now();
   const { message, history } = req.body;
   const lower = (message || '').toLowerCase();
 
@@ -512,24 +678,246 @@ RESPONSE FORMAT:
         });
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-3.7-flash",
           contents,
           config: { systemInstruction: systemPrompt }
         });
 
+        const latencyMs = Date.now() - startTime;
         if (response && response.text) {
-          return res.json({ reply: response.text });
+          addSystemLog({
+            level: 'success',
+            module: 'CHATBOT',
+            endpoint: '/api/ai-chat',
+            message: `Chatbot response generated in ${latencyMs}ms (${response.text.length} chars)`,
+            latencyMs,
+            details: { query: message?.substring(0, 50), replyPreview: response.text.substring(0, 70) }
+          });
+          return res.json({ reply: response.text, latencyMs, source: 'gemini' });
         }
       } catch (geminiError: any) {
-        console.warn("Gemini API call warning:", geminiError?.message || geminiError);
+        const parsedErr = parseGeminiError(geminiError);
+        addSystemLog({
+          level: 'error',
+          module: 'CHATBOT',
+          endpoint: '/api/ai-chat',
+          message: `Gemini chatbot request failed: ${parsedErr.message}`,
+          errorCode: parsedErr.code,
+          statusCode: parsedErr.status,
+          latencyMs: Date.now() - startTime,
+          details: { query: message, error: parsedErr.message, resolution: parsedErr.resolution }
+        });
+        console.warn("Gemini chat error, fallback active:", geminiError?.message || geminiError);
       }
+    } else {
+      addSystemLog({
+        level: 'warn',
+        module: 'CHATBOT',
+        endpoint: '/api/ai-chat',
+        message: 'Gemini API not configured. Falling back to local smart knowledge base.',
+        errorCode: 'KEY_NOT_CONFIGURED',
+        details: { query: message }
+      });
     }
-  } catch (e) {
+  } catch (e: any) {
+    addSystemLog({
+      level: 'error',
+      module: 'CHATBOT',
+      endpoint: '/api/ai-chat',
+      message: `Fatal error initializing chat: ${e?.message || e}`,
+      errorCode: 'INIT_ERROR'
+    });
     console.warn("Gemini init error:", e);
   }
 
   // 2. Fallback to smart knowledge base
-  return res.json({ reply: getSmartFallback(lower) });
+  const fallbackReply = getSmartFallback(lower);
+  return res.json({ reply: fallbackReply, fallback: true, source: 'knowledge_base', latencyMs: Date.now() - startTime });
+});
+
+// Real-Time System Diagnostics Endpoint
+app.get("/api/admin/diagnostics", async (req, res) => {
+  const startTime = Date.now();
+  const envKey = process.env.GEMINI_API_KEY || "";
+  const isKeyConfigured = Boolean(envKey && !envKey.startsWith("MY_"));
+  const keySnippet = isKeyConfigured 
+    ? `${envKey.substring(0, 6)}...${envKey.substring(envKey.length - 4)}` 
+    : (envKey.startsWith("MY_") ? "Placeholder Key (Not Set)" : "Not Configured");
+
+  const diagnostics: any = {
+    timestamp: new Date().toISOString(),
+    server: {
+      uptimeSeconds: Math.floor(process.uptime()),
+      memoryMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      nodeVersion: process.version,
+      port: PORT,
+      status: "healthy"
+    },
+    gemini: {
+      configured: isKeyConfigured,
+      keySnippet,
+      model: "gemini-3.7-flash",
+      reachable: false,
+      latencyMs: 0,
+      statusCode: 0,
+      errorCode: null as string | null,
+      message: isKeyConfigured ? "Testing connection..." : "GEMINI_API_KEY environment variable is not configured",
+      resolution: null as string | null
+    },
+    firebase: {
+      adminInitialized: getApps().length > 0,
+      projectId: process.env.FIREBASE_PROJECT_ID || "ai-studio-52c30446-74a2-476d-a811-4a823b07db28",
+      status: getApps().length > 0 ? "ready" : "not_initialized"
+    },
+    logs: systemLogs.slice(0, 60)
+  };
+
+  // Perform quick live ping test to Gemini API if key is present
+  if (isKeyConfigured) {
+    const ai = getAI();
+    if (ai) {
+      try {
+        const pingStart = Date.now();
+        const testRes = await ai.models.generateContent({
+          model: "gemini-3.7-flash",
+          contents: [{ role: "user", parts: [{ text: "Ping. Respond strictly with 'PONG'." }] }]
+        });
+        const latency = Date.now() - pingStart;
+        diagnostics.gemini.latencyMs = latency;
+
+        if (testRes?.text) {
+          diagnostics.gemini.reachable = true;
+          diagnostics.gemini.statusCode = 200;
+          diagnostics.gemini.message = `Connected & Active (Latency: ${latency}ms, Response: "${testRes.text.trim()}")`;
+        } else {
+          diagnostics.gemini.statusCode = 204;
+          diagnostics.gemini.message = "Connected, but returned empty text response.";
+        }
+      } catch (testErr: any) {
+        const parsed = parseGeminiError(testErr);
+        diagnostics.gemini.reachable = false;
+        diagnostics.gemini.statusCode = parsed.status;
+        diagnostics.gemini.errorCode = parsed.code;
+        diagnostics.gemini.message = parsed.message;
+        diagnostics.gemini.resolution = parsed.resolution;
+
+        addSystemLog({
+          level: 'error',
+          module: 'GEMINI_API',
+          endpoint: '/api/admin/diagnostics',
+          message: `Gemini Diagnostic Ping failed: ${parsed.message}`,
+          errorCode: parsed.code,
+          statusCode: parsed.status,
+          details: { error: parsed.message, resolution: parsed.resolution }
+        });
+      }
+    } else {
+      diagnostics.gemini.errorCode = "CLIENT_INIT_FAILED";
+      diagnostics.gemini.message = "Could not create Gemini SDK instance";
+    }
+  }
+
+  diagnostics.totalCheckTimeMs = Date.now() - startTime;
+  res.json(diagnostics);
+});
+
+// Explicit Gemini API Test Endpoint with Custom Prompt
+app.post("/api/admin/diagnostics/test-gemini", async (req, res) => {
+  const startTime = Date.now();
+  const { testPrompt } = req.body;
+  const promptToRun = testPrompt || "Hello Rare Dreams AI! Please respond with a brief greeting in English and Bengali.";
+
+  const envKey = process.env.GEMINI_API_KEY || "";
+  if (!envKey || envKey.startsWith("MY_")) {
+    const errorEntry = addSystemLog({
+      level: 'error',
+      module: 'GEMINI_API',
+      endpoint: '/api/admin/diagnostics/test-gemini',
+      message: 'Test failed: GEMINI_API_KEY environment variable is not configured.',
+      errorCode: 'KEY_NOT_CONFIGURED',
+      statusCode: 400
+    });
+    return res.status(400).json({
+      success: false,
+      error: "GEMINI_API_KEY is not set in environment variables.",
+      errorCode: "KEY_NOT_CONFIGURED",
+      resolution: "Add GEMINI_API_KEY in your hosting dashboard (e.g. Vercel or Cloud Run environment settings).",
+      log: errorEntry
+    });
+  }
+
+  const ai = getAI();
+  if (!ai) {
+    return res.status(500).json({
+      success: false,
+      error: "Failed to initialize Gemini SDK client.",
+      errorCode: "SDK_INIT_FAILED"
+    });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents: promptToRun
+    });
+
+    const latencyMs = Date.now() - startTime;
+    const responseText = response?.text || "No text received";
+
+    const successLog = addSystemLog({
+      level: 'success',
+      module: 'GEMINI_API',
+      endpoint: '/api/admin/diagnostics/test-gemini',
+      message: `Live Gemini Test succeeded in ${latencyMs}ms (${responseText.length} chars)`,
+      latencyMs,
+      details: { prompt: promptToRun, responsePreview: responseText.substring(0, 100) }
+    });
+
+    return res.json({
+      success: true,
+      model: "gemini-3.7-flash",
+      latencyMs,
+      prompt: promptToRun,
+      responseText,
+      log: successLog
+    });
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    const parsed = parseGeminiError(err);
+
+    const errorLog = addSystemLog({
+      level: 'error',
+      module: 'GEMINI_API',
+      endpoint: '/api/admin/diagnostics/test-gemini',
+      message: `Live Gemini Test failed: ${parsed.message}`,
+      errorCode: parsed.code,
+      statusCode: parsed.status,
+      latencyMs,
+      details: { error: parsed.message, resolution: parsed.resolution, raw: String(err) }
+    });
+
+    return res.status(parsed.status >= 400 && parsed.status < 600 ? parsed.status : 500).json({
+      success: false,
+      error: parsed.message,
+      errorCode: parsed.code,
+      statusCode: parsed.status,
+      latencyMs,
+      resolution: parsed.resolution,
+      rawError: String(err),
+      log: errorLog
+    });
+  }
+});
+
+// Clear Diagnostic Logs Endpoint
+app.delete("/api/admin/diagnostics/logs", (req, res) => {
+  systemLogs.length = 0;
+  addSystemLog({
+    level: 'info',
+    module: 'SERVER',
+    message: 'System logs cleared by administrator.'
+  });
+  res.json({ success: true, message: "Logs cleared successfully." });
 });
 
 // Dynamic robots.txt
