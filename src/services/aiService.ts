@@ -44,11 +44,6 @@ export async function sendAiMessage({
         'Accept': 'application/json'
       };
 
-      const customKey = localStorage.getItem('rare_dreams_gemini_key');
-      if (customKey) {
-        headers['x-gemini-key'] = customKey;
-      }
-
       const response = await fetch('/api/ai-chat', {
         method: 'POST',
         headers,

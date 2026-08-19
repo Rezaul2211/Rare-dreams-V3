@@ -12,41 +12,16 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-let dynamicGeminiKey: string = process.env.GEMINI_API_KEY || "";
 let aiClient: GoogleGenAI | null = null;
-let lastUsedKey: string = "";
 
-function resolveGeminiKey(req?: express.Request, customKey?: string): string {
-  if (customKey && customKey.trim() && !customKey.startsWith("MY_")) {
-    return customKey.trim();
-  }
-  const headerKey = req?.headers?.["x-gemini-key"] as string;
-  if (headerKey && headerKey.trim() && !headerKey.startsWith("MY_")) {
-    return headerKey.trim();
-  }
-  const bodyKey = req?.body?.customApiKey as string;
-  if (bodyKey && bodyKey.trim() && !bodyKey.startsWith("MY_")) {
-    return bodyKey.trim();
-  }
-  if (dynamicGeminiKey && dynamicGeminiKey.trim() && !dynamicGeminiKey.startsWith("MY_")) {
-    return dynamicGeminiKey.trim();
-  }
+function getAI(): GoogleGenAI | null {
   const envKey = process.env.GEMINI_API_KEY || "";
-  if (envKey && envKey.trim() && !envKey.startsWith("MY_")) {
-    return envKey.trim();
-  }
-  return "";
-}
-
-function getAI(req?: express.Request, customKey?: string): GoogleGenAI | null {
-  const key = resolveGeminiKey(req, customKey);
-  if (!key) {
+  if (!envKey || envKey.startsWith("MY_")) {
     return null;
   }
-  if (!aiClient || lastUsedKey !== key) {
-    lastUsedKey = key;
+  if (!aiClient) {
     aiClient = new GoogleGenAI({
-      apiKey: key,
+      apiKey: envKey.trim(),
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build'
@@ -103,7 +78,7 @@ Requirements:
 - Keep it under 250 words. Do NOT include markdown code blocks around text.`;
 
     // Primary: Gemini 3.7 Flash API
-    const ai = getAI(req);
+    const ai = getAI();
     if (ai) {
       try {
         const response = await ai.models.generateContent({
@@ -145,7 +120,7 @@ Instructions:
 2. Provide a brief, reassuring explanation in polite English explaining why this size is recommended.
 3. Return JSON format strictly: {"recommendedSize": "SIZE_NAME", "explanation": "ENGLISH_EXPLANATION"}`;
 
-    const ai = getAI(req);
+    const ai = getAI();
     if (ai) {
       try {
         const response = await ai.models.generateContent({
@@ -245,7 +220,7 @@ Required JSON Structure:
 }`;
 
     // Primary: Gemini 3.7 Flash with Multimodal Vision
-    const ai = getAI(req);
+    const ai = getAI();
     if (ai && base64Data) {
       try {
         const imagePart = {
@@ -329,7 +304,7 @@ Suggest:
 
 Return JSON strictly: {"subcategory": "SUBCATEGORY_NAME", "tags": ["TAG1", "TAG2", "TAG3"]}`;
 
-    const ai = getAI(req);
+    const ai = getAI();
     if (ai) {
       try {
         const response = await ai.models.generateContent({
@@ -527,7 +502,7 @@ RESPONSE FORMAT:
 
   // 1. Primary: Gemini API
   try {
-    const ai = getAI(req);
+    const ai = getAI();
     if (ai) {
       try {
         const contents = Array.isArray(history) ? [...history] : [];
@@ -555,118 +530,6 @@ RESPONSE FORMAT:
 
   // 2. Fallback to smart knowledge base
   return res.json({ reply: getSmartFallback(lower) });
-});
-
-// AI API Health & Connectivity Check Endpoint
-app.get("/api/ai-health-check", async (req, res) => {
-  const activeKey = resolveGeminiKey(req);
-
-  const results = {
-    gemini: {
-      configured: false,
-      reachable: false,
-      keySnippet: activeKey ? `${activeKey.substring(0, 6)}...` : 'Not Set',
-      source: dynamicGeminiKey ? 'admin_panel' : (process.env.GEMINI_API_KEY ? 'env' : 'none'),
-      message: activeKey ? "Testing connection..." : "Gemini API Key is not configured yet"
-    }
-  };
-
-  // Test Gemini
-  if (activeKey) {
-    results.gemini.configured = true;
-    const ai = getAI(req);
-    if (ai) {
-      try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: [{ role: "user", parts: [{ text: "Respond 'OK' if reachable." }] }]
-        });
-        if (response?.text) {
-          results.gemini.reachable = true;
-          results.gemini.message = "Connected & Active (Gemini 2.5/3.7 Flash)";
-        } else {
-          results.gemini.message = "Connected but received empty response";
-        }
-      } catch (err: any) {
-        results.gemini.message = err?.message || "Connection to Gemini API failed";
-      }
-    } else {
-      results.gemini.message = "Failed to initialize Gemini SDK client";
-    }
-  }
-
-  res.json(results);
-});
-
-// Admin endpoint: Save and verify custom Gemini API key
-app.post("/api/admin/save-gemini-key", async (req, res) => {
-  try {
-    const { apiKey } = req.body;
-    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
-      return res.status(400).json({ success: false, error: "Please enter a valid Gemini API Key." });
-    }
-
-    const cleanKey = apiKey.trim();
-
-    // Verify key by making a test call to Gemini
-    try {
-      const testAi = new GoogleGenAI({
-        apiKey: cleanKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
-          }
-        }
-      });
-
-      const testRes = await testAi.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: [{ role: "user", parts: [{ text: "Ping. Respond 'PONG'." }] }]
-      });
-
-      if (!testRes?.text) {
-        throw new Error("Received empty verification response from Gemini API.");
-      }
-
-      // Update dynamic key in server memory
-      dynamicGeminiKey = cleanKey;
-      aiClient = null;
-      lastUsedKey = "";
-
-      return res.json({
-        success: true,
-        message: "Gemini API Key successfully verified and activated!",
-        keySnippet: `${cleanKey.substring(0, 7)}...${cleanKey.substring(cleanKey.length - 4)}`,
-        model: "gemini-3.6-flash & gemini-3.6-flash"
-      });
-    } catch (testErr: any) {
-      console.warn("Gemini key verification failed:", testErr);
-      return res.status(400).json({
-        success: false,
-        error: `Verification failed: ${testErr?.message || "Invalid API key or quota exceeded. Please check Google AI Studio."}`
-      });
-    }
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || "Failed to save API key" });
-  }
-});
-
-// Admin endpoint: Get current key status
-app.get("/api/admin/gemini-key-status", (req, res) => {
-  const activeKey = resolveGeminiKey(req);
-  res.json({
-    configured: !!activeKey,
-    keySnippet: activeKey ? `${activeKey.substring(0, 6)}...${activeKey.substring(activeKey.length - 4)}` : null,
-    source: dynamicGeminiKey ? 'admin_panel' : (process.env.GEMINI_API_KEY ? 'env' : 'none')
-  });
-});
-
-// Admin endpoint: Clear dynamic key
-app.delete("/api/admin/gemini-key", (req, res) => {
-  dynamicGeminiKey = "";
-  aiClient = null;
-  lastUsedKey = "";
-  res.json({ success: true, message: "Gemini API Key removed from server memory." });
 });
 
 // Dynamic robots.txt

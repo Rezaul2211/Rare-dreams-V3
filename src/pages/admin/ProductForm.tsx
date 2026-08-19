@@ -86,12 +86,7 @@ export default function ProductForm() {
   };
 
   const getAiHeaders = () => {
-    const key = localStorage.getItem('rare_dreams_gemini_key');
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (key) {
-      headers["x-gemini-key"] = key;
-    }
-    return headers;
+    return { "Content-Type": "application/json" };
   };
 
   // Main AI Image Auto-Fill Function
@@ -228,7 +223,7 @@ export default function ProductForm() {
     if (!files || files.length === 0) return;
 
     Array.from(files).forEach((file: File, fileIndex: number) => {
-      if (!file.type.startsWith('image/')) {
+      if (file.type && !file.type.startsWith('image/')) {
         alert('Please select valid image files');
         return;
       }
@@ -295,12 +290,9 @@ export default function ProductForm() {
                   images: [...(prev.images || []), compressedBase64]
                 }));
               }
-            } catch (err) {
+            } catch (err: any) {
               console.error("Canvas error:", err);
-              setFormData(prev => ({
-                ...prev,
-                images: [...(prev.images || []), result]
-              }));
+              alert("Could not process image: " + (err.message || "Unknown error"));
             }
           };
           img.src = result;
@@ -308,6 +300,9 @@ export default function ProductForm() {
       };
       reader.readAsDataURL(file);
     });
+    
+    // Clear input so the same file can be selected again
+    e.target.value = '';
   };
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
