@@ -4,7 +4,7 @@
 interface GrokConfig {
   key: string;
   baseUrl: string;
-  model: string;
+  candidateModels: string[];
   providerName: 'xAI Grok' | 'Groq Llama';
 }
 
@@ -25,14 +25,14 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
-      model: "llama-3.3-70b-versatile",
+      candidateModels: ["llama-3.1-8b-instant", "llama3-70b-8192", "llama3-8b-8192", "mixtral-8x7b-32768", "gemma2-9b-it"],
       providerName: "Groq Llama"
     };
   } else {
     return {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
-      model: "grok-beta",
+      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212"],
       providerName: "xAI Grok"
     };
   }
@@ -44,46 +44,66 @@ async function callGrok(messages: Array<{ role: string; content: string }>, opti
     throw new Error("GROK_API_KEY is not configured in Vercel Environment Variables.");
   }
 
-  const startTime = Date.now();
-  const payload = {
-    model: config.model,
-    messages,
-    temperature: options.temperature ?? 0.7,
-    max_tokens: options.max_tokens ?? 1024,
-  };
+  let lastError: any = null;
 
-  const response = await fetch(config.baseUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.key}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const latencyMs = Date.now() - startTime;
-
-  if (!response.ok) {
-    let errorDetail = "";
+  for (const model of config.candidateModels) {
     try {
-      const errJson = await response.json();
-      errorDetail = JSON.stringify(errJson);
-    } catch {
-      errorDetail = await response.text();
+      const startTime = Date.now();
+      const payload = {
+        model,
+        messages,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.max_tokens ?? 1024,
+      };
+
+      const response = await fetch(config.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${config.key}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const latencyMs = Date.now() - startTime;
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || "";
+        return {
+          content,
+          model: data.model || model,
+          latencyMs
+        };
+      }
+
+      let errorDetail = "";
+      try {
+        const errJson = await response.json();
+        errorDetail = JSON.stringify(errJson);
+      } catch {
+        errorDetail = await response.text();
+      }
+
+      const err: any = new Error(`Grok API error (${response.status}): ${errorDetail}`);
+      err.status = response.status;
+      err.details = errorDetail;
+      lastError = err;
+
+      if (response.status === 404 || errorDetail.includes("model_not_found") || errorDetail.includes("does not exist")) {
+        continue;
+      }
+
+      throw err;
+    } catch (e: any) {
+      if (e.status === 401 || e.message?.includes("401") || e.message?.includes("invalid_api_key")) {
+        throw e;
+      }
+      lastError = e;
     }
-    const err: any = new Error(`Grok API error (${response.status}): ${errorDetail}`);
-    err.status = response.status;
-    err.details = errorDetail;
-    throw err;
   }
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || "";
-  return {
-    content,
-    model: data.model || config.model,
-    latencyMs
-  };
+  throw lastError || new Error("Failed to communicate with Grok / Groq API.");
 }
 
 export default async function handler(req: any, res: any) {

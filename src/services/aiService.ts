@@ -43,33 +43,65 @@ async function callDirectGrok(key: string, query: string): Promise<string> {
   const endpoint = isGroq 
     ? 'https://api.groq.com/openai/v1/chat/completions' 
     : 'https://api.x.ai/v1/chat/completions';
-  const model = isGroq ? 'llama-3.3-70b-versatile' : 'grok-beta';
+  
+  const candidateModels = isGroq
+    ? ['llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma2-9b-it']
+    : ['grok-beta', 'grok-2-latest', 'grok-2-1212'];
 
   const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh. Powered by Grok AI. Speak warmly and naturally in polite Bengali or English.`;
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: query }
-      ],
-      temperature: 0.7,
-      max_tokens: 1024
-    })
-  });
+  let lastError: any = null;
 
-  if (!response.ok) {
-    throw new Error(`Direct Grok error: ${response.status}`);
+  for (const model of candidateModels) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: query }
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || '';
+      }
+
+      if (response.status === 404) {
+        continue;
+      }
+
+      let errText = '';
+      try {
+        const errJson = await response.json();
+        errText = JSON.stringify(errJson);
+      } catch {
+        errText = await response.text();
+      }
+
+      if (errText.includes('model_not_found') || errText.includes('does not exist')) {
+        continue;
+      }
+
+      throw new Error(`Direct Grok error: ${response.status} - ${errText}`);
+    } catch (e: any) {
+      if (e.message?.includes('401') || e.message?.includes('invalid_api_key')) {
+        throw e;
+      }
+      lastError = e;
+    }
   }
 
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || '';
+  throw lastError || new Error("Failed to get response from Grok / Groq API");
 }
 
 /**

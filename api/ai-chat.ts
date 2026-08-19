@@ -3,7 +3,7 @@
 interface GrokConfig {
   key: string;
   baseUrl: string;
-  model: string;
+  candidateModels: string[];
   providerName: string;
 }
 
@@ -24,14 +24,14 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
-      model: "llama-3.3-70b-versatile",
+      candidateModels: ["llama-3.1-8b-instant", "llama3-70b-8192", "llama3-8b-8192", "mixtral-8x7b-32768", "gemma2-9b-it"],
       providerName: "Groq Llama"
     };
   } else {
     return {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
-      model: "grok-beta",
+      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212"],
       providerName: "xAI Grok"
     };
   }
@@ -65,46 +65,52 @@ export default async function handler(req: any, res: any) {
 
   const config = getGrokConfig();
   if (config) {
-    try {
-      const startTime = Date.now();
-      const messages: any[] = [{ role: "system", content: systemPrompt }];
+    for (const model of config.candidateModels) {
+      try {
+        const startTime = Date.now();
+        const messages: any[] = [{ role: "system", content: systemPrompt }];
 
-      if (Array.isArray(history)) {
-        for (const h of history) {
-          messages.push({
-            role: h.role === 'model' || h.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof h.content === 'string' ? h.content : (h.parts?.[0]?.text || '')
+        if (Array.isArray(history)) {
+          for (const h of history) {
+            messages.push({
+              role: h.role === 'model' || h.role === 'assistant' ? 'assistant' : 'user',
+              content: typeof h.content === 'string' ? h.content : (h.parts?.[0]?.text || '')
+            });
+          }
+        }
+        messages.push({ role: "user", content: query });
+
+        const response = await fetch(config.baseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${config.key}`
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.7,
+            max_tokens: 1024
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || "";
+          return res.status(200).json({
+            reply: content,
+            latencyMs: Date.now() - startTime,
+            source: 'grok',
+            model: data.model || model
           });
         }
-      }
-      messages.push({ role: "user", content: query });
 
-      const response = await fetch(config.baseUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${config.key}`
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages,
-          temperature: 0.7,
-          max_tokens: 1024
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || "";
-        return res.status(200).json({
-          reply: content,
-          latencyMs: Date.now() - startTime,
-          source: 'grok',
-          model: data.model || config.model
-        });
+        if (response.status === 404) {
+          continue;
+        }
+      } catch (e) {
+        console.warn("Grok model error, trying next:", e);
       }
-    } catch (e) {
-      console.warn("Grok handler error:", e);
     }
   }
 

@@ -137,41 +137,67 @@ export default function AdminSystem() {
     const endpoint = isGroq 
       ? 'https://api.groq.com/openai/v1/chat/completions' 
       : 'https://api.x.ai/v1/chat/completions';
-    const model = isGroq ? 'llama-3.3-70b-versatile' : 'grok-beta';
+      
+    // Candidate models in order of priority & universal availability
+    const candidateModels = isGroq
+      ? ['llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma2-9b-it']
+      : ['grok-beta', 'grok-2-latest', 'grok-2-1212'];
 
-    const start = Date.now();
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${trimmedKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: promptText }],
-        temperature: 0.7,
-        max_tokens: 1024
-      })
-    });
+    let lastError: any = null;
 
-    const latencyMs = Date.now() - start;
-    if (!res.ok) {
-      let errText = '';
+    for (const model of candidateModels) {
       try {
-        const errJson = await res.json();
-        errText = JSON.stringify(errJson);
-      } catch {
-        errText = await res.text();
+        const start = Date.now();
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${trimmedKey}`
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: promptText }],
+            temperature: 0.7,
+            max_tokens: 1024
+          })
+        });
+
+        const latencyMs = Date.now() - start;
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            content: data.choices?.[0]?.message?.content || '',
+            model: data.model || model,
+            latencyMs
+          };
+        }
+
+        let errText = '';
+        try {
+          const errJson = await res.json();
+          errText = JSON.stringify(errJson);
+        } catch {
+          errText = await res.text();
+        }
+
+        lastError = new Error(`Direct Grok API Error (${res.status}): ${errText}`);
+        
+        // If it's a 404 or model_not_found, try the next model in the candidate list
+        if (res.status === 404 || errText.includes('model_not_found') || errText.includes('does not exist')) {
+          continue;
+        } else {
+          // If it's 401 unauthenticated or other fatal error, stop and throw immediately
+          throw lastError;
+        }
+      } catch (e: any) {
+        if (e.message?.includes('401') || e.message?.includes('invalid_api_key')) {
+          throw e;
+        }
+        lastError = e;
       }
-      throw new Error(`Direct Grok API Error (${res.status}): ${errText}`);
     }
 
-    const data = await res.json();
-    return {
-      content: data.choices?.[0]?.message?.content || '',
-      model: data.model || model,
-      latencyMs
-    };
+    throw lastError || new Error("Failed to connect with any available Grok / Groq model.");
   };
 
   // Safe Fetch Diagnostics
