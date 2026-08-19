@@ -179,13 +179,21 @@ export default function WhatsAppSupportWidget() {
       timestamp: now
     };
 
+    // Prepare history from existing messages (excluding the new userMsg and system errors)
+    const history = chatMessages
+      .filter(m => m.id !== 'initial' && !m.id.includes('err'))
+      .map(m => ({
+        role: m.sender === 'user' ? 'user' as const : 'model' as const,
+        parts: [{ text: m.text }]
+      }));
+
     setChatMessages(prev => [...prev, userMsg]);
     if (!directText) setAiInput('');
     setAiLoading(true);
 
     try {
-      // Uses aiService with a smooth thinking state timer (1.4s)
-      const res = await sendAiMessage({ message: query, minThinkingMs: 1400 });
+      // Uses aiService with a smooth thinking state timer (1.4s) and history
+      const res = await sendAiMessage({ message: query, minThinkingMs: 1400, history });
 
       const aiMsg: ChatMsg = {
         id: 'ai-' + Date.now(),

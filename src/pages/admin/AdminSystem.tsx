@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, updateDoc, doc, deleteDoc, writeBatch, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, updateDoc, doc, deleteDoc, writeBatch, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { assignUserRoleByEmail, revokeUserRoleByEmail } from '../../lib/roles';
-import { ShieldAlert, Trash2, Mail, ShieldCheck, Database, Server, Loader2, AlertTriangle, CheckCircle2, UserMinus, Cpu, Sparkles, RefreshCw, Activity, Radio, Check, XCircle } from 'lucide-react';
+import { 
+  ShieldAlert, Trash2, Mail, ShieldCheck, Database, Server, Loader2, AlertTriangle, 
+  CheckCircle2, UserMinus, Cpu, Sparkles, RefreshCw, Key, Eye, EyeOff, ExternalLink,
+  Check, XCircle, Zap
+} from 'lucide-react';
 
 export default function AdminSystem() {
   const [email, setEmail] = useState('');
@@ -14,17 +18,37 @@ export default function AdminSystem() {
   const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [staffUsers, setStaffUsers] = useState<any[]>([]);
 
+  // AI Gemini API Key State
+  const [geminiApiKeyInput, setGeminiApiKeyInput] = useState('');
+  const [showKeyText, setShowKeyText] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
+  const [keyStatusMessage, setKeyStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  
   // AI Health Check State
   const [testingHealth, setTestingHealth] = useState(false);
   const [healthData, setHealthData] = useState<{
-    gemini?: { configured: boolean; reachable: boolean; keySnippet: string; message: string };
-    groq?: { configured: boolean; reachable: boolean; keySnippet: string; message: string };
+    gemini?: { configured: boolean; reachable: boolean; keySnippet: string; source?: string; message: string };
   } | null>(null);
+
+  // Integrations API Keys State
+  const [integrations, setIntegrations] = useState({
+    stripePublishableKey: '',
+    stripeSecretKey: '',
+    customServiceKey: ''
+  });
+  const [showIntegrations, setShowIntegrations] = useState(false);
+  const [savingIntegrations, setSavingIntegrations] = useState(false);
+  const [integrationsMessage, setIntegrationsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const fetchAiHealth = async () => {
     setTestingHealth(true);
     try {
-      const res = await fetch('/api/ai-health-check');
+      const localKey = localStorage.getItem('rare_dreams_gemini_key') || '';
+      const headers: Record<string, string> = {};
+      if (localKey) {
+        headers['x-gemini-key'] = localKey;
+      }
+      const res = await fetch('/api/ai-health-check', { headers });
       if (res.ok) {
         const data = await res.json();
         setHealthData(data);
@@ -36,9 +60,171 @@ export default function AdminSystem() {
     }
   };
 
+  // Load saved API key from Firestore & LocalStorage on mount
   useEffect(() => {
+    const loadAiConfig = async () => {
+      try {
+        const localKey = localStorage.getItem('rare_dreams_gemini_key');
+        if (localKey) {
+          setGeminiApiKeyInput(localKey);
+        }
+
+        const docRef = doc(db, 'system_settings', 'ai_config');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data?.geminiApiKey && typeof data.geminiApiKey === 'string') {
+            setGeminiApiKeyInput(data.geminiApiKey);
+            localStorage.setItem('rare_dreams_gemini_key', data.geminiApiKey);
+            
+            // Sync with server memory silently
+            fetch('/api/admin/save-gemini-key', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ apiKey: data.geminiApiKey })
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load AI configuration:", err);
+      }
+    };
+
+    const loadIntegrations = async () => {
+      try {
+        const docRef = doc(db, 'system_settings', 'integrations');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setIntegrations({
+            stripePublishableKey: data.stripePublishableKey || '',
+            stripeSecretKey: data.stripeSecretKey || '',
+            customServiceKey: data.customServiceKey || ''
+          });
+        }
+      } catch (err) {
+        console.warn("Could not load integrations:", err);
+      }
+    };
+
+    loadAiConfig();
+    loadIntegrations();
     fetchAiHealth();
   }, []);
+
+  const handleSaveGeminiKey = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!geminiApiKeyInput.trim()) {
+      setKeyStatusMessage({ type: 'error', text: 'Please enter a Gemini API Key.' });
+      return;
+    }
+
+    setSavingKey(true);
+    setKeyStatusMessage(null);
+
+    const cleanKey = geminiApiKeyInput.trim();
+
+    try {
+      // 1. Verify with backend server
+      const res = await fetch('/api/admin/save-gemini-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: cleanKey })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Verification failed. Please check your Gemini API key from Google AI Studio.');
+      }
+
+      // 2. Store in Firestore for multi-device admin synchronization
+      try {
+        await setDoc(doc(db, 'system_settings', 'ai_config'), {
+          geminiApiKey: cleanKey,
+          updatedAt: new Date().toISOString(),
+          status: 'active'
+        }, { merge: true });
+      } catch (fsErr) {
+        console.warn("Could not persist key to Firestore:", fsErr);
+      }
+
+      // 3. Store in LocalStorage for client requests
+      localStorage.setItem('rare_dreams_gemini_key', cleanKey);
+
+      setKeyStatusMessage({
+        type: 'success',
+        text: `Gemini API Key verified and saved successfully! Auto-generation is ready to use.`
+      });
+
+      // Refresh health
+      await fetchAiHealth();
+    } catch (err: any) {
+      console.error("Save Gemini Key error:", err);
+      setKeyStatusMessage({
+        type: 'error',
+        text: err.message || 'Failed to verify and save Gemini API Key.'
+      });
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
+  const handleRemoveGeminiKey = async () => {
+    if (!window.confirm("Are you sure you want to remove this Gemini API Key?")) return;
+    
+    setSavingKey(true);
+    setKeyStatusMessage(null);
+    try {
+      localStorage.removeItem('rare_dreams_gemini_key');
+      setGeminiApiKeyInput('');
+
+      await fetch('/api/admin/gemini-key', { method: 'DELETE' });
+
+      try {
+        await setDoc(doc(db, 'system_settings', 'ai_config'), {
+          geminiApiKey: '',
+          status: 'removed',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {}
+
+      setKeyStatusMessage({ type: 'success', text: 'Gemini API Key removed.' });
+      await fetchAiHealth();
+    } catch (err: any) {
+      setKeyStatusMessage({ type: 'error', text: err.message || 'Failed to remove key.' });
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
+  const handleSaveIntegrations = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingIntegrations(true);
+    setIntegrationsMessage(null);
+
+    try {
+      await setDoc(doc(db, 'system_settings', 'integrations'), {
+        ...integrations,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      setIntegrationsMessage({
+        type: 'success',
+        text: 'Integration keys saved securely to Firestore.'
+      });
+      
+      setTimeout(() => setIntegrationsMessage(null), 5000);
+    } catch (err: any) {
+      console.error("Save Integrations error:", err);
+      setIntegrationsMessage({
+        type: 'error',
+        text: err.message || 'Failed to save integration keys.'
+      });
+    } finally {
+      setSavingIntegrations(false);
+    }
+  };
 
   useEffect(() => {
     // Listen to users with admin/seller role
@@ -90,7 +276,7 @@ export default function AdminSystem() {
       await assignUserRoleByEmail(cleanEmail, role as any);
       setRoleMessage({ 
         type: 'success', 
-        text: `Permission granted successfully! ${role.toUpperCase()} access given to ${cleanEmail}. The user will directly access the admin panel upon login.` 
+        text: `Permission granted successfully! ${role.toUpperCase()} access given to ${cleanEmail}.` 
       });
       setEmail('');
     } catch (error: any) {
@@ -106,7 +292,7 @@ export default function AdminSystem() {
     
     try {
       await revokeUserRoleByEmail(userEmail);
-      setRoleMessage({ type: 'success', text: `Successfully revoked access for ${userEmail}. They are now a standard customer.` });
+      setRoleMessage({ type: 'success', text: `Successfully revoked access for ${userEmail}.` });
       setTimeout(() => setRoleMessage(null), 4000);
     } catch (error: any) {
       console.error(error);
@@ -116,20 +302,15 @@ export default function AdminSystem() {
 
   const handleClearHistory = async () => {
     const confirm = window.confirm(
-      "DANGER: Are you sure you want to permanently delete all order history and sales data? This action cannot be undone."
+      "DANGER: Are you sure you want to permanently delete all test orders and sales data? This action cannot be undone."
     );
     if (!confirm) return;
-
-    const confirm2 = window.confirm("Final confirmation. Type OK in the console... Just kidding, click OK to proceed.");
-    if (!confirm2) return;
 
     setLoadingDelete(true);
     setDeleteMessage(null);
     try {
-      // Get all orders
       const ordersSnap = await getDocs(collection(db, 'orders'));
       
-      // Batch delete in chunks of 500
       const batches = [];
       let currentBatch = writeBatch(db);
       let operationCount = 0;
@@ -151,7 +332,7 @@ export default function AdminSystem() {
       
       await Promise.all(batches);
       
-      setDeleteMessage({ type: 'success', text: `Successfully deleted ${ordersSnap.size} order records. Selling history wiped.` });
+      setDeleteMessage({ type: 'success', text: `Successfully deleted ${ordersSnap.size} order records.` });
     } catch (error: any) {
       console.error(error);
       setDeleteMessage({ type: 'error', text: error.message || 'Failed to clear history' });
@@ -168,17 +349,15 @@ export default function AdminSystem() {
     setSyncingAll(true);
     setSyncMessage(null);
     try {
-      // 1. Fetch AI Health Status
       await fetchAiHealth();
       
-      // 2. Refresh staff users query
       const qUsers = query(collection(db, 'users'), where('role', 'in', ['admin', 'seller']));
       const snapshot = await getDocs(qUsers);
       if (snapshot) {
         setStaffUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }
 
-      setSyncMessage("All AI APIs and system data synced successfully!");
+      setSyncMessage("All AI configurations and database systems synced successfully!");
       setTimeout(() => setSyncMessage(null), 4000);
     } catch (e: any) {
       console.error("Sync all error:", e);
@@ -188,9 +367,11 @@ export default function AdminSystem() {
     }
   };
 
+  const isGeminiConnected = healthData?.gemini?.reachable && healthData?.gemini?.configured;
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-3 duration-300">
-      {/* Top Header Card with Single 'Sync All Data' Button */}
+      {/* Top Header Card */}
       <div className="bg-white p-6 sm:p-7 rounded-3xl border border-neutral-200/90 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
@@ -198,14 +379,14 @@ export default function AdminSystem() {
             <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Control Panel & AI Engine</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-neutral-900 mt-0.5">
-            System & Infrastructure
+            System & API Settings
           </h1>
           <p className="text-xs text-neutral-500 font-medium mt-1">
-            Manage admin permissions, dual AI connectivity (Gemini & Groq), and cloud database operations
+            Configure Google Gemini API keys, staff permissions, and cloud database operations
           </p>
         </div>
 
-        {/* Consolidated Single Sync Button */}
+        {/* Sync Button */}
         <button
           onClick={handleSyncAllData}
           disabled={syncingAll}
@@ -232,7 +413,258 @@ export default function AdminSystem() {
         </div>
       )}
 
-      {/* Clean Card-Based Grid Layout */}
+      {/* FEATURED: Gemini API Key Configuration Card */}
+      <div className="bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 text-white p-6 sm:p-8 rounded-3xl border border-neutral-800 shadow-lg space-y-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-800 pb-5">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-400 text-neutral-950 flex items-center justify-center font-black shadow-md shrink-0">
+              <Sparkles size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-white uppercase tracking-tight">
+                  Google Gemini AI API Key
+                </h2>
+                <span className="text-[10px] font-black uppercase bg-amber-400/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-400/30">
+                  Multimodal Vision 3.7 & 2.5
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Set your API key here once to power automatic product titles, English descriptions, and category detection.
+              </p>
+            </div>
+          </div>
+
+          {/* Live Status Badge */}
+          <div className="flex items-center gap-2 shrink-0">
+            {testingHealth ? (
+              <span className="inline-flex items-center gap-1.5 bg-neutral-800 text-neutral-300 px-3 py-1.5 rounded-xl text-xs font-bold border border-neutral-700">
+                <Loader2 size={13} className="animate-spin text-amber-400" />
+                Testing connectivity...
+              </span>
+            ) : isGeminiConnected ? (
+              <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-bold border border-emerald-500/40">
+                <CheckCircle2 size={14} className="text-emerald-400" />
+                Connected & Active ({healthData?.gemini?.keySnippet || 'Key Verified'})
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 bg-amber-500/20 text-amber-300 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-500/40">
+                <AlertTriangle size={14} className="text-amber-400" />
+                Not Connected / Missing Key
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Status Message Toast */}
+        {keyStatusMessage && (
+          <div className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between gap-3 ${
+            keyStatusMessage.type === 'success' 
+              ? 'bg-emerald-950/80 text-emerald-200 border border-emerald-500/50' 
+              : 'bg-red-950/80 text-red-200 border border-red-500/50'
+          }`}>
+            <div className="flex items-center gap-2">
+              {keyStatusMessage.type === 'success' ? <CheckCircle2 size={16} className="text-emerald-400 shrink-0" /> : <AlertTriangle size={16} className="text-red-400 shrink-0" />}
+              <span>{keyStatusMessage.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setKeyStatusMessage(null)}
+              className="text-neutral-400 hover:text-white text-xs font-bold px-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* API Key Form */}
+        <form onSubmit={handleSaveGeminiKey} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-300 mb-2 flex items-center justify-between">
+              <span>Paste Your Gemini API Key</span>
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 hover:underline"
+              >
+                <span>Get a Free API Key from Google AI Studio</span>
+                <ExternalLink size={12} />
+              </a>
+            </label>
+
+            <div className="relative flex items-center">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
+                <Key size={16} />
+              </div>
+              <input
+                type={showKeyText ? "text" : "password"}
+                value={geminiApiKeyInput}
+                onChange={(e) => setGeminiApiKeyInput(e.target.value)}
+                placeholder="AIzaSy... (Paste your Google Gemini API Key here)"
+                className="w-full pl-10 pr-24 py-3 bg-neutral-900 border border-neutral-700 rounded-2xl text-xs sm:text-sm font-mono text-white placeholder-neutral-500 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKeyText(!showKeyText)}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                title={showKeyText ? "Hide key" : "Show key"}
+              >
+                {showKeyText ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={savingKey || !geminiApiKeyInput.trim()}
+                className="bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black px-5 py-2.5 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md disabled:opacity-50 cursor-pointer active:scale-95"
+              >
+                {savingKey ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-black" />
+                    <span>Verifying & Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={16} className="text-black" />
+                    <span>Verify & Save Key</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={fetchAiHealth}
+                disabled={testingHealth}
+                className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-bold border border-neutral-700 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {testingHealth ? <Loader2 size={14} className="animate-spin text-amber-400" /> : <RefreshCw size={14} />}
+                <span>Test Live Connection</span>
+              </button>
+            </div>
+
+            {geminiApiKeyInput && (
+              <button
+                type="button"
+                onClick={handleRemoveGeminiKey}
+                disabled={savingKey}
+                className="text-xs font-bold text-red-400 hover:text-red-300 hover:underline cursor-pointer"
+              >
+                Clear Key
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Quick Tips */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-[11px] text-neutral-400">
+          <div className="bg-neutral-900/90 p-3 rounded-xl border border-neutral-800">
+            <span className="font-bold text-white block mb-0.5">1. Free Google Key</span>
+            Google AI Studio offers a free tier for Gemini with generous limits.
+          </div>
+          <div className="bg-neutral-900/90 p-3 rounded-xl border border-neutral-800">
+            <span className="font-bold text-white block mb-0.5">2. Real-Time Verification</span>
+            When you click "Verify & Save", we immediately test the key with Gemini API.
+          </div>
+          <div className="bg-neutral-900/90 p-3 rounded-xl border border-neutral-800">
+            <span className="font-bold text-white block mb-0.5">3. Multi-Device Sync</span>
+            The key is synced to Firestore database so your whole team can auto-generate products.
+          </div>
+        </div>
+      </div>
+
+      {/* API Integrations Card */}
+      <div className="bg-white p-6 rounded-3xl border border-neutral-200/90 shadow-2xs space-y-6 mb-6">
+        <div className="border-b border-neutral-100 pb-4 flex items-start justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shrink-0">
+              <Key size={22} />
+            </div>
+            <div>
+              <h2 className="text-base font-black uppercase text-neutral-900 tracking-tight">
+                Integration API Keys
+              </h2>
+              <p className="text-[11px] text-neutral-500 font-medium">Manage Stripe and other third-party API keys securely</p>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveIntegrations} className="space-y-4 max-w-3xl">
+          {integrationsMessage && (
+            <div className={`p-4 rounded-2xl text-sm font-bold flex items-start gap-3 ${
+              integrationsMessage.type === 'success' 
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                : 'bg-red-50 text-red-800 border border-red-200'
+            }`}>
+              {integrationsMessage.type === 'success' ? <CheckCircle2 size={18} className="mt-0.5" /> : <AlertTriangle size={18} className="mt-0.5" />}
+              <div className="flex-1">{integrationsMessage.text}</div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-neutral-500 mb-1.5">Stripe Publishable Key</label>
+              <input
+                type="text"
+                value={integrations.stripePublishableKey}
+                onChange={(e) => setIntegrations({ ...integrations, stripePublishableKey: e.target.value })}
+                placeholder="pk_test_..."
+                className="w-full bg-neutral-50 border border-neutral-200 text-neutral-900 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-neutral-500 mb-1.5 flex justify-between">
+                Stripe Secret Key
+                <button
+                  type="button"
+                  onClick={() => setShowIntegrations(!showIntegrations)}
+                  className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1 normal-case"
+                >
+                  {showIntegrations ? <EyeOff size={12} /> : <Eye size={12} />}
+                  {showIntegrations ? 'Hide' : 'Show'}
+                </button>
+              </label>
+              <input
+                type={showIntegrations ? "text" : "password"}
+                value={integrations.stripeSecretKey}
+                onChange={(e) => setIntegrations({ ...integrations, stripeSecretKey: e.target.value })}
+                placeholder="sk_test_..."
+                className="w-full bg-neutral-50 border border-neutral-200 text-neutral-900 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-bold uppercase text-neutral-500 mb-1.5">Custom Service Key (e.g. SMS Gateway)</label>
+              <input
+                type={showIntegrations ? "text" : "password"}
+                value={integrations.customServiceKey}
+                onChange={(e) => setIntegrations({ ...integrations, customServiceKey: e.target.value })}
+                placeholder="Enter custom service API key..."
+                className="w-full bg-neutral-50 border border-neutral-200 text-neutral-900 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={savingIntegrations}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2.5 px-6 rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-indigo-600/20"
+            >
+              {savingIntegrations ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+              {savingIntegrations ? 'Saving...' : 'Save Keys'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Grid Layout for other Settings */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         {/* CARD 2: Cloud Storage & Database Limits */}

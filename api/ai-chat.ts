@@ -96,42 +96,9 @@ export default async function handler(req: any, res: any) {
   const { message } = body || {};
   const query = message || "Hello";
 
-  // 1. Try Groq API (High Speed Llama 3.3 70B)
-  const groqApiKey = process.env.GROQ_API_KEY;
-  if (groqApiKey && groqApiKey.trim() !== '') {
-    try {
-      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${groqApiKey.trim()}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: query }
-          ],
-          temperature: 0.7,
-          max_tokens: 1024
-        })
-      });
-
-      if (groqRes.ok) {
-        const groqData = await groqRes.json();
-        const replyText = groqData.choices?.[0]?.message?.content;
-        if (replyText) {
-          return res.status(200).json({ reply: replyText, provider: 'groq' });
-        }
-      }
-    } catch (err) {
-      console.warn("Groq API error in Vercel function:", err);
-    }
-  }
-
-  // 2. Try Gemini API
+  // 1. Try Gemini API
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (geminiApiKey && geminiApiKey.trim() !== '') {
+  if (geminiApiKey && geminiApiKey.trim() !== '' && !geminiApiKey.startsWith('MY_')) {
     try {
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey.trim()}`,
@@ -164,7 +131,7 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  // 3. Fallback Knowledge Base Response
+  // 2. Fallback Knowledge Base Response
   return res.status(200).json({
     reply: getSmartFallback(query),
     provider: 'fallback'

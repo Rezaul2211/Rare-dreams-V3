@@ -6,13 +6,14 @@
 
 export interface AiChatResponse {
   reply: string;
-  provider?: 'groq' | 'gemini' | 'fallback';
+  provider?: 'gemini' | 'fallback';
   error?: string;
 }
 
 export interface SendMessageOptions {
   message: string;
   minThinkingMs?: number; // Minimum duration for thinking animation (default: 1200ms)
+  history?: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
 }
 
 /**
@@ -21,7 +22,8 @@ export interface SendMessageOptions {
  */
 export async function sendAiMessage({
   message,
-  minThinkingMs = 1200
+  minThinkingMs = 1200,
+  history = []
 }: SendMessageOptions): Promise<AiChatResponse> {
   const trimmed = message.trim();
   if (!trimmed) {
@@ -37,13 +39,20 @@ export async function sendAiMessage({
   // Request to API endpoint (/api/ai-chat)
   const apiPromise = (async (): Promise<AiChatResponse> => {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      const customKey = localStorage.getItem('rare_dreams_gemini_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/ai-chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ message: trimmed })
+        headers,
+        body: JSON.stringify({ message: trimmed, history })
       });
 
       if (!response.ok) {
@@ -57,7 +66,7 @@ export async function sendAiMessage({
 
       return {
         reply: data.reply,
-        provider: data.provider || 'groq'
+        provider: data.provider || 'gemini'
       };
     } catch (err: any) {
       console.warn("AI Service API Fetch warning:", err?.message || err);

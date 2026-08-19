@@ -11,13 +11,41 @@ const PORT = 3000;
 
 app.use(express.json());
 
+let dynamicGeminiKey: string = process.env.GEMINI_API_KEY || "";
 let aiClient: GoogleGenAI | null = null;
-function getAI(): GoogleGenAI | null {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || key.trim() === '' || key === "MY_GEMINI_API_KEY" || key.startsWith("MY_")) return null;
-  if (!aiClient) {
+let lastUsedKey: string = "";
+
+function resolveGeminiKey(req?: express.Request, customKey?: string): string {
+  if (customKey && customKey.trim() && !customKey.startsWith("MY_")) {
+    return customKey.trim();
+  }
+  const headerKey = req?.headers?.["x-gemini-key"] as string;
+  if (headerKey && headerKey.trim() && !headerKey.startsWith("MY_")) {
+    return headerKey.trim();
+  }
+  const bodyKey = req?.body?.customApiKey as string;
+  if (bodyKey && bodyKey.trim() && !bodyKey.startsWith("MY_")) {
+    return bodyKey.trim();
+  }
+  if (dynamicGeminiKey && dynamicGeminiKey.trim() && !dynamicGeminiKey.startsWith("MY_")) {
+    return dynamicGeminiKey.trim();
+  }
+  const envKey = process.env.GEMINI_API_KEY || "";
+  if (envKey && envKey.trim() && !envKey.startsWith("MY_")) {
+    return envKey.trim();
+  }
+  return "";
+}
+
+function getAI(req?: express.Request, customKey?: string): GoogleGenAI | null {
+  const key = resolveGeminiKey(req, customKey);
+  if (!key) {
+    return null;
+  }
+  if (!aiClient || lastUsedKey !== key) {
+    lastUsedKey = key;
     aiClient = new GoogleGenAI({
-      apiKey: key.trim(),
+      apiKey: key,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build'
@@ -26,104 +54,6 @@ function getAI(): GoogleGenAI | null {
     });
   }
   return aiClient;
-}
-
-// Reusable Groq LLM Helper (User requested Groq API as primary AI model)
-async function callGroq(prompt: string, systemPrompt?: string, jsonMode?: boolean): Promise<string | null> {
-  const groqApiKey = process.env.GROQ_API_KEY;
-  if (!groqApiKey || groqApiKey.trim() === '' || groqApiKey.startsWith('MY_')) {
-    return null;
-  }
-
-  const messages: any[] = [];
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-  messages.push({ role: "user", content: prompt });
-
-  const body: any = {
-    model: "llama-3.3-70b-versatile",
-    messages,
-    temperature: 0.7,
-    max_tokens: 1024
-  };
-
-  if (jsonMode) {
-    body.response_format = { type: "json_object" };
-  }
-
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${groqApiKey.trim()}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (content) return content.trim();
-    } else {
-      const errText = await res.text();
-      console.warn("Groq API warning status:", res.status, errText);
-    }
-  } catch (err) {
-    console.warn("Groq API request error:", err);
-  }
-  return null;
-}
-
-// Reusable Groq Vision Helper
-async function callGroqVision(prompt: string, mimeType: string, base64Data: string, jsonMode?: boolean): Promise<string | null> {
-  const groqApiKey = process.env.GROQ_API_KEY;
-  if (!groqApiKey || groqApiKey.trim() === '' || groqApiKey.startsWith('MY_')) {
-    return null;
-  }
-
-  const body: any = {
-    model: "qwen/qwen3.6-27b",
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } }
-        ]
-      }
-    ],
-    temperature: 0.7,
-    max_tokens: 1024
-  };
-
-  if (jsonMode) {
-    body.response_format = { type: "json_object" };
-  }
-
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${groqApiKey.trim()}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (content) return content.trim();
-    } else {
-      const errText = await res.text();
-      console.warn("Groq Vision API warning status:", res.status, errText);
-    }
-  } catch (err) {
-    console.warn("Groq Vision API request error:", err);
-  }
-  return null;
 }
 
 // Initialize Firebase Admin (Only if not already initialized)
@@ -153,11 +83,11 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-// 1. AI Product Description Generator API Route (Admin Tool)
+// 1. AI Product Description Generator API Route (Admin Tool - English)
 app.post("/api/ai-generate-description", async (req, res) => {
   try {
     const { name, category, subcategory, price, material } = req.body;
-    const prompt = `Write a compelling, luxury, SEO-optimized Bengali product description for an e-commerce clothing item with these details:
+    const prompt = `Write a compelling, luxury, SEO-optimized English product description for an e-commerce fashion item with these details:
 Product Name: ${name || 'Luxury Fashion Item'}
 Category: ${category || 'Clothing'}
 Subcategory: ${subcategory || ''}
@@ -165,24 +95,19 @@ Price: ৳${price || 0}
 Material: ${material || 'Premium Fabric'}
 
 Requirements:
-- Written in stylish, attractive, and persuasive Bengali (বাংলা).
-- Highlights premium quality, comfortable fit, fabric feel, and elegance for kids/family.
-- Includes 3-4 bullet points for key features (যেমন: ১০০% প্রিমিয়াম ফেব্রিক, আরামদায়ক সেলাই, আকর্ষণীয় আউটলুক, যেসকল অনুষ্ঠানে পরানো যাবে).
+- Written in stylish, modern, engaging English.
+- Highlights premium quality, tailored fit, comfort, and versatile styling.
+- Includes 3-4 bullet points for key features (e.g., ✨ 100% Premium Quality Fabric, Precision Tailored Stitching, Elegant Silhouette, Ideal for Parties & Special Occasions).
+- Includes a brief Care Instructions note.
 - Keep it under 250 words. Do NOT include markdown code blocks around text.`;
 
-    // 1. Primary: Groq LLM API
-    const groqDesc = await callGroq(prompt);
-    if (groqDesc) {
-      return res.json({ description: groqDesc });
-    }
-
-    // 2. Secondary: Gemini API
-    const ai = getAI();
+    // Primary: Gemini 3.7 Flash API
+    const ai = getAI(req);
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }]
+          model: "gemini-3.7-flash",
+          contents: prompt
         });
         if (response?.text) {
           return res.json({ description: response.text.trim() });
@@ -192,21 +117,21 @@ Requirements:
       }
     }
 
-    // 3. Fallback Description
-    const fallbackDesc = `রেয়ার ড্রিমস (Rare Dreams)-এর এই প্রিমিয়াম ${name || 'আকর্ষণীয় ড্রেসটি'} অত্যন্ত নিখুঁত সেলাই ও ১০০% আরামদায়ক ফেব্রিকে তৈরি। বাচ্চার সংবেদনশীল ত্বকের কথা মাথায় রেখে এটি অত্যন্ত নরম ও টেকসই করা হয়েছে।\n\n✨ মূল বৈশিষ্ট্যসমূহ:\n- প্রিমিয়াম কোয়ালিটির দীর্ঘস্থায়ী ফেব্রিক\n- রাজকীয় লুক ও আকর্ষণীয় কালার ফিনিশিং\n- পার্টি, ঈদ বা যেকোনো বিশেষ অনুষ্ঠানে পরার জন্য সেরা পছন্দ\n- স্কিন ফ্রেন্ডলি ও দীর্ঘক্ষণ পরে থাকার জন্য পারফেক্ট কমফোর্ট`;
+    // High-quality English Fallback Description
+    const fallbackDesc = `Elevate your wardrobe with the exquisite ${name || 'Designer Collection'} by Rare Dreams. Expertly crafted from ${material || 'ultra-fine premium fabric'}, this outfit blends timeless elegance with all-day comfort.\n\n✨ Key Highlights:\n- Premium grade breathable & durable fabric\n- Tailored precision finish with regal aesthetic\n- Perfect for weddings, festive occasions, and exclusive gatherings\n- Easy care & long-lasting vibrant color retention\n\n🧺 Care Instructions: Gentle machine wash or dry clean recommended.`;
     res.json({ description: fallbackDesc });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to generate description" });
   }
 });
 
-// 2. AI Size Helper / Recommender API Route
+// 2. AI Size Helper / Recommender API Route (English)
 app.post("/api/ai-recommend-size", async (req, res) => {
   try {
     const { productName, category, availableSizes, age, height, weight, fitPreference } = req.body;
-    const prompt = `Act as an expert kids sizing consultant for the luxury fashion brand "Rare Dreams".
+    const prompt = `Act as an expert size consultant for the luxury fashion brand "Rare Dreams".
 Product Name: ${productName || 'Outfit'}
-Category: ${category || 'Kids Item'}
+Category: ${category || 'Apparel'}
 Available Sizes in Stock: ${Array.isArray(availableSizes) ? availableSizes.join(', ') : availableSizes || 'S, M, L, XL'}
 Customer Input:
 - Age: ${age || 'Not specified'}
@@ -215,32 +140,19 @@ Customer Input:
 - Fit Preference: ${fitPreference || 'Regular'}
 
 Instructions:
-1. Determine the best size from the Available Sizes list.
-2. Provide a clear, friendly, reassuring explanation in polite Bengali (বাংলা) explaining why this size is recommended (taking into consideration that children grow fast).
-3. Return JSON format strictly: {"recommendedSize": "SIZE_NAME", "explanation": "BENGALI_EXPLANATION"}`;
+1. Determine the best recommended size from the Available Sizes list.
+2. Provide a brief, reassuring explanation in polite English explaining why this size is recommended.
+3. Return JSON format strictly: {"recommendedSize": "SIZE_NAME", "explanation": "ENGLISH_EXPLANATION"}`;
 
-    // 1. Primary: Groq LLM API
-    const groqRes = await callGroq(prompt, undefined, true);
-    if (groqRes) {
-      const cleanText = groqRes.replace(/```json/g, '').replace(/```/g, '').trim();
-      try {
-        const parsed = JSON.parse(cleanText);
-        return res.json(parsed);
-      } catch {
-        return res.json({
-          recommendedSize: availableSizes?.[0] || 'M',
-          explanation: groqRes
-        });
-      }
-    }
-
-    // 2. Secondary: Gemini API
-    const ai = getAI();
+    const ai = getAI(req);
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }]
+          model: "gemini-3.7-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json"
+          }
         });
         if (response?.text) {
           const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -259,100 +171,145 @@ Instructions:
       }
     }
 
-    // 3. Fallback recommendation
-    const defaultSize = availableSizes?.[0] || '24';
-    const fallbackExp = `বাচ্চার বয়স (${age || 'নির্দিষ্ট'}) ও ওজন বিবেচনা করে, শিশু দ্রুত বড় হয় বিধায় দীর্ঘমেয়াদী ব্যবহারের জন্য এবং আরামদায়ক ফিটিংসের জন্য '${defaultSize}' সাইজটি বেছে নেওয়ার পরামর্শ দেওয়া হচ্ছে।`;
+    const defaultSize = availableSizes?.[0] || 'M';
+    const fallbackExp = `Based on your provided measurements and desired fit preference, size '${defaultSize}' will provide the most comfortable and flattering silhouette.`;
     res.json({ recommendedSize: defaultSize, explanation: fallbackExp });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Size recommendation failed" });
   }
 });
 
-// 3. AI Product Auto-Fill API Route (Admin Tool)
+// 3. AI Product Multimodal Vision Auto-Fill API Route (Admin Tool - English)
 app.post("/api/ai-product-auto-fill", async (req, res) => {
   try {
-    const { image } = req.body;
+    const { image, categories: clientCategories, hints } = req.body;
     if (!image) {
       return res.status(400).json({ error: "No image provided" });
     }
 
-    const prompt = `You are an expert e-commerce catalog AI assistant for the luxury Bangladeshi kids & family fashion brand "Rare Dreams".
-Generate complete, accurate product metadata for a luxury fashion item strictly in JSON format.
+    const availableCategories = Array.isArray(clientCategories) && clientCategories.length > 0
+      ? clientCategories.map(c => typeof c === 'string' ? c : c.title || c.name).filter(Boolean)
+      : ["Men", "Women", "Kids", "Accessories", "Panjabi", "Sharee", "Abaya", "Kurtis", "T-Shirts", "Shirts", "Pants", "Foot wear", "Watches"];
+
+    // Process image into base64Data and mimeType
+    let base64Data = '';
+    let mimeType = 'image/jpeg';
+
+    if (image.startsWith('data:')) {
+      const match = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (match) {
+        mimeType = match[1];
+        base64Data = match[2];
+      } else {
+        base64Data = image.split(',')[1] || image;
+      }
+    } else if (image.startsWith('http://') || image.startsWith('https://')) {
+      try {
+        const imgFetch = await fetch(image);
+        if (imgFetch.ok) {
+          const buffer = await imgFetch.arrayBuffer();
+          base64Data = Buffer.from(buffer).toString('base64');
+          mimeType = imgFetch.headers.get('content-type') || 'image/jpeg';
+        }
+      } catch (fErr) {
+        console.warn("Could not fetch external image for vision:", fErr);
+      }
+    } else {
+      base64Data = image;
+    }
+
+    const visionPrompt = `You are an expert e-commerce fashion catalog manager for the luxury lifestyle brand "Rare Dreams".
+Analyze this uploaded product photo in detail (garment style, cut, embroidery, patterns, fabric texture, colors, and demographic).
+
+Available Store Categories: ${availableCategories.join(', ')}
+${hints ? `Admin Hint: ${hints}` : ''}
+
+Generate complete, high-converting product metadata in English in strict JSON format.
 
 Required JSON Structure:
 {
-  "name": "Exact product title in Bengali & English e.g. ছেলেদের রয়েল কাফতান পাঞ্জাবি সেট - Maroon",
-  "category": "Must be ONE of: Mens items, Womens items, Baby items, Foot wear",
-  "subcategory": "e.g. Panjabi Set, Party Gown, Baby Romper, Leather Loafers, Formal Shirt, Jeans",
-  "description": "Comprehensive, attractive product description in Bengali highlighting luxury quality, fabric comfort, stitching, and occasion suitability",
-  "material": "e.g. 100% Premium Cotton / Pure Silk / Katan / Genuine Leather",
-  "price": 1250,
-  "comparePrice": 1650,
-  "discount": 24,
-  "sizeOptions": ["22", "24", "26", "28", "30"],
-  "colorOptions": ["Maroon", "Gold"]
+  "name": "Luxury, appealing product title in English e.g. 'Royal Silk Embroidered Panjabi Set - Navy Blue' or 'Designer Festive Party Gown'",
+  "category": "Must be ONE from available categories: ${availableCategories.join(', ')}",
+  "subcategory": "Specific subcategory in English e.g. Panjabi Set, Party Gown, Baby Romper, Leather Loafers, Formal Shirt, Jeans, Kurti",
+  "description": "Rich, formatted product description in English. Include a 2-sentence luxury intro, bullet points for key features (✨ Key Features: Premium Quality, Tailored Finish, Comfortable Fit, Ideal Occasions), and fabric care.",
+  "material": "Estimated fabric/material in English e.g. '100% Premium Combed Cotton', 'Pure Raw Silk & Georgette', 'Genuine Full-Grain Leather'",
+  "price": 1450,
+  "comparePrice": 1850,
+  "discount": 20,
+  "stockQuantity": 25,
+  "sizeOptions": ["38", "40", "42", "44"],
+  "colorOptions": ["Navy Blue", "Gold"],
+  "tags": ["Panjabi", "Festive", "Silk", "Rare Dreams", "New Arrival"],
+  "isFlashSale": false
 }`;
 
-    // 1. Primary: Groq LLM API (llama-3.3-70b-versatile) - Ultra fast & reliable
-    const groqRes = await callGroq(prompt, "You are an e-commerce catalog assistant for Rare Dreams Bangladesh. Always respond with strict JSON.", true);
-    if (groqRes) {
+    // Primary: Gemini 3.7 Flash with Multimodal Vision
+    const ai = getAI(req);
+    if (ai && base64Data) {
       try {
-        const cleanText = groqRes.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanText);
-        return res.json(parsed);
-      } catch (e) {
-        console.warn("JSON parse error from Groq auto fill:", e);
-      }
-    }
+        const imagePart = {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Data
+          }
+        };
+        const textPart = { text: visionPrompt };
 
-    // 2. Secondary: Gemini API (if configured and working)
-    const ai = getAI();
-    if (ai) {
-      try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }]
+          model: "gemini-3.7-flash",
+          contents: {
+            parts: [imagePart, textPart]
+          },
+          config: {
+            responseMimeType: "application/json"
+          }
         });
 
         if (response?.text) {
           const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
-          try {
-            const parsed = JSON.parse(cleanText);
+          const parsed = JSON.parse(cleanText);
+          if (parsed && parsed.name) {
             return res.json(parsed);
-          } catch (e) {
-            console.warn("JSON parse error from Gemini vision:", e);
           }
         }
-      } catch (geminiErr: any) {
-        console.warn("Gemini vision auto-fill fallback active:", geminiErr?.message || geminiErr);
+      } catch (geminiVisionErr: any) {
+        console.warn("Gemini vision analysis warning:", geminiVisionErr?.message || geminiVisionErr);
       }
     }
 
-    // 3. Fallback response (Guarantees auto-fill never fails)
+    // High-Quality English Default Fallback Data
+    const defaultCat = availableCategories[0] || "Men";
     res.json({
-      name: "এক্সক্লুসিভ প্রিমিয়াম রয়েল কালেকশন",
-      category: "Mens items",
-      subcategory: "Panjabi & Pajama Set",
-      description: "রেয়ার ড্রিমস (Rare Dreams)-এর এই প্রিমিয়াম পোশাকটি অত্যন্ত সুক্ষ্ম সেলাই ও ১০০% আরামদায়ক ফেব্রিকে তৈরি। স্কিন ফ্রেন্ডলি ও যেকোনো অনুষ্ঠানে ব্যবহারের জন্য অতুলনীয়।",
-      material: "১০০% প্রিমিয়াম কটন",
-      price: 1250,
-      comparePrice: 1550,
+      name: "Exclusive Royal Designer Collection",
+      category: defaultCat,
+      subcategory: "Premium Collection",
+      description: "Designed for effortless elegance, this premium piece by Rare Dreams features meticulous tailoring and luxurious breathable fabric. Designed to provide unmatched comfort and sophisticated styling for all special occasions.\n\n✨ Key Highlights:\n- Premium quality long-lasting fabric\n- Elegant silhouette with flawless craftsmanship\n- Versatile styling for celebrations and everyday luxury\n- Soft on skin with breathable comfort\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.",
+      material: "100% Premium Cotton Blend",
+      price: 1450,
+      comparePrice: 1850,
       discount: 20,
-      sizeOptions: ["22", "24", "26", "28", "30"],
-      colorOptions: ["Maroon", "Gold"]
+      stockQuantity: 25,
+      sizeOptions: ["M", "L", "XL", "XXL"],
+      colorOptions: ["Black", "Navy Blue", "White"],
+      tags: ["Exclusive", "New Arrival", "Rare Dreams", "Premium Quality"],
+      isFlashSale: false
     });
   } catch (err: any) {
+    console.error("AI Product Auto-fill error:", err);
     res.json({
-      name: "এক্সক্লুসিভ প্রিমিয়াম রয়েল কালেকশন",
-      category: "Mens items",
-      subcategory: "Panjabi & Pajama Set",
-      description: "রেয়ার ড্রিমস (Rare Dreams)-এর এই প্রিমিয়াম পোশাকটি অত্যন্ত সুক্ষ্ম সেলাই ও ১০০% আরামদায়ক ফেব্রিকে তৈরি। স্কিন ফ্রেন্ডলি ও যেকোনো অনুষ্ঠানে ব্যবহারের জন্য অতুলনীয়।",
-      material: "১০০% প্রিমিয়াম কটন",
-      price: 1250,
-      comparePrice: 1550,
+      name: "Exclusive Royal Designer Collection",
+      category: "Men",
+      subcategory: "Premium Collection",
+      description: "Crafted with precision and premium materials, this exclusive design by Rare Dreams delivers superior comfort and contemporary elegance.",
+      material: "100% Premium Cotton",
+      price: 1450,
+      comparePrice: 1850,
       discount: 20,
-      sizeOptions: ["22", "24", "26", "28", "30"],
-      colorOptions: ["Maroon", "Gold"]
+      stockQuantity: 25,
+      sizeOptions: ["M", "L", "XL", "XXL"],
+      colorOptions: ["Navy Blue", "Black"],
+      tags: ["Exclusive", "New Arrival", "Rare Dreams"],
+      isFlashSale: false
     });
   }
 });
@@ -360,35 +317,25 @@ Required JSON Structure:
 app.post("/api/ai-tag-product", async (req, res) => {
   try {
     const { name, category } = req.body;
-    const prompt = `Analyze this apparel product for e-commerce tagging:
+    const prompt = `Analyze this apparel product for e-commerce tagging in English:
 Title: ${name}
 Category: ${category}
 
 Suggest:
-1. Best subcategory name in Bengali/English (e.g., Party Gown, Panjabi & Pajama Set, Leather Loafers, Casual T-Shirt)
+1. Best subcategory name in English (e.g., Party Gown, Panjabi Set, Leather Loafers, Casual Shirt)
 2. 3-5 tags/keywords as comma-separated values (e.g. Party Wear, Cotton, Festival, Premium, Summer Collection)
 
 Return JSON strictly: {"subcategory": "SUBCATEGORY_NAME", "tags": ["TAG1", "TAG2", "TAG3"]}`;
 
-    // 1. Primary: Groq LLM API
-    const groqRes = await callGroq(prompt, undefined, true);
-    if (groqRes) {
-      const cleanText = groqRes.replace(/```json/g, '').replace(/```/g, '').trim();
-      try {
-        const parsed = JSON.parse(cleanText);
-        return res.json(parsed);
-      } catch {
-        // fallback
-      }
-    }
-
-    // 2. Secondary: Gemini API
-    const ai = getAI();
+    const ai = getAI(req);
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }]
+          model: "gemini-3.7-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json"
+          }
         });
         if (response?.text) {
           const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -400,7 +347,7 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY_NAME", "tags": ["TAG1", "TAG2
       }
     }
 
-    // 3. Smart Keyword Fallback Detector
+    // Smart Keyword Fallback Detector in English
     const lower = (name || '').toLowerCase();
     let smartSubcat = 'Exclusive Collection';
     if (lower.includes('panjabi') || lower.includes('পাঞ্জাবি')) smartSubcat = "Panjabi & Pajama Set";
@@ -408,7 +355,7 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY_NAME", "tags": ["TAG1", "TAG2
     else if (lower.includes('gown') || lower.includes('গাউন')) smartSubcat = "Party Gown";
     else if (lower.includes('frock') || lower.includes('ফ্রক')) smartSubcat = "Designer Frock";
     else if (lower.includes('lehenga') || lower.includes('লেহেঙ্গা')) smartSubcat = "Luxury Lehenga";
-    else if (lower.includes('shoe') || lower.includes('loafer') || lower.includes('জুতা') || lower.includes('স্যান্ডেল')) smartSubcat = "Leather Loafers & Shoes";
+    else if (lower.includes('shoe') || lower.includes('loafer') || lower.includes('জুতা')) smartSubcat = "Leather Loafers & Shoes";
     else if (lower.includes('shirt') || lower.includes('শার্ট')) smartSubcat = "Casual & Formal Shirt";
     else if (lower.includes('pant') || lower.includes('jeans') || lower.includes('প্যান্ট')) smartSubcat = "Jeans & Trousers";
     else if (category === 'Foot wear') smartSubcat = "Shoes & Loafers";
@@ -506,7 +453,7 @@ app.post("/api/price-alerts/track-price-changes", async (req, res) => {
 
 
 app.post("/api/ai-chat", async (req, res) => {
-  const { message } = req.body;
+  const { message, history } = req.body;
   const lower = (message || '').toLowerCase();
 
   const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh.
@@ -576,25 +523,20 @@ RESPONSE FORMAT:
     return `রেয়ার ড্রিমসে (Rare Dreams) আপনার প্রশ্নটির জন্য ধন্যবাদ! 🌸\n\nআমাদের কাছে ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা রয়েছে। ঢাকা সিটিতে ১-২ দিন ও ঢাকার বাইরে ২-৪ দিনে ক্যাশ অন ডেলিভারি পাবেন (২০০০ টাকার অর্ডারে ডেলিভারি ফ্রী)। আপনার নির্দিষ্ট কোনো সাহায্য লাগলে বিস্তারিত লিখুন!`;
   };
 
-  // 1. Primary: Groq API
-  const groqReply = await callGroq(message || "Hello", systemPrompt);
-  if (groqReply) {
-    return res.json({ reply: groqReply });
-  }
-
-  // 2. Secondary: Gemini API
+  // 1. Primary: Gemini API
   try {
-    const ai = getAI();
+    const ai = getAI(req);
     if (ai) {
       try {
+        const contents = Array.isArray(history) ? [...history] : [];
+        contents.push({
+          role: "user",
+          parts: [{ text: message || "Hello" }]
+        });
+
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: message || "Hello" }]
-            }
-          ],
+          model: "gemini-2.5-flash",
+          contents,
           config: { systemInstruction: systemPrompt }
         });
 
@@ -609,43 +551,37 @@ RESPONSE FORMAT:
     console.warn("Gemini init error:", e);
   }
 
-  // 3. Fallback to smart knowledge base
+  // 2. Fallback to smart knowledge base
   return res.json({ reply: getSmartFallback(lower) });
 });
 
 // AI API Health & Connectivity Check Endpoint
 app.get("/api/ai-health-check", async (req, res) => {
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const groqKey = process.env.GROQ_API_KEY;
+  const activeKey = resolveGeminiKey(req);
 
   const results = {
     gemini: {
       configured: false,
       reachable: false,
-      keySnippet: geminiKey ? `${geminiKey.substring(0, 6)}...` : 'Not Set',
-      message: "GEMINI_API_KEY is not set"
-    },
-    groq: {
-      configured: false,
-      reachable: false,
-      keySnippet: groqKey ? `${groqKey.substring(0, 6)}...` : 'Not Set',
-      message: "GROQ_API_KEY is not set"
+      keySnippet: activeKey ? `${activeKey.substring(0, 6)}...` : 'Not Set',
+      source: dynamicGeminiKey ? 'admin_panel' : (process.env.GEMINI_API_KEY ? 'env' : 'none'),
+      message: activeKey ? "Testing connection..." : "Gemini API Key is not configured yet"
     }
   };
 
-  // 1. Test Gemini
-  if (geminiKey && geminiKey.trim() !== "" && !geminiKey.startsWith("MY_")) {
+  // Test Gemini
+  if (activeKey) {
     results.gemini.configured = true;
-    const ai = getAI();
+    const ai = getAI(req);
     if (ai) {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-2.5-flash",
           contents: [{ role: "user", parts: [{ text: "Respond 'OK' if reachable." }] }]
         });
         if (response?.text) {
           results.gemini.reachable = true;
-          results.gemini.message = "Connected & Active (gemini-3.6-flash)";
+          results.gemini.message = "Connected & Active (Gemini 2.5/3.7 Flash)";
         } else {
           results.gemini.message = "Connected but received empty response";
         }
@@ -657,23 +593,78 @@ app.get("/api/ai-health-check", async (req, res) => {
     }
   }
 
-  // 2. Test Groq
-  if (groqKey && groqKey.trim() !== "" && !groqKey.startsWith("MY_")) {
-    results.groq.configured = true;
-    try {
-      const groqRes = await callGroq("Respond 'OK' if reachable.");
-      if (groqRes) {
-        results.groq.reachable = true;
-        results.groq.message = "Connected & Active (llama-3.3-70b-versatile)";
-      } else {
-        results.groq.message = "Groq request returned no output or auth error";
-      }
-    } catch (err: any) {
-      results.groq.message = err?.message || "Connection to Groq API failed";
-    }
-  }
-
   res.json(results);
+});
+
+// Admin endpoint: Save and verify custom Gemini API key
+app.post("/api/admin/save-gemini-key", async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+      return res.status(400).json({ success: false, error: "Please enter a valid Gemini API Key." });
+    }
+
+    const cleanKey = apiKey.trim();
+
+    // Verify key by making a test call to Gemini
+    try {
+      const testAi = new GoogleGenAI({
+        apiKey: cleanKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
+
+      const testRes = await testAi.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: "Ping. Respond 'PONG'." }] }]
+      });
+
+      if (!testRes?.text) {
+        throw new Error("Received empty verification response from Gemini API.");
+      }
+
+      // Update dynamic key in server memory
+      dynamicGeminiKey = cleanKey;
+      aiClient = null;
+      lastUsedKey = "";
+
+      return res.json({
+        success: true,
+        message: "Gemini API Key successfully verified and activated!",
+        keySnippet: `${cleanKey.substring(0, 7)}...${cleanKey.substring(cleanKey.length - 4)}`,
+        model: "gemini-2.5-flash & gemini-3.7-flash"
+      });
+    } catch (testErr: any) {
+      console.warn("Gemini key verification failed:", testErr);
+      return res.status(400).json({
+        success: false,
+        error: `Verification failed: ${testErr?.message || "Invalid API key or quota exceeded. Please check Google AI Studio."}`
+      });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || "Failed to save API key" });
+  }
+});
+
+// Admin endpoint: Get current key status
+app.get("/api/admin/gemini-key-status", (req, res) => {
+  const activeKey = resolveGeminiKey(req);
+  res.json({
+    configured: !!activeKey,
+    keySnippet: activeKey ? `${activeKey.substring(0, 6)}...${activeKey.substring(activeKey.length - 4)}` : null,
+    source: dynamicGeminiKey ? 'admin_panel' : (process.env.GEMINI_API_KEY ? 'env' : 'none')
+  });
+});
+
+// Admin endpoint: Clear dynamic key
+app.delete("/api/admin/gemini-key", (req, res) => {
+  dynamicGeminiKey = "";
+  aiClient = null;
+  lastUsedKey = "";
+  res.json({ success: true, message: "Gemini API Key removed from server memory." });
 });
 
 // Dynamic robots.txt
