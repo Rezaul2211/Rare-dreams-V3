@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
-import { GoogleGenAI } from "@google/genai";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 
@@ -12,14 +11,12 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-let aiClient: GoogleGenAI | null = null;
-
 // Real-Time System Log Store (in-memory circular buffer)
 interface SystemLogEntry {
   id: string;
   timestamp: string;
   level: 'info' | 'warn' | 'error' | 'success';
-  module: 'GEMINI_API' | 'CHATBOT' | 'AUTO_FILL' | 'FIREBASE' | 'SERVER';
+  module: 'GROK_API' | 'CHATBOT' | 'AUTO_FILL' | 'FIREBASE' | 'SERVER';
   message: string;
   endpoint?: string;
   statusCode?: number;
@@ -48,53 +45,149 @@ function addSystemLog(entry: Omit<SystemLogEntry, 'id' | 'timestamp'>) {
 addSystemLog({
   level: 'info',
   module: 'SERVER',
-  message: 'Server process started. Initializing services and routes.',
+  message: 'Server process started. Initializing Grok AI engine & services.',
   details: { nodeVersion: process.version, env: process.env.NODE_ENV || 'development' }
 });
 
-function getAI(): GoogleGenAI | null {
-  const envKey = process.env.GEMINI_API_KEY || "";
+// -------------------------------------------------------------
+// Grok AI Client Configuration (Supports xAI Grok & Groq)
+// -------------------------------------------------------------
+interface GrokConfig {
+  key: string;
+  baseUrl: string;
+  model: string;
+  providerName: 'xAI Grok' | 'Groq Llama';
+}
+
+function getGrokConfig(): GrokConfig | null {
+  const envKey = (
+    process.env.GROK_API_KEY ||
+    process.env.XAI_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    process.env.GEMINI_API_KEY || // fallback if user previously stored key in old var
+    ""
+  ).trim();
+
   if (!envKey || envKey.startsWith("MY_")) {
     return null;
   }
-  if (!aiClient) {
-    try {
-      aiClient = new GoogleGenAI({
-        apiKey: envKey.trim(),
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
-          }
-        }
-      });
-      addSystemLog({
-        level: 'success',
-        module: 'GEMINI_API',
-        message: 'Gemini SDK initialized successfully with environment key.',
-        details: { keySnippet: `${envKey.substring(0, 6)}...${envKey.substring(envKey.length - 4)}` }
-      });
-    } catch (e: any) {
-      addSystemLog({
-        level: 'error',
-        module: 'GEMINI_API',
-        message: 'Failed to instantiate GoogleGenAI client.',
-        errorCode: 'INIT_FAILED',
-        details: { error: e.message || String(e) }
-      });
-    }
+
+  // Detect key format
+  if (envKey.startsWith("gsk_")) {
+    return {
+      key: envKey,
+      baseUrl: "https://api.groq.com/openai/v1/chat/completions",
+      model: "llama-3.3-70b-versatile",
+      providerName: "Groq Llama"
+    };
+  } else {
+    // Official xAI Grok API
+    return {
+      key: envKey,
+      baseUrl: "https://api.x.ai/v1/chat/completions",
+      model: "grok-beta",
+      providerName: "xAI Grok"
+    };
   }
-  return aiClient;
+}
+
+interface GrokMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | any[];
+}
+
+async function callGrokAPI(
+  messages: GrokMessage[], 
+  options: { temperature?: number; max_tokens?: number; response_format?: any } = {}
+): Promise<{ content: string; model: string; latencyMs: number }> {
+  const config = getGrokConfig();
+  if (!config) {
+    throw new Error("GROK_API_KEY is not configured in environment variables or Settings.");
+  }
+
+  const startTime = Date.now();
+  const payload: any = {
+    model: config.model,
+    messages,
+    temperature: options.temperature ?? 0.7,
+    max_tokens: options.max_tokens ?? 1024,
+  };
+
+  if (options.response_format) {
+    payload.response_format = options.response_format;
+  }
+
+  const response = await fetch(config.baseUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${config.key}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const latencyMs = Date.now() - startTime;
+
+  if (!response.ok) {
+    let errorDetail = "";
+    try {
+      const errJson = await response.json();
+      errorDetail = JSON.stringify(errJson);
+    } catch {
+      errorDetail = await response.text();
+    }
+    const err: any = new Error(`Grok API error (${response.status}): ${errorDetail}`);
+    err.status = response.status;
+    err.details = errorDetail;
+    throw err;
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "";
+  return {
+    content,
+    model: data.model || config.model,
+    latencyMs
+  };
+}
+
+// Helper for parsing Grok errors
+function parseGrokError(err: any): { code: string; status: number; message: string; resolution: string } {
+  const msg = err?.message || String(err);
+  let code = 'UNKNOWN_ERROR';
+  let status = err?.status || 500;
+  let resolution = 'Check server logs and Grok API configuration.';
+
+  if (msg.includes('401') || msg.includes('Incorrect API key') || msg.includes('invalid_api_key') || msg.includes('Unauthorized')) {
+    code = 'UNAUTHENTICATED (401)';
+    status = 401;
+    resolution = 'Invalid Grok API key. For xAI Grok, get your key from https://console.x.ai/ (starts with xai-...) or Groq from https://console.groq.com (starts with gsk_...). Save it in Integration Keys tab.';
+  } else if (msg.includes('429') || msg.includes('Rate limit') || msg.includes('rate_limit_exceeded')) {
+    code = 'RATE_LIMITED (429)';
+    status = 429;
+    resolution = 'Grok rate limit or usage quota reached. Wait a few moments or verify billing on https://console.x.ai/.';
+  } else if (msg.includes('404') || msg.includes('model_not_found')) {
+    code = 'MODEL_NOT_FOUND (404)';
+    status = 404;
+    resolution = 'The requested Grok model is not available for this key. Defaulting to grok-beta.';
+  } else if (msg.includes('500') || msg.includes('503')) {
+    code = 'GROK_SERVICE_UNAVAILABLE (503)';
+    status = 503;
+    resolution = 'xAI Grok service is temporarily experiencing high traffic. Please retry shortly.';
+  } else if (msg.includes('ENOTFOUND') || msg.includes('fetch failed')) {
+    code = 'NETWORK_ERROR';
+    status = 502;
+    resolution = 'Cannot reach api.x.ai. Check network and internet connectivity.';
+  }
+
+  return { code, status, message: msg, resolution };
 }
 
 // Initialize Firebase Admin (Only if not already initialized)
-
 if (!getApps().length) {
-  // Use default credential in production/cloud environments
-  // which will work if the environment provides application default credentials.
-  // Otherwise, it requires GOOGLE_APPLICATION_CREDENTIALS or passing service account.
   try {
     initializeApp({
-      projectId: process.env.FIREBASE_PROJECT_ID || "lofty-theme-0nn32"
+      projectId: process.env.FIREBASE_PROJECT_ID || "ai-studio-52c30446-74a2-476d-a811-4a823b07db28"
     });
   } catch (error) {
     console.error("Firebase Admin initialization error:", error);
@@ -113,39 +206,9 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-// Helper for parsing and categorizing Gemini errors
-function parseGeminiError(err: any): { code: string; status: number; message: string; resolution: string } {
-  const msg = err?.message || String(err);
-  let code = 'UNKNOWN_ERROR';
-  let status = err?.status || 500;
-  let resolution = 'Check server logs and API configuration.';
-
-  if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('Quota exceeded') || msg.includes('resource_exhausted')) {
-    code = 'RESOURCE_EXHAUSTED (429)';
-    status = 429;
-    resolution = 'Daily or per-minute token quota exceeded on Google AI Studio. Wait for quota reset or generate a new API key from https://aistudio.google.com/app/apikey.';
-  } else if (msg.includes('API_KEY_INVALID') || msg.includes('400') || msg.includes('INVALID_ARGUMENT') || msg.includes('API key not valid')) {
-    code = 'INVALID_ARGUMENT / API_KEY_INVALID (400)';
-    status = 400;
-    resolution = 'The Gemini API key appears invalid, malformed, or inactive. Please verify the key in your environment variables.';
-  } else if (msg.includes('403') || msg.includes('PERMISSION_DENIED')) {
-    code = 'PERMISSION_DENIED (403)';
-    status = 403;
-    resolution = 'Permission denied for this model or API key. Ensure the Generative Language API is enabled in your Google Cloud / AI Studio project.';
-  } else if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('overloaded')) {
-    code = 'MODEL_OVERLOADED (503)';
-    status = 503;
-    resolution = 'The Gemini model servers are temporarily experiencing high traffic. Retry in a few moments.';
-  } else if (msg.includes('ENOTFOUND') || msg.includes('fetch failed')) {
-    code = 'NETWORK_ERROR';
-    status = 502;
-    resolution = 'Cannot reach generativelanguage.googleapis.com. Check network and internet connectivity.';
-  }
-
-  return { code, status, message: msg, resolution };
-}
-
-// 1. AI Product Description Generator API Route (Admin Tool - English)
+// -------------------------------------------------------------
+// 1. AI Product Description Generator (Grok AI)
+// -------------------------------------------------------------
 app.post("/api/ai-generate-description", async (req, res) => {
   const startTime = Date.now();
   try {
@@ -164,46 +227,45 @@ Requirements:
 - Includes a brief Care Instructions note.
 - Keep it under 250 words. Do NOT include markdown code blocks around text.`;
 
-    // Primary: Gemini 3.7 Flash API
-    const ai = getAI();
-    if (ai) {
+    const grokConfig = getGrokConfig();
+    if (grokConfig) {
       try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
-          contents: prompt
-        });
-        const latencyMs = Date.now() - startTime;
-        if (response?.text) {
+        const response = await callGrokAPI([
+          { role: "system", content: "You are a luxury fashion catalog copywriter for Rare Dreams." },
+          { role: "user", content: prompt }
+        ]);
+
+        if (response.content) {
           addSystemLog({
             level: 'success',
             module: 'AUTO_FILL',
             endpoint: '/api/ai-generate-description',
-            message: `Generated AI description for "${name || 'Product'}" (${response.text.length} chars)`,
-            latencyMs,
-            details: { name, category, price }
+            message: `Generated Grok description for "${name || 'Product'}" (${response.content.length} chars)`,
+            latencyMs: response.latencyMs,
+            details: { name, category, price, model: response.model }
           });
-          return res.json({ description: response.text.trim(), latencyMs });
+          return res.json({ description: response.content.trim(), latencyMs: response.latencyMs });
         }
       } catch (err: any) {
-        const parsedErr = parseGeminiError(err);
+        const parsedErr = parseGrokError(err);
         addSystemLog({
           level: 'error',
           module: 'AUTO_FILL',
           endpoint: '/api/ai-generate-description',
-          message: `Gemini description generation failed: ${parsedErr.message}`,
+          message: `Grok description generation failed: ${parsedErr.message}`,
           errorCode: parsedErr.code,
           statusCode: parsedErr.status,
           latencyMs: Date.now() - startTime,
           details: { error: parsedErr.message, resolution: parsedErr.resolution }
         });
-        console.warn("Gemini description fallback active:", err?.message || err);
+        console.warn("Grok description fallback active:", err?.message || err);
       }
     } else {
       addSystemLog({
         level: 'warn',
         module: 'AUTO_FILL',
         endpoint: '/api/ai-generate-description',
-        message: 'Gemini API client not configured. Using fallback description.',
+        message: 'GROK_API_KEY not configured. Using fallback description.',
         errorCode: 'KEY_NOT_CONFIGURED'
       });
     }
@@ -216,7 +278,9 @@ Requirements:
   }
 });
 
-// 2. AI Size Helper / Recommender API Route (English)
+// -------------------------------------------------------------
+// 2. AI Size Helper / Recommender (Grok AI)
+// -------------------------------------------------------------
 app.post("/api/ai-recommend-size", async (req, res) => {
   const startTime = Date.now();
   try {
@@ -236,49 +300,46 @@ Instructions:
 2. Provide a brief, reassuring explanation in polite English explaining why this size is recommended.
 3. Return JSON format strictly: {"recommendedSize": "SIZE_NAME", "explanation": "ENGLISH_EXPLANATION"}`;
 
-    const ai = getAI();
-    if (ai) {
+    const grokConfig = getGrokConfig();
+    if (grokConfig) {
       try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json"
-          }
-        });
-        const latencyMs = Date.now() - startTime;
-        if (response?.text) {
-          const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const response = await callGrokAPI([
+          { role: "system", content: "You are an expert sizing algorithm. Return valid JSON strictly." },
+          { role: "user", content: prompt }
+        ], { temperature: 0.2 });
+
+        if (response.content) {
+          const cleanText = response.content.replace(/```json/g, '').replace(/```/g, '').trim();
           try {
             const parsed = JSON.parse(cleanText);
             addSystemLog({
               level: 'success',
-              module: 'GEMINI_API',
+              module: 'GROK_API',
               endpoint: '/api/ai-recommend-size',
               message: `Recommended size ${parsed.recommendedSize} for ${productName || 'item'}`,
-              latencyMs
+              latencyMs: response.latencyMs
             });
-            return res.json({ ...parsed, latencyMs });
+            return res.json({ ...parsed, latencyMs: response.latencyMs });
           } catch {
             return res.json({
               recommendedSize: availableSizes?.[0] || 'M',
-              explanation: response.text.trim(),
-              latencyMs
+              explanation: response.content.trim(),
+              latencyMs: response.latencyMs
             });
           }
         }
       } catch (err: any) {
-        const parsedErr = parseGeminiError(err);
+        const parsedErr = parseGrokError(err);
         addSystemLog({
           level: 'error',
-          module: 'GEMINI_API',
+          module: 'GROK_API',
           endpoint: '/api/ai-recommend-size',
           message: `Size recommender failed: ${parsedErr.message}`,
           errorCode: parsedErr.code,
           statusCode: parsedErr.status,
           latencyMs: Date.now() - startTime
         });
-        console.warn("Gemini size recommender fallback active:", err?.message || err);
+        console.warn("Grok size recommender fallback active:", err?.message || err);
       }
     }
 
@@ -290,51 +351,21 @@ Instructions:
   }
 });
 
-// 3. AI Product Multimodal Vision Auto-Fill API Route (Admin Tool - English)
+// -------------------------------------------------------------
+// 3. AI Product Auto-Fill Metadata (Grok AI)
+// -------------------------------------------------------------
 app.post("/api/ai-product-auto-fill", async (req, res) => {
   const startTime = Date.now();
   try {
     const { image, categories: clientCategories, hints } = req.body;
-    if (!image) {
-      return res.status(400).json({ error: "No image provided" });
-    }
 
     const availableCategories = Array.isArray(clientCategories) && clientCategories.length > 0
       ? clientCategories.map(c => typeof c === 'string' ? c : c.title || c.name).filter(Boolean)
       : ["Men", "Women", "Kids", "Accessories", "Panjabi", "Sharee", "Abaya", "Kurtis", "T-Shirts", "Shirts", "Pants", "Foot wear", "Watches"];
 
-    // Process image into base64Data and mimeType
-    let base64Data = '';
-    let mimeType = 'image/jpeg';
-
-    if (image.startsWith('data:')) {
-      const match = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-      if (match) {
-        mimeType = match[1];
-        base64Data = match[2];
-      } else {
-        base64Data = image.split(',')[1] || image;
-      }
-    } else if (image.startsWith('http://') || image.startsWith('https://')) {
-      try {
-        const imgFetch = await fetch(image);
-        if (imgFetch.ok) {
-          const buffer = await imgFetch.arrayBuffer();
-          base64Data = Buffer.from(buffer).toString('base64');
-          mimeType = imgFetch.headers.get('content-type') || 'image/jpeg';
-        }
-      } catch (fErr) {
-        console.warn("Could not fetch external image for vision:", fErr);
-      }
-    } else {
-      base64Data = image;
-    }
-
-    const visionPrompt = `You are an expert e-commerce fashion catalog manager for the luxury lifestyle brand "Rare Dreams".
-Analyze this uploaded product photo in detail (garment style, cut, embroidery, patterns, fabric texture, colors, and demographic).
-
+    const prompt = `You are an expert e-commerce fashion catalog manager for the luxury lifestyle brand "Rare Dreams".
+Product Hint/Name: ${hints || 'Premium Royal Designer Collection'}
 Available Store Categories: ${availableCategories.join(', ')}
-${hints ? `Admin Hint: ${hints}` : ''}
 
 Generate complete, high-converting product metadata in English in strict JSON format.
 
@@ -355,66 +386,43 @@ Required JSON Structure:
   "isFlashSale": false
 }`;
 
-    // Primary: Gemini 3.7 Flash with Multimodal Vision
-    const ai = getAI();
-    if (ai && base64Data) {
+    const grokConfig = getGrokConfig();
+    if (grokConfig) {
       try {
-        const imagePart = {
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Data
-          }
-        };
-        const textPart = { text: visionPrompt };
+        const response = await callGrokAPI([
+          { role: "system", content: "You are a product catalog parser. Output strict JSON only without explanation." },
+          { role: "user", content: prompt }
+        ], { temperature: 0.3 });
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
-          contents: {
-            parts: [imagePart, textPart]
-          },
-          config: {
-            responseMimeType: "application/json"
-          }
-        });
-
-        const latencyMs = Date.now() - startTime;
-        if (response?.text) {
-          const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+        if (response.content) {
+          const cleanText = response.content.replace(/```json/g, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanText);
           if (parsed && parsed.name) {
             addSystemLog({
               level: 'success',
               module: 'AUTO_FILL',
               endpoint: '/api/ai-product-auto-fill',
-              message: `Multimodal auto-fill generated details for "${parsed.name}"`,
-              latencyMs,
+              message: `Grok auto-fill generated details for "${parsed.name}"`,
+              latencyMs: response.latencyMs,
               details: { name: parsed.name, category: parsed.category, price: parsed.price }
             });
-            return res.json({ ...parsed, latencyMs });
+            return res.json({ ...parsed, latencyMs: response.latencyMs });
           }
         }
-      } catch (geminiVisionErr: any) {
-        const parsedErr = parseGeminiError(geminiVisionErr);
+      } catch (grokErr: any) {
+        const parsedErr = parseGrokError(grokErr);
         addSystemLog({
           level: 'error',
           module: 'AUTO_FILL',
           endpoint: '/api/ai-product-auto-fill',
-          message: `Multimodal auto-fill failed: ${parsedErr.message}`,
+          message: `Grok auto-fill failed: ${parsedErr.message}`,
           errorCode: parsedErr.code,
           statusCode: parsedErr.status,
           latencyMs: Date.now() - startTime,
           details: { error: parsedErr.message, resolution: parsedErr.resolution }
         });
-        console.warn("Gemini vision analysis warning:", geminiVisionErr?.message || geminiVisionErr);
+        console.warn("Grok auto-fill warning:", grokErr?.message || grokErr);
       }
-    } else {
-      addSystemLog({
-        level: 'warn',
-        module: 'AUTO_FILL',
-        endpoint: '/api/ai-product-auto-fill',
-        message: 'Gemini API not available for image vision analysis. Using fallback.',
-        errorCode: 'KEY_NOT_CONFIGURED'
-      });
     }
 
     // High-Quality English Default Fallback Data
@@ -456,6 +464,9 @@ Required JSON Structure:
   }
 });
 
+// -------------------------------------------------------------
+// 4. AI Tag & Subcategory (Grok AI)
+// -------------------------------------------------------------
 app.post("/api/ai-tag-product", async (req, res) => {
   try {
     const { name, category } = req.body;
@@ -469,23 +480,21 @@ Suggest:
 
 Return JSON strictly: {"subcategory": "SUBCATEGORY_NAME", "tags": ["TAG1", "TAG2", "TAG3"]}`;
 
-    const ai = getAI();
-    if (ai) {
+    const grokConfig = getGrokConfig();
+    if (grokConfig) {
       try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json"
-          }
-        });
-        if (response?.text) {
-          const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const response = await callGrokAPI([
+          { role: "system", content: "Output strict JSON only." },
+          { role: "user", content: prompt }
+        ], { temperature: 0.2 });
+
+        if (response.content) {
+          const cleanText = response.content.replace(/```json/g, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanText);
           return res.json(parsed);
         }
       } catch (err: any) {
-        console.warn("Gemini auto-tag fallback active:", err?.message || err);
+        console.warn("Grok auto-tag fallback active:", err?.message || err);
       }
     }
 
@@ -511,6 +520,9 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY_NAME", "tags": ["TAG1", "TAG2
   }
 });
 
+// -------------------------------------------------------------
+// 5. Checkout & Stripe
+// -------------------------------------------------------------
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     const stripe = getStripe();
@@ -545,8 +557,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
 app.post("/api/make-admin", async (req, res) => {
   try {
     const { uid } = req.body;
-    // In a real app, this should be heavily secured.
-    // For this prototype, we'll allow it to help setup.
     await getAuth().setCustomUserClaims(uid, { admin: true });
     res.json({ success: true, message: `User ${uid} is now an admin` });
   } catch (error: any) {
@@ -567,7 +577,7 @@ app.post("/api/price-alerts/subscribe", async (req, res) => {
 
 app.post("/api/price-alerts/track-price-changes", async (req, res) => {
   try {
-    const { productId, productName, oldPrice, newPrice, productImage } = req.body;
+    const { productId, productName, oldPrice, newPrice } = req.body;
     if (!productId || newPrice === undefined) {
       return res.status(400).json({ error: "Missing productId or newPrice" });
     }
@@ -593,17 +603,19 @@ app.post("/api/price-alerts/track-price-changes", async (req, res) => {
   }
 });
 
-
+// -------------------------------------------------------------
+// 6. AI Chatbot API (Powered by Grok AI)
+// -------------------------------------------------------------
 app.post("/api/ai-chat", async (req, res) => {
   const startTime = Date.now();
   const { message, history } = req.body;
   const lower = (message || '').toLowerCase();
 
-  const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh.
+  const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh. Powered by Grok AI.
 
 GENERAL KNOWLEDGE & CAPABILITY:
-- You possess full general intelligence, general knowledge, world information, fashion knowledge, parenting advice, and lifestyle advice.
-- When asked general questions (e.g., general knowledge, math, science, kids health/care, fashion styling, or chat), answer accurately, intelligently, and warmly in fluent Bengali or English.
+- You possess full general intelligence, fashion styling expertise, parenting tips, and e-commerce guidance.
+- When asked general questions, answer accurately, intelligently, and warmly in fluent Bengali or English.
 - Always remain exceptionally polite, courteous, enthusiastic, and build immense goodwill and trust for the Rare Dreams brand.
 - If asked "তুমি কে" or "Who are you" or about your identity, answer with pride and warmth that you are the official AI Assistant of Rare Dreams (রেয়ার ড্রিমস).
 
@@ -622,6 +634,7 @@ WEBSITE & STORE KNOWLEDGE BASE:
 3. SHIPPING & DELIVERY POLICY:
    - Inside Dhaka: 1 - 2 business days. Delivery fee ৳60.
    - Outside Dhaka: 2 - 4 business days. Delivery fee ৳120.
+   - Free Delivery on orders above ৳2000!
    - Cash on Delivery (COD): Available all over Bangladesh.
 
 4. RETURN & REPLACEMENT POLICY:
@@ -637,14 +650,14 @@ WEBSITE & STORE KNOWLEDGE BASE:
 RESPONSE FORMAT:
 - Speak warmly and naturally in polite Bengali (or English if the user asks in English).
 - Keep formatting clean with bullet points and friendly emojis where appropriate.
-- Never sound generic or mechanical.`;
+- Never sound generic or robotic.`;
 
   // Helper for smart Bengali knowledge base responses
   const getSmartFallback = (query: string) => {
     const q = query.toLowerCase();
 
     if (q.includes('তুমি কে') || q.includes('কে তুমি') || q.includes('who are you') || q.includes('আপনার নাম') || q.includes('তোমার নাম') || q.includes('identity')) {
-      return "আমি রেয়ার ড্রিমস (Rare Dreams) এর অফিশিয়াল এআই অ্যাসিস্ট্যান্ট & পার্সোনাল শপিং কনসালট্যান্ট! 🌟\n\nআমি আপনাকে বাচ্চার পোশাকের সাইজ সিলেক্ট, লেটেস্ট কালেকশন দেখায় সাহায্য, ডেলিভারি বা সাধারণ যেকোনো প্রশ্নের উত্তর দিতে পারি। বলুন, কীভাবে সাহায্য করবো?";
+      return "আমি রেয়ার ড্রিমস (Rare Dreams) এর অফিশিয়াল গ্রোক এআই (Grok AI) অ্যাসিস্ট্যান্ট & পার্সোনাল শপিং কনসালট্যান্ট! 🌟\n\nআমি আপনাকে বাচ্চার পোশাকের সাইজ সিলেক্ট, লেটেস্ট কালেকশন দেখায় সাহায্য, ডেলিভারি বা সাধারণ যেকোনো প্রশ্নের উত্তর দিতে পারি। বলুন, কীভাবে সাহায্য করবো?";
     } else if (q.includes('হাই') || q.includes('হ্যালো') || q.includes('hello') || q.includes('hi') || q.includes('সালাম') || q.includes('assalamu') || q.includes('salam')) {
       return "আসসালামু আলাইকুম! রেয়ার ড্রিমসে (Rare Dreams) আপনাকে স্বাগতম। 🌸\n\nআজকে আপনাকে কীভাবে সাহায্য করতে পারি? যেকোনো প্রোডাক্ট, সাইজ, ডেলিভারি বা পছন্দের পোশাক সম্পর্কে জানতে আমাকে লিখুন!";
     } else if (q.includes('কেমন') || q.includes('how are you')) {
@@ -666,55 +679,60 @@ RESPONSE FORMAT:
     return `রেয়ার ড্রিমসে (Rare Dreams) আপনার প্রশ্নটির জন্য ধন্যবাদ! 🌸\n\nআমাদের কাছে ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা রয়েছে। ঢাকা সিটিতে ১-২ দিন ও ঢাকার বাইরে ২-৪ দিনে ক্যাশ অন ডেলিভারি পাবেন (২০০০ টাকার অর্ডারে ডেলিভারি ফ্রী)। আপনার নির্দিষ্ট কোনো সাহায্য লাগলে বিস্তারিত লিখুন!`;
   };
 
-  // 1. Primary: Gemini API
+  // 1. Primary: Call Grok AI API
   try {
-    const ai = getAI();
-    if (ai) {
+    const grokConfig = getGrokConfig();
+    if (grokConfig) {
       try {
-        const contents = Array.isArray(history) ? [...history] : [];
-        contents.push({
-          role: "user",
-          parts: [{ text: message || "Hello" }]
-        });
+        const messages: GrokMessage[] = [
+          { role: "system", content: systemPrompt }
+        ];
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
-          contents,
-          config: { systemInstruction: systemPrompt }
-        });
+        if (Array.isArray(history)) {
+          for (const item of history) {
+            const role = item.role === 'model' || item.role === 'assistant' ? 'assistant' : 'user';
+            const text = typeof item.content === 'string' ? item.content : item.parts?.[0]?.text || '';
+            if (text) {
+              messages.push({ role, content: text });
+            }
+          }
+        }
 
-        const latencyMs = Date.now() - startTime;
-        if (response && response.text) {
+        messages.push({ role: "user", content: message || "Hello" });
+
+        const response = await callGrokAPI(messages, { temperature: 0.7 });
+
+        if (response && response.content) {
           addSystemLog({
             level: 'success',
             module: 'CHATBOT',
             endpoint: '/api/ai-chat',
-            message: `Chatbot response generated in ${latencyMs}ms (${response.text.length} chars)`,
-            latencyMs,
-            details: { query: message?.substring(0, 50), replyPreview: response.text.substring(0, 70) }
+            message: `Grok Chatbot response in ${response.latencyMs}ms (${response.content.length} chars)`,
+            latencyMs: response.latencyMs,
+            details: { query: message?.substring(0, 50), replyPreview: response.content.substring(0, 70), model: response.model }
           });
-          return res.json({ reply: response.text, latencyMs, source: 'gemini' });
+          return res.json({ reply: response.content, latencyMs: response.latencyMs, source: 'grok', model: response.model });
         }
-      } catch (geminiError: any) {
-        const parsedErr = parseGeminiError(geminiError);
+      } catch (grokError: any) {
+        const parsedErr = parseGrokError(grokError);
         addSystemLog({
           level: 'error',
           module: 'CHATBOT',
           endpoint: '/api/ai-chat',
-          message: `Gemini chatbot request failed: ${parsedErr.message}`,
+          message: `Grok chatbot request failed: ${parsedErr.message}`,
           errorCode: parsedErr.code,
           statusCode: parsedErr.status,
           latencyMs: Date.now() - startTime,
           details: { query: message, error: parsedErr.message, resolution: parsedErr.resolution }
         });
-        console.warn("Gemini chat error, fallback active:", geminiError?.message || geminiError);
+        console.warn("Grok chat error, fallback active:", grokError?.message || grokError);
       }
     } else {
       addSystemLog({
         level: 'warn',
         module: 'CHATBOT',
         endpoint: '/api/ai-chat',
-        message: 'Gemini API not configured. Falling back to local smart knowledge base.',
+        message: 'GROK_API_KEY not configured. Falling back to local smart knowledge base.',
         errorCode: 'KEY_NOT_CONFIGURED',
         details: { query: message }
       });
@@ -727,7 +745,7 @@ RESPONSE FORMAT:
       message: `Fatal error initializing chat: ${e?.message || e}`,
       errorCode: 'INIT_ERROR'
     });
-    console.warn("Gemini init error:", e);
+    console.warn("Grok init error:", e);
   }
 
   // 2. Fallback to smart knowledge base
@@ -735,14 +753,16 @@ RESPONSE FORMAT:
   return res.json({ reply: fallbackReply, fallback: true, source: 'knowledge_base', latencyMs: Date.now() - startTime });
 });
 
-// Real-Time System Diagnostics Endpoint
+// -------------------------------------------------------------
+// 7. Real-Time System Diagnostics Endpoint (Grok AI & Services)
+// -------------------------------------------------------------
 app.get("/api/admin/diagnostics", async (req, res) => {
   const startTime = Date.now();
-  const envKey = process.env.GEMINI_API_KEY || "";
-  const isKeyConfigured = Boolean(envKey && !envKey.startsWith("MY_"));
+  const grokConfig = getGrokConfig();
+  const isKeyConfigured = Boolean(grokConfig && grokConfig.key);
   const keySnippet = isKeyConfigured 
-    ? `${envKey.substring(0, 6)}...${envKey.substring(envKey.length - 4)}` 
-    : (envKey.startsWith("MY_") ? "Placeholder Key (Not Set)" : "Not Configured");
+    ? `${grokConfig!.key.substring(0, 6)}...${grokConfig!.key.substring(grokConfig!.key.length - 4)}` 
+    : "Not Configured";
 
   const diagnostics: any = {
     timestamp: new Date().toISOString(),
@@ -753,15 +773,28 @@ app.get("/api/admin/diagnostics", async (req, res) => {
       port: PORT,
       status: "healthy"
     },
-    gemini: {
+    grok: {
       configured: isKeyConfigured,
       keySnippet,
-      model: "gemini-3.7-flash",
+      model: grokConfig?.model || "grok-beta",
+      provider: grokConfig?.providerName || "xAI Grok",
       reachable: false,
       latencyMs: 0,
       statusCode: 0,
       errorCode: null as string | null,
-      message: isKeyConfigured ? "Testing connection..." : "GEMINI_API_KEY environment variable is not configured",
+      message: isKeyConfigured ? "Testing Grok connection..." : "GROK_API_KEY environment variable is not configured",
+      resolution: null as string | null
+    },
+    // Keep gemini alias object for safety
+    gemini: {
+      configured: isKeyConfigured,
+      keySnippet,
+      model: grokConfig?.model || "grok-beta",
+      reachable: false,
+      latencyMs: 0,
+      statusCode: 0,
+      errorCode: null as string | null,
+      message: isKeyConfigured ? "Connected with Grok" : "GROK_API_KEY not configured",
       resolution: null as string | null
     },
     firebase: {
@@ -772,48 +805,45 @@ app.get("/api/admin/diagnostics", async (req, res) => {
     logs: systemLogs.slice(0, 60)
   };
 
-  // Perform quick live ping test to Gemini API if key is present
+  // Perform quick live ping test to Grok API if key is present
   if (isKeyConfigured) {
-    const ai = getAI();
-    if (ai) {
-      try {
-        const pingStart = Date.now();
-        const testRes = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
-          contents: [{ role: "user", parts: [{ text: "Ping. Respond strictly with 'PONG'." }] }]
-        });
-        const latency = Date.now() - pingStart;
-        diagnostics.gemini.latencyMs = latency;
+    try {
+      const pingRes = await callGrokAPI([
+        { role: "user", content: "Ping. Respond strictly with 'PONG'." }
+      ], { max_tokens: 10, temperature: 0.1 });
 
-        if (testRes?.text) {
-          diagnostics.gemini.reachable = true;
-          diagnostics.gemini.statusCode = 200;
-          diagnostics.gemini.message = `Connected & Active (Latency: ${latency}ms, Response: "${testRes.text.trim()}")`;
-        } else {
-          diagnostics.gemini.statusCode = 204;
-          diagnostics.gemini.message = "Connected, but returned empty text response.";
-        }
-      } catch (testErr: any) {
-        const parsed = parseGeminiError(testErr);
-        diagnostics.gemini.reachable = false;
-        diagnostics.gemini.statusCode = parsed.status;
-        diagnostics.gemini.errorCode = parsed.code;
-        diagnostics.gemini.message = parsed.message;
-        diagnostics.gemini.resolution = parsed.resolution;
+      diagnostics.grok.latencyMs = pingRes.latencyMs;
+      diagnostics.gemini.latencyMs = pingRes.latencyMs;
 
-        addSystemLog({
-          level: 'error',
-          module: 'GEMINI_API',
-          endpoint: '/api/admin/diagnostics',
-          message: `Gemini Diagnostic Ping failed: ${parsed.message}`,
-          errorCode: parsed.code,
-          statusCode: parsed.status,
-          details: { error: parsed.message, resolution: parsed.resolution }
-        });
+      if (pingRes.content) {
+        diagnostics.grok.reachable = true;
+        diagnostics.grok.statusCode = 200;
+        diagnostics.grok.message = `Connected & Active (Latency: ${pingRes.latencyMs}ms, Model: ${pingRes.model})`;
+        diagnostics.gemini.reachable = true;
+        diagnostics.gemini.statusCode = 200;
+      } else {
+        diagnostics.grok.statusCode = 204;
+        diagnostics.grok.message = "Connected to Grok, but returned empty text response.";
       }
-    } else {
-      diagnostics.gemini.errorCode = "CLIENT_INIT_FAILED";
-      diagnostics.gemini.message = "Could not create Gemini SDK instance";
+    } catch (testErr: any) {
+      const parsed = parseGrokError(testErr);
+      diagnostics.grok.reachable = false;
+      diagnostics.grok.statusCode = parsed.status;
+      diagnostics.grok.errorCode = parsed.code;
+      diagnostics.grok.message = parsed.message;
+      diagnostics.grok.resolution = parsed.resolution;
+      diagnostics.gemini.reachable = false;
+      diagnostics.gemini.statusCode = parsed.status;
+
+      addSystemLog({
+        level: 'error',
+        module: 'GROK_API',
+        endpoint: '/api/admin/diagnostics',
+        message: `Grok Diagnostic Ping failed: ${parsed.message}`,
+        errorCode: parsed.code,
+        statusCode: parsed.status,
+        details: { error: parsed.message, resolution: parsed.resolution }
+      });
     }
   }
 
@@ -821,61 +851,53 @@ app.get("/api/admin/diagnostics", async (req, res) => {
   res.json(diagnostics);
 });
 
-// Explicit Gemini API Test Endpoint with Custom Prompt
-app.post("/api/admin/diagnostics/test-gemini", async (req, res) => {
+// -------------------------------------------------------------
+// 8. Explicit Grok API Test Endpoint with Custom Prompt
+// -------------------------------------------------------------
+const handleGrokTest = async (req: express.Request, res: express.Response) => {
   const startTime = Date.now();
   const { testPrompt } = req.body;
   const promptToRun = testPrompt || "Hello Rare Dreams AI! Please respond with a brief greeting in English and Bengali.";
 
-  const envKey = process.env.GEMINI_API_KEY || "";
-  if (!envKey || envKey.startsWith("MY_")) {
+  const grokConfig = getGrokConfig();
+  if (!grokConfig) {
     const errorEntry = addSystemLog({
       level: 'error',
-      module: 'GEMINI_API',
-      endpoint: '/api/admin/diagnostics/test-gemini',
-      message: 'Test failed: GEMINI_API_KEY environment variable is not configured.',
+      module: 'GROK_API',
+      endpoint: '/api/admin/diagnostics/test-grok',
+      message: 'Test failed: GROK_API_KEY environment variable is not configured.',
       errorCode: 'KEY_NOT_CONFIGURED',
       statusCode: 400
     });
     return res.status(400).json({
       success: false,
-      error: "GEMINI_API_KEY is not set in environment variables.",
+      error: "GROK_API_KEY is not set in environment variables.",
       errorCode: "KEY_NOT_CONFIGURED",
-      resolution: "Add GEMINI_API_KEY in your hosting dashboard (e.g. Vercel or Cloud Run environment settings).",
+      resolution: "Add GROK_API_KEY in your hosting dashboard or Integration Keys tab (e.g. from https://console.x.ai/ or https://console.groq.com).",
       log: errorEntry
     });
   }
 
-  const ai = getAI();
-  if (!ai) {
-    return res.status(500).json({
-      success: false,
-      error: "Failed to initialize Gemini SDK client.",
-      errorCode: "SDK_INIT_FAILED"
-    });
-  }
-
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: promptToRun
-    });
+    const response = await callGrokAPI([
+      { role: "user", content: promptToRun }
+    ]);
 
     const latencyMs = Date.now() - startTime;
-    const responseText = response?.text || "No text received";
+    const responseText = response.content || "No text received";
 
     const successLog = addSystemLog({
       level: 'success',
-      module: 'GEMINI_API',
-      endpoint: '/api/admin/diagnostics/test-gemini',
-      message: `Live Gemini Test succeeded in ${latencyMs}ms (${responseText.length} chars)`,
+      module: 'GROK_API',
+      endpoint: '/api/admin/diagnostics/test-grok',
+      message: `Live Grok Test succeeded in ${latencyMs}ms (${responseText.length} chars)`,
       latencyMs,
-      details: { prompt: promptToRun, responsePreview: responseText.substring(0, 100) }
+      details: { prompt: promptToRun, responsePreview: responseText.substring(0, 100), model: response.model }
     });
 
     return res.json({
       success: true,
-      model: "gemini-3.7-flash",
+      model: response.model,
       latencyMs,
       prompt: promptToRun,
       responseText,
@@ -883,13 +905,13 @@ app.post("/api/admin/diagnostics/test-gemini", async (req, res) => {
     });
   } catch (err: any) {
     const latencyMs = Date.now() - startTime;
-    const parsed = parseGeminiError(err);
+    const parsed = parseGrokError(err);
 
     const errorLog = addSystemLog({
       level: 'error',
-      module: 'GEMINI_API',
-      endpoint: '/api/admin/diagnostics/test-gemini',
-      message: `Live Gemini Test failed: ${parsed.message}`,
+      module: 'GROK_API',
+      endpoint: '/api/admin/diagnostics/test-grok',
+      message: `Live Grok Test failed: ${parsed.message}`,
       errorCode: parsed.code,
       statusCode: parsed.status,
       latencyMs,
@@ -907,7 +929,10 @@ app.post("/api/admin/diagnostics/test-gemini", async (req, res) => {
       log: errorLog
     });
   }
-});
+};
+
+app.post("/api/admin/diagnostics/test-grok", handleGrokTest);
+app.post("/api/admin/diagnostics/test-gemini", handleGrokTest); // backward compatibility
 
 // Clear Diagnostic Logs Endpoint
 app.delete("/api/admin/diagnostics/logs", (req, res) => {
@@ -918,6 +943,27 @@ app.delete("/api/admin/diagnostics/logs", (req, res) => {
     message: 'System logs cleared by administrator.'
   });
   res.json({ success: true, message: "Logs cleared successfully." });
+});
+
+// Update runtime Grok API key endpoint
+app.post("/api/admin/diagnostics/update-key", (req, res) => {
+  const { apiKey } = req.body;
+  if (!apiKey || typeof apiKey !== 'string') {
+    return res.status(400).json({ success: false, error: "API key is required" });
+  }
+
+  const trimmed = apiKey.trim();
+  process.env.GROK_API_KEY = trimmed;
+  process.env.XAI_API_KEY = trimmed;
+  process.env.GROQ_API_KEY = trimmed;
+
+  addSystemLog({
+    level: 'info',
+    module: 'GROK_API',
+    message: `Grok API key updated at runtime (Starts with: ${trimmed.substring(0, 6)}...).`,
+  });
+
+  return res.json({ success: true, message: "Grok API key updated in active runtime." });
 });
 
 // Dynamic robots.txt
@@ -978,7 +1024,6 @@ ${mainPages
   res.setHeader("Content-Type", "application/xml");
   res.send(sitemapXml);
 });
-
 
 async function startServer() {
   // Vite middleware for development

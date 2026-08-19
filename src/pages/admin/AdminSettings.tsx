@@ -1016,6 +1016,48 @@ export default function AdminSettings() {
             </div>
           </div>
 
+          {/* Group E: Facebook Pixel (FB ID) & Analytics */}
+          <div className="bg-indigo-50/40 p-5 rounded-2xl border border-indigo-100/80 space-y-4 md:col-span-2">
+            <h3 className="text-xs font-black uppercase text-indigo-950 tracking-wider flex items-center gap-2">
+              <Globe size={16} className="text-indigo-600" />
+              <span>Facebook Pixel (FB ID) & Marketing Tracking</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                  Facebook Pixel ID (FB ID)
+                </label>
+                <input
+                  type="text"
+                  value={storeForm.facebookPixelId || ''}
+                  onChange={(e) => handleStoreFormChange('facebookPixelId', e.target.value)}
+                  placeholder="e.g. 182940294819203"
+                  className="w-full bg-white border border-neutral-300 px-3.5 py-2.5 rounded-xl text-xs font-mono font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="text-[10px] text-neutral-500 mt-1">
+                  Enter your Meta / Facebook Pixel Dataset ID from Facebook Events Manager to track conversions and ads.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                  Google Analytics Measurement ID (GA4)
+                </label>
+                <input
+                  type="text"
+                  value={storeForm.googleAnalyticsId || ''}
+                  onChange={(e) => handleStoreFormChange('googleAnalyticsId', e.target.value)}
+                  placeholder="e.g. G-XXXXXXXXXX"
+                  className="w-full bg-white border border-neutral-300 px-3.5 py-2.5 rounded-xl text-xs font-mono font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="text-[10px] text-neutral-500 mt-1">
+                  Optional: GA4 measurement ID for Google Analytics visitor tracking.
+                </p>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 

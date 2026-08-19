@@ -102,7 +102,7 @@ export default function ProductForm() {
     }
 
     setIsAiGenerating(true);
-    setAiStatusStep("Analyzing image with Gemini Vision AI...");
+    setAiStatusStep("Analyzing image with Grok AI...");
     setAiGeneratedSuccess(false);
 
     try {

@@ -119,6 +119,10 @@ export interface StoreConfig {
   googleSiteVerification?: string;
   canonicalDomain?: string;
   ogImage?: string;
+  // Tracking & Pixels
+  facebookPixelId?: string;
+  facebookPageId?: string;
+  googleAnalyticsId?: string;
 }
 
 export interface Review {

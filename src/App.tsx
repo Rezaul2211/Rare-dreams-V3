@@ -13,6 +13,7 @@ import Account from './pages/Account';
 import OrderSuccess from './pages/OrderSuccess';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from './store/useAuthStore';
+import { useStoreConfigStore } from './store/useStoreConfigStore';
 import { seedProductsIfEmpty } from './lib/seed';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -52,10 +53,50 @@ function PageFallback() {
 export default function App() {
   const initializeAuth = useAuthStore((state) => state.initialize);
   const user = useAuthStore((state) => state.user);
+  const config = useStoreConfigStore((state) => state.config);
+  const fetchConfig = useStoreConfigStore((state) => state.fetchConfig);
 
   useEffect(() => {
     initializeAuth();
-  }, [initializeAuth]);
+    fetchConfig();
+  }, [initializeAuth, fetchConfig]);
+
+  // Dynamically initialize Facebook Pixel when configured
+  useEffect(() => {
+    if (config?.facebookPixelId && typeof window !== 'undefined') {
+      const fbId = config.facebookPixelId.trim();
+      if (fbId && !(window as any)._fbq_initialized) {
+        (window as any)._fbq_initialized = true;
+        try {
+          const win = window as any;
+          if (!win.fbq) {
+            const n: any = function (...args: any[]) {
+              if (n.callMethod) {
+                n.callMethod(...args);
+              } else {
+                n.queue.push(args);
+              }
+            };
+            n.queue = [];
+            n.loaded = true;
+            n.version = '2.0';
+            win.fbq = n;
+            win._fbq = n;
+
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+            document.head.appendChild(script);
+          }
+
+          win.fbq('init', fbId);
+          win.fbq('track', 'PageView');
+        } catch (e) {
+          console.warn("FB Pixel load error:", e);
+        }
+      }
+    }
+  }, [config?.facebookPixelId]);
 
   useEffect(() => {
     if (user?.role === 'admin') {

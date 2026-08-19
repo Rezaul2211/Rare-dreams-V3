@@ -6,7 +6,7 @@
 
 export interface AiChatResponse {
   reply: string;
-  provider?: 'gemini' | 'fallback';
+  provider?: 'grok' | 'gemini' | 'fallback';
   error?: string;
 }
 
