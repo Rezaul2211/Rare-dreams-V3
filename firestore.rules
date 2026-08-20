@@ -17,27 +17,61 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Categories collection (Public read, write allowed)
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Price Drop Alerts collection (Users can create, view, manage subscriptions)
     match /price_alerts/{alertId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if true;
     }
 
     // User Notifications collection (Price drop & order updates)
     match /notifications/{notificationId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if true;
     }
 
     // Orders collection
     match /orders/{orderId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if true;
     }
 
     // Reviews collection
     match /reviews/{reviewId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if true;
     }
 
-    // Default fallback
+    // Users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Settings collection
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Coupons collection
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Flash sale and banners
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Default fallback (Allows read/write to all documents to ensure production access)
     match /{document=**} {
       allow read, write: if true;
     }

@@ -5,6 +5,14 @@
       "destination": "/api/ai-chat.ts"
     },
     {
+      "source": "/api/ai-product-auto-fill",
+      "destination": "/api/ai-product-auto-fill.ts"
+    },
+    {
+      "source": "/api/ai-generate-description",
+      "destination": "/api/ai-generate-description.ts"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.ts"
     },
