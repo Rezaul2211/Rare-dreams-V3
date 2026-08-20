@@ -3,6 +3,7 @@ import { collection, getDocs, query, where, updateDoc, doc, deleteDoc, writeBatc
 import { db } from '../../lib/firebase';
 import { assignUserRoleByEmail, revokeUserRoleByEmail } from '../../lib/roles';
 import { useStoreConfigStore } from '../../store/useStoreConfigStore';
+import { setCachedGrokKey } from '../../services/aiService';
 import { 
   ShieldAlert, Trash2, Mail, ShieldCheck, Database, Server, Loader2, AlertTriangle, 
   CheckCircle2, UserMinus, Cpu, Sparkles, RefreshCw, Key, Eye, EyeOff, ExternalLink,
@@ -158,8 +159,17 @@ export default function AdminSystem() {
           if (fetchedIds.length > 0) {
             // Prioritize fast & popular chat models
             const prioritized = isGroq
-              ? ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.3-70b-specdec', 'llama-3.2-3b-preview', 'llama-3.2-1b-preview']
-              : ['grok-beta', 'grok-2-latest', 'grok-2-1212', 'grok-2'];
+              ? [
+                  'openai/gpt-oss-120b',
+                  'openai/gpt-oss-20b',
+                  'qwen/qwen3.6-27b',
+                  'groq/compound',
+                  'groq/compound-mini',
+                  'moonshotai/kimi-k2-instruct-0905',
+                  'llama-3.3-70b-versatile',
+                  'llama-3.1-8b-instant'
+                ]
+              : ['grok-2-latest', 'grok-2', 'grok-beta'];
             
             const sorted = [
               ...prioritized.filter(p => fetchedIds.includes(p)),
@@ -176,8 +186,17 @@ export default function AdminSystem() {
     // Default static fallback models if dynamic discovery was empty
     if (candidateModels.length === 0) {
       candidateModels = isGroq
-        ? ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.3-70b-specdec', 'llama-3.2-3b-preview', 'llama-3.2-1b-preview', 'qwen-2.5-32b']
-        : ['grok-beta', 'grok-2-latest', 'grok-2-1212', 'grok-2'];
+        ? [
+            'openai/gpt-oss-120b',
+            'openai/gpt-oss-20b',
+            'qwen/qwen3.6-27b',
+            'groq/compound',
+            'groq/compound-mini',
+            'moonshotai/kimi-k2-instruct-0905',
+            'llama-3.3-70b-versatile',
+            'llama-3.1-8b-instant'
+          ]
+        : ['grok-2-latest', 'grok-2', 'grok-beta'];
     }
 
     let lastError: any = null;
@@ -468,8 +487,12 @@ export default function AdminSystem() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
+          const grokKey = data.grokApiKey || data.xaiApiKey || data.groqApiKey || data.geminiApiKey || '';
+          if (grokKey) {
+            setCachedGrokKey(grokKey);
+          }
           setIntegrations({
-            grokApiKey: data.grokApiKey || data.geminiApiKey || '',
+            grokApiKey: grokKey,
             facebookPixelId: data.facebookPixelId || storeConfig?.facebookPixelId || '',
             googleAnalyticsId: data.googleAnalyticsId || storeConfig?.googleAnalyticsId || '',
             stripePublishableKey: data.stripePublishableKey || '',
@@ -497,6 +520,10 @@ export default function AdminSystem() {
     setIntegrationsMessage(null);
 
     try {
+      if (integrations.grokApiKey?.trim()) {
+        setCachedGrokKey(integrations.grokApiKey.trim());
+      }
+
       // 1. Save to Firestore system_settings/integrations
       await setDoc(doc(db, 'system_settings', 'integrations'), {
         ...integrations,
@@ -526,7 +553,7 @@ export default function AdminSystem() {
 
       setIntegrationsMessage({
         type: 'success',
-        text: 'Grok API Key & Integration settings saved successfully! Active on active server & database.'
+        text: 'Grok API Key & Integration settings saved successfully! Active for Chatbot, Product Description Generator & Admin Diagnostics.'
       });
       
       fetchDiagnostics(true);

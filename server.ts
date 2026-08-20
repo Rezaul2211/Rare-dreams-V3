@@ -55,6 +55,7 @@ addSystemLog({
 interface GrokConfig {
   key: string;
   baseUrl: string;
+  modelsUrl: string;
   candidateModels: string[];
   providerName: 'xAI Grok' | 'Groq Llama';
 }
@@ -77,7 +78,17 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
-      candidateModels: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama-3.3-70b-specdec", "llama-3.2-3b-preview", "llama-3.2-1b-preview", "qwen-2.5-32b"],
+      modelsUrl: "https://api.groq.com/openai/v1/models",
+      candidateModels: [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.6-27b",
+        "groq/compound",
+        "groq/compound-mini",
+        "moonshotai/kimi-k2-instruct-0905",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
+      ],
       providerName: "Groq Llama"
     };
   } else {
@@ -85,7 +96,8 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
-      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212", "grok-2"],
+      modelsUrl: "https://api.x.ai/v1/models",
+      candidateModels: ["grok-2-latest", "grok-2", "grok-beta"],
       providerName: "xAI Grok"
     };
   }
@@ -94,6 +106,56 @@ function getGrokConfig(): GrokConfig | null {
 interface GrokMessage {
   role: 'system' | 'user' | 'assistant';
   content: string | any[];
+}
+
+let cachedActiveModels: { key: string; models: string[]; timestamp: number } | null = null;
+
+async function getActiveCandidateModels(config: { key: string; modelsUrl: string; candidateModels: string[] }): Promise<string[]> {
+  const now = Date.now();
+  if (cachedActiveModels && cachedActiveModels.key === config.key && (now - cachedActiveModels.timestamp) < 5 * 60 * 1000) {
+    return cachedActiveModels.models;
+  }
+
+  let discoveredModels: string[] = [];
+  try {
+    const res = await fetch(config.modelsUrl, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${config.key}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.data)) {
+        const activeIds: string[] = data.data
+          .map((m: any) => m.id)
+          .filter((id: string) => typeof id === 'string' &&
+            !id.includes('whisper') &&
+            !id.includes('tts') &&
+            !id.includes('guard') &&
+            !id.includes('audio') &&
+            !id.includes('embed') &&
+            !id.includes('transcription') &&
+            !id.includes('moderation')
+          );
+
+        if (activeIds.length > 0) {
+          const prioritized = config.candidateModels;
+          const matched = prioritized.filter(p => activeIds.includes(p));
+          const rest = activeIds.filter(a => !prioritized.includes(a));
+          discoveredModels = [...matched, ...rest];
+        }
+      }
+    }
+  } catch {
+    // Discovery failed, proceed with fallback candidateModels
+  }
+
+  const finalModels = discoveredModels.length > 0 ? discoveredModels : config.candidateModels;
+  cachedActiveModels = {
+    key: config.key,
+    models: finalModels,
+    timestamp: now
+  };
+  return finalModels;
 }
 
 async function callGrokAPI(
@@ -105,9 +167,10 @@ async function callGrokAPI(
     throw new Error("GROK_API_KEY is not configured in environment variables or Settings.");
   }
 
+  const modelsToTry = await getActiveCandidateModels(config);
   let lastError: any = null;
 
-  for (const model of config.candidateModels) {
+  for (const model of modelsToTry) {
     try {
       const startTime = Date.now();
       const payload: any = {

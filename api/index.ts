@@ -25,17 +25,65 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
-      candidateModels: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama-3.3-70b-specdec", "llama-3.2-3b-preview", "llama-3.2-1b-preview", "qwen-2.5-32b"],
+      modelsUrl: "https://api.groq.com/openai/v1/models",
+      candidateModels: [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.6-27b",
+        "groq/compound",
+        "groq/compound-mini",
+        "moonshotai/kimi-k2-instruct-0905",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
+      ],
       providerName: "Groq Llama"
     };
   } else {
     return {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
-      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212", "grok-2"],
+      modelsUrl: "https://api.x.ai/v1/models",
+      candidateModels: ["grok-2-latest", "grok-2", "grok-beta"],
       providerName: "xAI Grok"
     };
   }
+}
+
+async function getActiveCandidateModels(config: { key: string; modelsUrl: string; candidateModels: string[] }): Promise<string[]> {
+  let discoveredModels: string[] = [];
+  try {
+    const res = await fetch(config.modelsUrl, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${config.key}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.data)) {
+        const activeIds: string[] = data.data
+          .map((m: any) => m.id)
+          .filter((id: string) => typeof id === 'string' &&
+            !id.includes('whisper') &&
+            !id.includes('tts') &&
+            !id.includes('guard') &&
+            !id.includes('audio') &&
+            !id.includes('embed') &&
+            !id.includes('transcription') &&
+            !id.includes('moderation')
+          );
+
+        if (activeIds.length > 0) {
+          const prioritized = config.candidateModels;
+          const matched = prioritized.filter(p => activeIds.includes(p));
+          const rest = activeIds.filter(a => !prioritized.includes(a));
+          discoveredModels = [...matched, ...rest];
+        }
+      }
+    }
+  } catch {
+    // Discovery failed
+  }
+
+  return discoveredModels.length > 0 ? discoveredModels : config.candidateModels;
 }
 
 async function callGrok(messages: Array<{ role: string; content: string }>, options: { temperature?: number; max_tokens?: number } = {}) {
@@ -44,9 +92,10 @@ async function callGrok(messages: Array<{ role: string; content: string }>, opti
     throw new Error("GROK_API_KEY is not configured in Vercel Environment Variables.");
   }
 
+  const modelsToTry = await getActiveCandidateModels(config);
   let lastError: any = null;
 
-  for (const model of config.candidateModels) {
+  for (const model of modelsToTry) {
     try {
       const startTime = Date.now();
       const payload = {
@@ -292,6 +341,85 @@ Requirements:
       return res.status(200).json({
         description: `Elevate your style with the ${name || 'Designer Collection'} by Rare Dreams. Crafted from ${material || 'premium fabric'}, this exclusive piece features impeccable craftsmanship and royal comfort.\n\n✨ Key Highlights:\n- Breathable luxury fabric\n- Precision tailored finish\n- Perfect for festive gatherings\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.`,
         fallback: true
+      });
+    }
+  }
+
+  // 5. AI Product Auto-Fill Route
+  if (url.includes('/api/ai-product-auto-fill')) {
+    const { categories: clientCategories, hints } = body;
+    const availableCategories = Array.isArray(clientCategories) && clientCategories.length > 0
+      ? clientCategories
+      : ["Men", "Women", "Kids", "Accessories", "Panjabi", "Sharee", "Abaya", "Kurtis", "T-Shirts", "Shirts", "Pants", "Foot wear", "Watches"];
+
+    const prompt = `You are an expert fashion catalog manager for luxury brand "Rare Dreams".
+Product Hint/Name: ${hints || 'Royal Designer Collection'}
+Available Categories: ${availableCategories.join(', ')}
+
+Return strict JSON only:
+{
+  "name": "Luxury product title in English",
+  "category": "Must be ONE from: ${availableCategories.join(', ')}",
+  "subcategory": "Subcategory in English",
+  "description": "Rich English product description with 2 intro sentences, bullet highlights (✨ Key Highlights), and care note",
+  "material": "Estimated fabric/material in English",
+  "price": 1450,
+  "comparePrice": 1850,
+  "discount": 20,
+  "stockQuantity": 25,
+  "sizeOptions": ["38", "40", "42", "44"],
+  "colorOptions": ["Navy Blue", "Gold"],
+  "tags": ["Exclusive", "Rare Dreams"],
+  "isFlashSale": false
+}`;
+
+    try {
+      const resp = await callGrok([
+        { role: "system", content: "Output strict JSON only." },
+        { role: "user", content: prompt }
+      ], { temperature: 0.3 });
+      const cleanText = resp.content.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanText);
+      return res.status(200).json(parsed);
+    } catch {
+      return res.status(200).json({
+        name: hints ? `Luxury ${hints}` : "Exclusive Royal Designer Collection",
+        category: availableCategories[0] || "Men",
+        subcategory: hints || "Premium Collection",
+        description: "Designed for effortless elegance, this premium piece by Rare Dreams features meticulous tailoring and luxurious breathable fabric.\n\n✨ Key Highlights:\n- Premium quality long-lasting fabric\n- Elegant silhouette with flawless craftsmanship\n- Soft on skin with breathable comfort\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.",
+        material: "100% Premium Cotton Blend",
+        price: 1450,
+        comparePrice: 1850,
+        discount: 20,
+        stockQuantity: 25,
+        sizeOptions: ["M", "L", "XL", "XXL"],
+        colorOptions: ["Navy Blue", "Black"],
+        tags: ["Exclusive", "Rare Dreams"],
+        isFlashSale: false,
+        fallback: true
+      });
+    }
+  }
+
+  // 6. AI Tag Product Route
+  if (url.includes('/api/ai-tag-product')) {
+    const { name, category } = body;
+    const prompt = `Analyze for e-commerce tagging in English:
+Title: ${name || 'Luxury Fashion Item'}
+Category: ${category || 'Clothing'}
+Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "TAG3"]}`;
+
+    try {
+      const resp = await callGrok([
+        { role: "system", content: "Output strict JSON only." },
+        { role: "user", content: prompt }
+      ], { temperature: 0.2 });
+      const cleanText = resp.content.replace(/```json/g, '').replace(/```/g, '').trim();
+      return res.status(200).json(JSON.parse(cleanText));
+    } catch {
+      return res.status(200).json({
+        subcategory: category ? `${category} Collection` : "Designer Collection",
+        tags: ["Exclusive", "Rare Dreams", "Premium Quality"]
       });
     }
   }

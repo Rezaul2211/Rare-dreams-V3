@@ -5,6 +5,11 @@ import { db } from '../../lib/firebase';
 import { Product } from '../../types';
 import { useCategoryStore } from '../../store/useCategoryStore';
 import { 
+  generateAiProductAutoFill, 
+  generateAiProductDescription, 
+  generateAiProductTags 
+} from '../../services/aiService';
+import { 
   ArrowLeft, Save, X, UploadCloud, Image as ImageIcon, Video, CheckCircle2, 
   Sparkles, Wand2, Loader2, Check
 } from 'lucide-react';
@@ -92,46 +97,31 @@ export default function ProductForm() {
   // Main AI Image Auto-Fill Function
   const runAiAutoFill = async (imageToAnalyze?: string, customHint?: string) => {
     const targetImage = imageToAnalyze || formData.images?.[0];
-    if (!targetImage) {
+    if (!targetImage && !formData.name && !customHint && !aiPromptHint) {
       if (fileInputRef.current) {
         fileInputRef.current.click();
       } else {
-        alert("Please upload at least one product image first.");
+        alert("Please upload at least one product image or enter a title/hint first.");
       }
       return;
     }
 
     setIsAiGenerating(true);
-    setAiStatusStep("Analyzing image with Grok AI...");
+    setAiStatusStep("Analyzing product details with Grok AI...");
     setAiGeneratedSuccess(false);
 
     try {
       setTimeout(() => {
         setAiStatusStep("Generating titles, tags & English description...");
-      }, 1000);
+      }, 800);
 
       const categoryList = (categories || []).map(c => c.title);
 
-      const res = await fetch("/api/ai-product-auto-fill", {
-        method: "POST",
-        headers: getAiHeaders(),
-        body: JSON.stringify({
-          image: targetImage,
-          categories: categoryList,
-          hints: customHint || aiPromptHint || ""
-        })
+      const data = await generateAiProductAutoFill({
+        image: targetImage,
+        categories: categoryList,
+        hints: customHint || aiPromptHint || formData.name || ""
       });
-
-      if (!res.ok) {
-        let errMsg = "AI Server responded with an error.";
-        try {
-          const errData = await res.json();
-          if (errData && errData.error) errMsg = errData.error;
-        } catch(e) {}
-        throw new Error(errMsg);
-      }
-
-      const data = await res.json();
 
       if (data) {
         setFormData(prev => {
@@ -162,7 +152,7 @@ export default function ProductForm() {
       }
     } catch (err: any) {
       console.error("AI Auto-fill failed:", err);
-      alert(`AI Generation Failed: ${err.message || "Please try again later."}`);
+      alert(`AI Generation Notice: ${err.message || "Could not generate. Please ensure your Grok API key is saved."}`);
     } finally {
       setIsAiGenerating(false);
       setAiStatusStep("");
@@ -173,20 +163,15 @@ export default function ProductForm() {
   const generateAiDescriptionOnly = async () => {
     setGeneratingField('description');
     try {
-      const res = await fetch("/api/ai-generate-description", {
-        method: "POST",
-        headers: getAiHeaders(),
-        body: JSON.stringify({
-          name: formData.name,
-          category: formData.category,
-          subcategory: formData.subcategory,
-          price: formData.price,
-          material: formData.material
-        })
+      const description = await generateAiProductDescription({
+        name: formData.name,
+        category: formData.category,
+        subcategory: formData.subcategory,
+        price: formData.price,
+        material: formData.material
       });
-      const data = await res.json();
-      if (data?.description) {
-        setFormData(prev => ({ ...prev, description: data.description }));
+      if (description) {
+        setFormData(prev => ({ ...prev, description }));
       }
     } catch (e) {
       console.warn("Description generation error", e);
@@ -199,17 +184,12 @@ export default function ProductForm() {
   const generateAiTagsOnly = async () => {
     setGeneratingField('tags');
     try {
-      const res = await fetch("/api/ai-tag-product", {
-        method: "POST",
-        headers: getAiHeaders(),
-        body: JSON.stringify({
-          name: formData.name,
-          category: formData.category
-        })
+      const result = await generateAiProductTags({
+        name: formData.name,
+        category: formData.category
       });
-      const data = await res.json();
-      if (data?.subcategory) {
-        setFormData(prev => ({ ...prev, subcategory: data.subcategory }));
+      if (result?.subcategory) {
+        setFormData(prev => ({ ...prev, subcategory: result.subcategory }));
       }
     } catch (e) {
       console.warn("Tag generation error", e);
