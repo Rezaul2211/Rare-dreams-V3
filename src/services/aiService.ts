@@ -111,8 +111,8 @@ export function setCachedGrokKey(key: string) {
  */
 export async function callDirectGrok(
   key: string,
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-  options: { temperature?: number; max_tokens?: number } = {}
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string | any[] }>,
+  options: { temperature?: number; max_tokens?: number; isVision?: boolean } = {}
 ): Promise<{ content: string; model: string; latencyMs: number }> {
   const trimmedKey = key.trim();
   const isGroq = trimmedKey.startsWith('gsk_');
@@ -135,11 +135,13 @@ export async function callDirectGrok(
       if (Array.isArray(modelsData?.data)) {
         const fetchedIds: string[] = modelsData.data
           .map((m: any) => m.id)
-          .filter((id: string) => typeof id === 'string' && !id.includes('whisper') && !id.includes('tts') && !id.includes('guard'));
+          .filter((id: string) => typeof id === 'string' && !id.includes('whisper') && !id.includes('tts') && !id.includes('guard') && !id.includes('audio'));
         
         if (fetchedIds.length > 0) {
           const prioritized = isGroq
             ? [
+                'llama-3.2-11b-vision-preview',
+                'llama-3.2-90b-vision-preview',
                 'openai/gpt-oss-120b',
                 'openai/gpt-oss-20b',
                 'qwen/qwen3.6-27b',
@@ -149,7 +151,14 @@ export async function callDirectGrok(
                 'llama-3.3-70b-versatile',
                 'llama-3.1-8b-instant'
               ]
-            : ['grok-2-latest', 'grok-2', 'grok-beta'];
+            : [
+                'grok-2-vision-1212',
+                'grok-2-vision-latest',
+                'grok-vision-beta',
+                'grok-2-latest',
+                'grok-2',
+                'grok-beta'
+              ];
           
           candidateModels = [
             ...prioritized.filter(p => fetchedIds.includes(p)),
@@ -165,6 +174,8 @@ export async function callDirectGrok(
   if (candidateModels.length === 0) {
     candidateModels = isGroq
       ? [
+          'llama-3.2-11b-vision-preview',
+          'llama-3.2-90b-vision-preview',
           'openai/gpt-oss-120b',
           'openai/gpt-oss-20b',
           'qwen/qwen3.6-27b',
@@ -174,7 +185,21 @@ export async function callDirectGrok(
           'llama-3.3-70b-versatile',
           'llama-3.1-8b-instant'
         ]
-      : ['grok-2-latest', 'grok-2', 'grok-beta'];
+      : [
+          'grok-2-vision-1212',
+          'grok-2-vision-latest',
+          'grok-vision-beta',
+          'grok-2-latest',
+          'grok-2',
+          'grok-beta'
+        ];
+  }
+
+  if (options.isVision) {
+    const visionModels = candidateModels.filter(m => m.includes('vision') || m.includes('scout') || m.includes('120b') || m.includes('grok-2'));
+    if (visionModels.length > 0) {
+      candidateModels = [...visionModels, ...candidateModels.filter(m => !visionModels.includes(m))];
+    }
   }
 
   let lastError: any = null;
@@ -208,36 +233,33 @@ export async function callDirectGrok(
         };
       }
 
-      let errText = '';
+      let errorDetail = '';
       try {
         const errJson = await response.json();
-        errText = JSON.stringify(errJson);
+        errorDetail = JSON.stringify(errJson);
       } catch {
-        errText = await response.text();
+        errorDetail = await response.text();
       }
 
       const isModelIssue = response.status === 404 ||
-        errText.includes('model_decommissioned') ||
-        errText.includes('model_not_found') ||
-        errText.includes('decommissioned') ||
-        errText.includes('does not exist') ||
-        errText.includes('not supported') ||
-        errText.includes('deprecat');
+        errorDetail.includes('model_decommissioned') ||
+        errorDetail.includes('model_not_found') ||
+        errorDetail.includes('decommissioned') ||
+        errorDetail.includes('does not exist') ||
+        errorDetail.includes('not supported') ||
+        errorDetail.includes('deprecat');
 
       if (isModelIssue) {
         continue;
       }
 
-      throw new Error(`Direct Grok error (${response.status}): ${errText}`);
+      lastError = new Error(`Grok API error (${response.status}): ${errorDetail}`);
     } catch (e: any) {
-      if (e.message?.includes('401') || e.message?.includes('invalid_api_key')) {
-        throw e;
-      }
       lastError = e;
     }
   }
 
-  throw lastError || new Error("Failed to communicate with Grok / Groq API.");
+  throw lastError || new Error("All candidate Grok models failed.");
 }
 
 /**
@@ -259,12 +281,19 @@ export async function sendAiMessage({
   const apiPromise = (async (): Promise<AiChatResponse> => {
     // 1. Try Backend /api/ai-chat route
     try {
+      const grokKey = await getStoredGrokKey();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+      if (grokKey) {
+        headers['Authorization'] = `Bearer ${grokKey}`;
+        headers['x-grok-api-key'] = grokKey;
+      }
+
       const response = await fetch('/api/ai-chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers,
         body: JSON.stringify({ message: trimmed, history })
       });
 
@@ -289,9 +318,10 @@ export async function sendAiMessage({
         const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh.
 Key Brand Rules & Details:
 - Brand Name: Rare Dreams (রেয়ার ড্রিমস)
-- Delivery in Dhaka: ৳70 (24-48 Hours)
-- Delivery Outside Dhaka: ৳130 (2-4 Days)
-- Payment Methods: Cash on Delivery (COD), bKash, Nagad, Visa, Mastercard
+- Delivery in Dhaka: ৳80 (1-2 business days)
+- Delivery Outside Dhaka / Nationwide: ৳120 (2-4 business days)
+- Free Shipping on orders above ৳2000 nationwide!
+- Payment Methods: Cash on Delivery (COD) with open-box parcel checking, bKash, Nagad, Visa, Mastercard
 - Exchange Policy: 7-day hassle-free size & design exchange
 - Customer Support: Daily 10 AM - 10 PM
 - Personality: Warm, polite, professional, and knowledgeable. Answer in friendly Bangla (or English if the user asks in English). Keep responses concise, clear, and stylish.`;
@@ -327,8 +357,8 @@ Key Brand Rules & Details:
     // 3. Smart Local Fallback Response (if no API key or offline)
     const lower = trimmed.toLowerCase();
     let smartReply = "আসসালামু আলাইকুম! রেয়ার ড্রিমস (Rare Dreams)-এ আপনাকে স্বাগতম। আমাদের প্রিমিয়াম কালেকশন, সাইজ গাইড, ক্যাশ অন ডেলিভারি বা এক্সচেঞ্জ পলিসি সম্পর্কে কীভাবে সাহায্য করতে পারি?";
-    if (lower.includes('delivery') || lower.includes('ডেলিভারি') || lower.includes('charge') || lower.includes('ভাড়া')) {
-      smartReply = "আমাদের ডেলিভারি চার্জ: ঢাকা সিটির ভিতরে মাত্র ৭০ টাকা (২৪-৪৮ ঘণ্টার মধ্যে হোম ডেলিভারি), এবং ঢাকার বাইরে ১৩০ টাকা (২-৪ দিনের মধ্যে)। সারা বাংলাদেশে ক্যাশ অন ডেলিভারি সুবিধা রয়েছে!";
+    if (lower.includes('delivery') || lower.includes('ডেলিভারি') || lower.includes('charge') || lower.includes('চার্জ') || lower.includes('ভাড়া') || lower.includes('শিপিং')) {
+      smartReply = "আমাদের ডেলিভারি পলিসি ও চার্জ:\n\n🚚 ঢাকা সিটির ভিতরে: মাত্র ৳৮০ (১-২ দিনের মধ্যে ফাস্ট হোম ডেলিভারি)\n🚛 ঢাকার বাইরে / সারাদেশে: মাত্র ৳১২০ (২-৪ দিনের মধ্যে ডেলিভারি)\n🎁 ২০০০ টাকার বেশি অর্ডারে সারা বাংলাদেশে সম্পূর্ণ ডেলিভারি ফ্রী!\n💵 সারাদেশে ক্যাশ অন ডেলিভারি (COD) সুবিধা রয়েছে—পার্সেল দেখে নেওয়ার সুযোগ আছে!";
     } else if (lower.includes('cash') || lower.includes('cod') || lower.includes('ক্যাশ') || lower.includes('পেমেন্ট') || lower.includes('payment') || lower.includes('bkash') || lower.includes('বিকাশ')) {
       smartReply = "হ্যাঁ, আমরা সারা বাংলাদেশে ১০০% ক্যাশ অন ডেলিভারি (Cash on Delivery) প্রদান করি। এছাড়া বিকাশ, নগদ ও ডেবিট/ক্রেডিট কার্ডের মাধ্যমে নিরাপদে অগ্রিম পেমেন্ট করার সুবিধাও রয়েছে।";
     } else if (lower.includes('size') || lower.includes('সাইজ') || lower.includes('মাপ')) {
@@ -416,11 +446,19 @@ export async function generateAiProductAutoFill(params: ProductAiParams): Promis
     ? clientCategories
     : ["Men", "Women", "Kids", "Accessories", "Panjabi", "Sharee", "Abaya", "Kurtis", "T-Shirts", "Shirts", "Pants", "Foot wear", "Watches"];
 
+  const grokKey = await getStoredGrokKey();
+
   // 1. Try backend endpoint
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (grokKey) {
+      headers["Authorization"] = `Bearer ${grokKey}`;
+      headers["x-grok-api-key"] = grokKey;
+    }
+
     const res = await fetch("/api/ai-product-auto-fill", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ image, categories: availableCategories, hints })
     });
     const contentType = res.headers.get("content-type") || "";
@@ -434,12 +472,12 @@ export async function generateAiProductAutoFill(params: ProductAiParams): Promis
     console.warn("Backend auto-fill error, trying direct Grok:", e);
   }
 
-  // 2. Direct Grok Call via stored key
+  // 2. Direct Grok Call via stored key (with vision support)
   try {
-    const grokKey = await getStoredGrokKey();
     if (grokKey) {
-      const prompt = `You are an expert e-commerce fashion catalog manager for the luxury lifestyle brand "Rare Dreams".
-Product Hint/Name: ${hints || 'Premium Royal Designer Collection'}
+      const promptText = `Analyze this fashion product for luxury brand "Rare Dreams".
+${image ? 'Carefully inspect the provided image for: item silhouette, styling, fabric texture, primary & secondary colors, patterns/embroidery, and occasion.' : ''}
+${hints ? `Context / Hint: "${hints}"` : ''}
 Available Store Categories: ${availableCategories.join(', ')}
 
 Generate complete, high-converting product metadata in English in strict JSON format.
@@ -447,24 +485,31 @@ Generate complete, high-converting product metadata in English in strict JSON fo
 Required JSON Structure:
 {
   "name": "Luxury, appealing product title in English e.g. 'Royal Silk Embroidered Panjabi Set - Navy Blue' or 'Designer Festive Party Gown'",
-  "category": "Must be ONE from available categories: ${availableCategories.join(', ')}",
+  "category": "Must be EXACTLY ONE from available categories: ${availableCategories.join(', ')}",
   "subcategory": "Specific subcategory in English e.g. Panjabi Set, Party Gown, Baby Romper, Leather Loafers, Formal Shirt, Jeans, Kurti",
-  "description": "Rich, formatted product description in English. Include a 2-sentence luxury intro, bullet points for key features (✨ Key Highlights: Premium Quality, Tailored Finish, Comfortable Fit, Ideal Occasions), and fabric care.",
+  "description": "Rich, formatted product description in English with a 2-sentence luxury intro, bullet points for key features (✨ Key Highlights: Premium Quality, Tailored Finish, Comfortable Fit, Ideal Occasions), and fabric care (🧺 Care Instructions).",
   "material": "Estimated fabric/material in English e.g. '100% Premium Combed Cotton', 'Pure Raw Silk & Georgette', 'Genuine Full-Grain Leather'",
   "price": 1450,
   "comparePrice": 1850,
   "discount": 20,
   "stockQuantity": 25,
-  "sizeOptions": ["38", "40", "42", "44"],
+  "sizeOptions": ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
   "colorOptions": ["Navy Blue", "Gold"],
-  "tags": ["Panjabi", "Festive", "Silk", "Rare Dreams", "New Arrival"],
+  "tags": ["Exclusive", "Rare Dreams", "New Arrival"],
   "isFlashSale": false
 }`;
 
+      const userContent: any = image
+        ? [
+            { type: "text", text: promptText },
+            { type: "image_url", image_url: { url: image } }
+          ]
+        : promptText;
+
       const directRes = await callDirectGrok(grokKey, [
-        { role: 'system', content: 'You are a product catalog parser. Output strict JSON only without explanation or markdown quotes.' },
-        { role: 'user', content: prompt }
-      ], { temperature: 0.3, max_tokens: 800 });
+        { role: 'system', content: 'You are a luxury fashion catalog parser. Output strict JSON only without explanation or markdown quotes.' },
+        { role: 'user', content: userContent }
+      ], { temperature: 0.2, max_tokens: 800, isVision: Boolean(image) });
 
       if (directRes.content) {
         const cleanText = directRes.content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -472,7 +517,7 @@ Required JSON Structure:
         if (parsed && parsed.name) {
           return {
             name: parsed.name,
-            category: parsed.category || availableCategories[0] || 'Men',
+            category: parsed.category || availableCategories[0] || 'Kids',
             subcategory: parsed.subcategory || '',
             description: parsed.description || '',
             material: parsed.material || '100% Premium Cotton Blend',
@@ -480,9 +525,9 @@ Required JSON Structure:
             comparePrice: Number(parsed.comparePrice) || 1850,
             discount: Number(parsed.discount) || 20,
             stockQuantity: Number(parsed.stockQuantity) || 25,
-            sizeOptions: Array.isArray(parsed.sizeOptions) ? parsed.sizeOptions : ["M", "L", "XL"],
+            sizeOptions: Array.isArray(parsed.sizeOptions) ? parsed.sizeOptions : ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
             colorOptions: Array.isArray(parsed.colorOptions) ? parsed.colorOptions : ["Navy Blue", "Black"],
-            tags: Array.isArray(parsed.tags) ? parsed.tags : ["Exclusive", "Rare Dreams"],
+            tags: Array.isArray(parsed.tags) ? parsed.tags : ["Exclusive", "Rare Dreams", "New Arrival"],
             isFlashSale: !!parsed.isFlashSale
           };
         }
@@ -493,19 +538,19 @@ Required JSON Structure:
   }
 
   // 3. High quality fallback data
-  const defaultCat = availableCategories[0] || "Men";
+  const defaultCat = availableCategories.find(c => c.toLowerCase().includes('kid')) || availableCategories[0] || "Kids";
   return {
     name: hints ? `Luxury ${hints}` : "Exclusive Royal Designer Collection",
     category: defaultCat,
-    subcategory: hints || "Premium Collection",
+    subcategory: hints || "Festive Exclusive",
     description: "Designed for effortless elegance, this premium piece by Rare Dreams features meticulous tailoring and luxurious breathable fabric. Designed to provide unmatched comfort and sophisticated styling for all special occasions.\n\n✨ Key Highlights:\n- Premium quality long-lasting fabric\n- Elegant silhouette with flawless craftsmanship\n- Versatile styling for celebrations and everyday luxury\n- Soft on skin with breathable comfort\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.",
     material: "100% Premium Cotton Blend",
     price: 1450,
     comparePrice: 1850,
     discount: 20,
     stockQuantity: 25,
-    sizeOptions: ["M", "L", "XL", "XXL"],
-    colorOptions: ["Navy Blue", "Black", "White"],
+    sizeOptions: ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
+    colorOptions: ["Navy Blue", "Black", "Gold"],
     tags: ["Exclusive", "New Arrival", "Rare Dreams", "Premium Quality"],
     isFlashSale: false,
     fallback: true

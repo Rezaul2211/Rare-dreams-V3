@@ -11,7 +11,7 @@ import {
 } from '../../services/aiService';
 import { 
   ArrowLeft, Save, X, UploadCloud, Image as ImageIcon, Video, CheckCircle2, 
-  Sparkles, Wand2, Loader2, Check
+  Sparkles, Wand2, Loader2, Check, RotateCw, FlipHorizontal
 } from 'lucide-react';
 
 export default function ProductForm() {
@@ -198,91 +198,198 @@ export default function ProductForm() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processImageFile = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // 1. Modern ImageBitmap method with EXIF orientation auto-correction
+      if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
+        createImageBitmap(file, { imageOrientation: 'from-image' })
+          .then((bitmap) => {
+            const MAX_WIDTH = 1000;
+            const MAX_HEIGHT = 1000;
+            let width = bitmap.width;
+            let height = bitmap.height;
+
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height = Math.round((height * MAX_WIDTH) / width);
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width = Math.round((width * MAX_HEIGHT) / height);
+                height = MAX_HEIGHT;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(bitmap, 0, 0, width, height);
+              const base64 = canvas.toDataURL('image/jpeg', 0.8);
+              resolve(base64);
+              return;
+            }
+            throw new Error("Could not create canvas context");
+          })
+          .catch(() => {
+            // Fallback to standard Image loading
+            fallbackImageReader(file, resolve, reject);
+          });
+      } else {
+        fallbackImageReader(file, resolve, reject);
+      }
+    });
+  };
+
+  const fallbackImageReader = (file: File, resolve: (val: string) => void, reject: (err: any) => void) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return reject(new Error("Empty image result"));
+
+      const img = new Image();
+      img.onerror = () => resolve(dataUrl);
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1000;
+          const MAX_HEIGHT = 1000;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+          } else {
+            resolve(dataUrl);
+          }
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file: File, fileIndex: number) => {
-      if (file.type && !file.type.startsWith('image/')) {
-        alert('Please select valid image files');
-        return;
-      }
+    const validFiles = (Array.from(files) as File[]).filter(f => f.type && f.type.startsWith('image/'));
+    if (validFiles.length === 0) {
+      alert('Please select valid image files (JPG, PNG, WEBP)');
+      return;
+    }
 
+    const processedList: string[] = [];
+    for (const file of validFiles) {
       if (file.size > 15 * 1024 * 1024) {
-        alert("A file exceeds 15MB limit. Please select smaller images.");
-        return;
+        alert(`${file.name} exceeds 15MB limit.`);
+        continue;
       }
-
-      const reader = new FileReader();
-      
-      reader.onerror = () => {
-        alert("Error: Browser could not read the file. Please try again.");
-      };
-
-      reader.onload = (uploadEvent) => {
-        const result = uploadEvent.target?.result as string;
-        if (result) {
-          const img = new Image();
-          
-          img.onerror = () => {
-             if (file.size < 500 * 1024) {
-                setFormData(prev => ({
-                  ...prev,
-                  images: [...(prev.images || []), result]
-                }));
-             } else {
-                alert("Image format not supported. Please use JPEG, PNG, or WEBP.");
-             }
-          };
-
-          img.onload = () => {
-            try {
-              const canvas = document.createElement('canvas');
-              const MAX_WIDTH = 800;
-              const MAX_HEIGHT = 800;
-              let width = img.width;
-              let height = img.height;
-
-              if (width > height) {
-                if (width > MAX_WIDTH) {
-                  height *= MAX_WIDTH / width;
-                  width = MAX_WIDTH;
-                }
-              } else {
-                if (height > MAX_HEIGHT) {
-                  width *= MAX_HEIGHT / height;
-                  height = MAX_HEIGHT;
-                }
-              }
-
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext('2d');
-              
-              if (ctx) {
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(img, 0, 0, width, height);
-                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.65);
-                
-                setFormData(prev => ({
-                  ...prev,
-                  images: [...(prev.images || []), compressedBase64]
-                }));
-              }
-            } catch (err: any) {
-              console.error("Canvas error:", err);
-              alert("Could not process image: " + (err.message || "Unknown error"));
-            }
-          };
-          img.src = result;
+      try {
+        const base64 = await processImageFile(file);
+        if (base64) {
+          processedList.push(base64);
         }
-      };
-      reader.readAsDataURL(file);
-    });
-    
+      } catch (err) {
+        console.error("Error processing image file:", err);
+      }
+    }
+
+    if (processedList.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        images: [...(prev.images || []), ...processedList]
+      }));
+
+      // Auto-trigger AI if form is completely fresh
+      if (!formData.name && (!formData.images || formData.images.length === 0)) {
+        setTimeout(() => {
+          runAiAutoFill(processedList[0]);
+        }, 300);
+      }
+    }
+
     // Clear input so the same file can be selected again
     e.target.value = '';
+  };
+
+  // Rotate an uploaded image by 90 degrees clockwise
+  const rotateImage = (index: number) => {
+    const images = formData.images || [];
+    const src = images[index];
+    if (!src) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.height;
+      canvas.height = img.width;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((90 * Math.PI) / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        const newSrc = canvas.toDataURL('image/jpeg', 0.85);
+        setFormData(prev => {
+          const next = [...(prev.images || [])];
+          next[index] = newSrc;
+          return { ...prev, images: next };
+        });
+      }
+    };
+    img.src = src;
+  };
+
+  // Flip an uploaded image horizontally
+  const flipImage = (index: number) => {
+    const images = formData.images || [];
+    const src = images[index];
+    if (!src) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0);
+        const newSrc = canvas.toDataURL('image/jpeg', 0.85);
+        setFormData(prev => {
+          const next = [...(prev.images || [])];
+          next[index] = newSrc;
+          return { ...prev, images: next };
+        });
+      }
+    };
+    img.src = src;
   };
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -676,7 +783,7 @@ export default function ProductForm() {
                       >
                         <img src={img} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
                         
-                        {/* Main Image Badge */}
+                        {/* Main Image Badge / Make Main Button */}
                         {idx === 0 ? (
                           <div className="absolute top-2 left-2 bg-amber-500 text-neutral-950 text-[10px] font-black px-2 py-0.5 rounded-md shadow-md flex items-center gap-1">
                             <CheckCircle2 size={10} />
@@ -686,34 +793,52 @@ export default function ProductForm() {
                           <button
                             type="button"
                             onClick={() => makeMainImage(idx)}
-                            className="absolute top-2 left-2 bg-black/70 hover:bg-black text-white text-[10px] font-bold px-2 py-0.5 rounded-md opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-2 left-2 bg-black/80 hover:bg-black text-white text-[10px] font-bold px-2 py-0.5 rounded-md opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity shadow"
                           >
                             Make Main
                           </button>
                         )}
 
-                        {/* AI Scan button per image */}
-                        {idx !== 0 && (
+                        {/* Top Right Action Tools (Rotate, Flip, Remove) */}
+                        <div className="absolute top-2 right-2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => rotateImage(idx)}
+                            className="bg-black/75 hover:bg-amber-500 hover:text-black text-white p-1.5 rounded-full transition-colors shadow-md opacity-90 sm:opacity-0 group-hover:opacity-100"
+                            title="Rotate 90° clockwise"
+                          >
+                            <RotateCw size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => flipImage(idx)}
+                            className="bg-black/75 hover:bg-amber-500 hover:text-black text-white p-1.5 rounded-full transition-colors shadow-md opacity-90 sm:opacity-0 group-hover:opacity-100"
+                            title="Flip horizontally"
+                          >
+                            <FlipHorizontal size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx)}
+                            className="bg-black/75 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-md"
+                            title="Remove photo"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+
+                        {/* Bottom Actions: Scan with AI */}
+                        <div className="absolute bottom-2 inset-x-2 flex items-center justify-between pointer-events-none">
                           <button
                             type="button"
                             onClick={() => runAiAutoFill(img)}
                             disabled={isAiGenerating}
-                            className="absolute bottom-2 left-2 bg-amber-500/90 hover:bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shadow"
+                            className="pointer-events-auto bg-amber-500/95 hover:bg-amber-400 text-neutral-950 text-[10px] font-black px-2 py-1 rounded-lg shadow-md flex items-center gap-1 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
                           >
-                            <Sparkles size={10} />
+                            <Sparkles size={11} />
                             <span>Scan with AI</span>
                           </button>
-                        )}
-
-                        {/* Remove Button */}
-                        <button
-                          type="button"
-                          onClick={() => removeImage(idx)}
-                          className="absolute top-2 right-2 bg-black/70 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-md"
-                          title="Remove image"
-                        >
-                          <X size={14} />
-                        </button>
+                        </div>
                       </div>
                     ))}
                   </div>

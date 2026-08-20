@@ -60,12 +60,16 @@ interface GrokConfig {
   providerName: 'xAI Grok' | 'Groq Llama';
 }
 
-function getGrokConfig(): GrokConfig | null {
+function getGrokConfig(req?: express.Request): GrokConfig | null {
+  const headerAuth = (req?.headers?.authorization || req?.headers?.['x-grok-api-key'] || "") as string;
+  const headerKey = headerAuth.startsWith("Bearer ") ? headerAuth.slice(7).trim() : headerAuth.trim();
+
   const envKey = (
     process.env.GROK_API_KEY ||
     process.env.XAI_API_KEY ||
     process.env.GROQ_API_KEY ||
-    process.env.GEMINI_API_KEY || // fallback if user previously stored key in old var
+    process.env.GEMINI_API_KEY ||
+    headerKey ||
     ""
   ).trim();
 
@@ -80,6 +84,8 @@ function getGrokConfig(): GrokConfig | null {
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
       modelsUrl: "https://api.groq.com/openai/v1/models",
       candidateModels: [
+        "llama-3.2-11b-vision-preview",
+        "llama-3.2-90b-vision-preview",
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "qwen/qwen3.6-27b",
@@ -97,7 +103,14 @@ function getGrokConfig(): GrokConfig | null {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
       modelsUrl: "https://api.x.ai/v1/models",
-      candidateModels: ["grok-2-latest", "grok-2", "grok-beta"],
+      candidateModels: [
+        "grok-2-vision-1212",
+        "grok-2-vision-latest",
+        "grok-vision-beta",
+        "grok-2-latest",
+        "grok-2",
+        "grok-beta"
+      ],
       providerName: "xAI Grok"
     };
   }
@@ -110,9 +123,13 @@ interface GrokMessage {
 
 let cachedActiveModels: { key: string; models: string[]; timestamp: number } | null = null;
 
-async function getActiveCandidateModels(config: { key: string; modelsUrl: string; candidateModels: string[] }): Promise<string[]> {
+async function getActiveCandidateModels(config: { key: string; modelsUrl: string; candidateModels: string[] }, isVision = false): Promise<string[]> {
   const now = Date.now();
   if (cachedActiveModels && cachedActiveModels.key === config.key && (now - cachedActiveModels.timestamp) < 5 * 60 * 1000) {
+    if (isVision) {
+      const visionModels = cachedActiveModels.models.filter(m => m.includes('vision') || m.includes('scout') || m.includes('120b') || m.includes('grok-2'));
+      return visionModels.length > 0 ? visionModels : cachedActiveModels.models;
+    }
     return cachedActiveModels.models;
   }
 
@@ -155,19 +172,24 @@ async function getActiveCandidateModels(config: { key: string; modelsUrl: string
     models: finalModels,
     timestamp: now
   };
+  
+  if (isVision) {
+    const visionModels = finalModels.filter(m => m.includes('vision') || m.includes('scout') || m.includes('120b') || m.includes('grok-2'));
+    return visionModels.length > 0 ? visionModels : finalModels;
+  }
   return finalModels;
 }
 
 async function callGrokAPI(
   messages: GrokMessage[], 
-  options: { temperature?: number; max_tokens?: number; response_format?: any } = {}
+  options: { temperature?: number; max_tokens?: number; response_format?: any; req?: express.Request; isVision?: boolean } = {}
 ): Promise<{ content: string; model: string; latencyMs: number }> {
-  const config = getGrokConfig();
+  const config = getGrokConfig(options.req);
   if (!config) {
     throw new Error("GROK_API_KEY is not configured in environment variables or Settings.");
   }
 
-  const modelsToTry = await getActiveCandidateModels(config);
+  const modelsToTry = await getActiveCandidateModels(config, !!options.isVision);
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -443,7 +465,7 @@ Instructions:
 });
 
 // -------------------------------------------------------------
-// 3. AI Product Auto-Fill Metadata (Grok AI)
+// 3. AI Product Auto-Fill Metadata (Grok AI & Vision)
 // -------------------------------------------------------------
 app.post("/api/ai-product-auto-fill", async (req, res) => {
   const startTime = Date.now();
@@ -454,36 +476,42 @@ app.post("/api/ai-product-auto-fill", async (req, res) => {
       ? clientCategories.map(c => typeof c === 'string' ? c : c.title || c.name).filter(Boolean)
       : ["Men", "Women", "Kids", "Accessories", "Panjabi", "Sharee", "Abaya", "Kurtis", "T-Shirts", "Shirts", "Pants", "Foot wear", "Watches"];
 
-    const prompt = `You are an expert e-commerce fashion catalog manager for the luxury lifestyle brand "Rare Dreams".
-Product Hint/Name: ${hints || 'Premium Royal Designer Collection'}
+    const promptText = `Analyze this luxury fashion product and extract detailed, accurate catalog metadata for "Rare Dreams".
+${image ? 'Carefully inspect the provided image for: garment/item type, primary & secondary colors, fabric texture, styling details, patterns/embroidery, silhouette, and occasion.' : ''}
+${hints ? `Admin context/hint: "${hints}"` : ''}
 Available Store Categories: ${availableCategories.join(', ')}
 
-Generate complete, high-converting product metadata in English in strict JSON format.
-
-Required JSON Structure:
+Output strict JSON only with this structure:
 {
-  "name": "Luxury, appealing product title in English e.g. 'Royal Silk Embroidered Panjabi Set - Navy Blue' or 'Designer Festive Party Gown'",
-  "category": "Must be ONE from available categories: ${availableCategories.join(', ')}",
-  "subcategory": "Specific subcategory in English e.g. Panjabi Set, Party Gown, Baby Romper, Leather Loafers, Formal Shirt, Jeans, Kurti",
-  "description": "Rich, formatted product description in English. Include a 2-sentence luxury intro, bullet points for key features (✨ Key Features: Premium Quality, Tailored Finish, Comfortable Fit, Ideal Occasions), and fabric care.",
-  "material": "Estimated fabric/material in English e.g. '100% Premium Combed Cotton', 'Pure Raw Silk & Georgette', 'Genuine Full-Grain Leather'",
+  "name": "Specific, descriptive luxury product title in English e.g. 'Royal Blue Embroidered Silk Panjabi Set' or 'Pastel Pink Floral Party Gown'",
+  "category": "Must be EXACTLY ONE from: ${availableCategories.join(', ')}",
+  "subcategory": "Specific subcategory in English e.g. Panjabi Set, Party Lehenga, Baby Romper, Leather Loafers, Formal Shirt, Casual Denim",
+  "description": "Rich, formatted product description in English. Include a 2-sentence luxury intro, bullet points (✨ Key Highlights: Premium Quality Fabric, Tailored Precision Finish, Regal Aesthetic, Ideal for Festive Celebrations), and care note (🧺 Care Instructions).",
+  "material": "Accurate fabric/material in English e.g. 'Pure Raw Silk & Georgette', '100% Combed Breathable Cotton', 'Full-Grain Genuine Leather'",
   "price": 1450,
   "comparePrice": 1850,
   "discount": 20,
   "stockQuantity": 25,
-  "sizeOptions": ["38", "40", "42", "44"],
+  "sizeOptions": ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
   "colorOptions": ["Navy Blue", "Gold"],
   "tags": ["Panjabi", "Festive", "Silk", "Rare Dreams", "New Arrival"],
   "isFlashSale": false
 }`;
 
-    const grokConfig = getGrokConfig();
+    const grokConfig = getGrokConfig(req);
     if (grokConfig) {
       try {
+        const userContent: any = image
+          ? [
+              { type: "text", text: promptText },
+              { type: "image_url", image_url: { url: image } }
+            ]
+          : promptText;
+
         const response = await callGrokAPI([
-          { role: "system", content: "You are a product catalog parser. Output strict JSON only without explanation." },
-          { role: "user", content: prompt }
-        ], { temperature: 0.3 });
+          { role: "system", content: "You are a product catalog parser. Output strict JSON only without explanation or markdown quotes." },
+          { role: "user", content: userContent }
+        ], { temperature: 0.2, req, isVision: Boolean(image) });
 
         if (response.content) {
           const cleanText = response.content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -517,19 +545,19 @@ Required JSON Structure:
     }
 
     // High-Quality English Default Fallback Data
-    const defaultCat = availableCategories[0] || "Men";
+    const defaultCat = availableCategories[0] || "Kids";
     res.json({
       name: hints ? `Luxury ${hints}` : "Exclusive Royal Designer Collection",
       category: defaultCat,
-      subcategory: hints || "Premium Collection",
+      subcategory: hints || "Festive Exclusive",
       description: "Designed for effortless elegance, this premium piece by Rare Dreams features meticulous tailoring and luxurious breathable fabric. Designed to provide unmatched comfort and sophisticated styling for all special occasions.\n\n✨ Key Highlights:\n- Premium quality long-lasting fabric\n- Elegant silhouette with flawless craftsmanship\n- Versatile styling for celebrations and everyday luxury\n- Soft on skin with breathable comfort\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.",
       material: "100% Premium Cotton Blend",
       price: 1450,
       comparePrice: 1850,
       discount: 20,
       stockQuantity: 25,
-      sizeOptions: ["M", "L", "XL", "XXL"],
-      colorOptions: ["Black", "Navy Blue", "White"],
+      sizeOptions: ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
+      colorOptions: ["Royal Navy", "Crimson Red", "Emerald Gold"],
       tags: ["Exclusive", "New Arrival", "Rare Dreams", "Premium Quality"],
       isFlashSale: false,
       fallback: true
@@ -538,17 +566,17 @@ Required JSON Structure:
     console.error("AI Product Auto-fill error:", err);
     res.json({
       name: "Exclusive Royal Designer Collection",
-      category: "Men",
-      subcategory: "Premium Collection",
-      description: "Crafted with precision and premium materials, this exclusive design by Rare Dreams delivers superior comfort and contemporary elegance.",
+      category: "Kids",
+      subcategory: "Festive Exclusive",
+      description: "Exquisite craftsmanship and premium luxury design from Rare Dreams.",
       material: "100% Premium Cotton",
       price: 1450,
       comparePrice: 1850,
       discount: 20,
       stockQuantity: 25,
-      sizeOptions: ["M", "L", "XL", "XXL"],
-      colorOptions: ["Navy Blue", "Black"],
-      tags: ["Exclusive", "New Arrival", "Rare Dreams"],
+      sizeOptions: ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
+      colorOptions: ["Royal Navy", "Gold"],
+      tags: ["Exclusive", "Rare Dreams"],
       isFlashSale: false,
       fallback: true
     });
@@ -723,10 +751,10 @@ WEBSITE & STORE KNOWLEDGE BASE:
    - Footwear: Genuine leather shoes, Formal loafers, Party sandals, Casual sneakers for boys and girls.
 
 3. SHIPPING & DELIVERY POLICY:
-   - Inside Dhaka: 1 - 2 business days. Delivery fee ৳60.
-   - Outside Dhaka: 2 - 4 business days. Delivery fee ৳120.
-   - Free Delivery on orders above ৳2000!
-   - Cash on Delivery (COD): Available all over Bangladesh.
+   - Inside Dhaka City: 1 - 2 business days. Delivery fee ৳80.
+   - Outside Dhaka / Nationwide: 2 - 4 business days. Delivery fee ৳120.
+   - Free Nationwide Delivery on orders above ৳2000!
+   - Cash on Delivery (COD): Available all over Bangladesh (all 64 districts) with open-box verification before payment.
 
 4. RETURN & REPLACEMENT POLICY:
    - 7 Days Free Replacement & Return Guarantee for size issues or quality defects.
@@ -737,6 +765,7 @@ WEBSITE & STORE KNOWLEDGE BASE:
 6. LOCATION & CREDENTIALS:
    - Showroom / Office: Level 4, Block B, Jamuna Future Park, Dhaka, Bangladesh.
    - Trade License: TRAD/DNCC/012984/2026 | DBID-2026-884129
+   - Support Helpline / WhatsApp: +880 1712-345678 (10 AM - 10 PM daily)
 
 RESPONSE FORMAT:
 - Speak warmly and naturally in polite Bengali (or English if the user asks in English).
@@ -761,18 +790,18 @@ RESPONSE FORMAT:
       return "পণ্য হাতে পাওয়ার পর পছন্দ না হলে বা সাইজ না মিললে ৭ দিনের সহজ ও ফ্রি রিপ্লেসমেন্ট গ্যারান্টি পাবেন!";
     } else if (q.includes('price') || q.includes('দাম') || q.includes('কত') || q.includes('টাকা') || q.includes('কস্ট')) {
       return "আমাদের বয়েজ, গার্লস, বেবি ও প্যান্ট-জুতার কালেকশনের দাম ওয়েবসাইটে আকর্ষণীয় ডিসকাউন্ট সহ দেখানো আছে। আপনার কোনো নির্দিষ্ট পোশাকের দাম জানতে নাম লিখুন!";
-    } else if (q.includes('delivery') || q.includes('ডেলিভারি') || q.includes('চার্জ') || q.includes('শিপিং')) {
-      return "ঢাকা সিটিতে ১-২ দিন (চার্জ ৳৬০) এবং ঢাকার বাইরে ২-৪ দিনে (চার্জ ৳১২০) ক্যাশ অন ডেলিভারিতে প্রিমিয়াম ড্রেস পাঠানো হয়। ২০০০ টাকার উপরে অর্ডারে সম্পূর্ণ ডেলিভারি ফ্রী! 🚚";
+    } else if (q.includes('delivery') || q.includes('ডেলিভারি') || q.includes('চার্জ') || q.includes('শিপিং') || q.includes('ভাড়া')) {
+      return "আমাদের ডেলিভারি পলিসি ও চার্জ:\n\n🚚 ঢাকা সিটির ভিতরে: মাত্র ৳৮০ (১-২ দিনের মধ্যে ফাস্ট হোম ডেলিভারি)\n🚛 ঢাকার বাইরে / সারাদেশে: মাত্র ৳১২০ (২-৪ দিনের মধ্যে ডেলিভারি)\n🎁 ২০০০ টাকার বেশি অর্ডারে সারা বাংলাদেশে সম্পূর্ণ ডেলিভারি ফ্রী!\n💵 সারাদেশে ক্যাশ অন ডেলিভারি (COD) সুবিধা রয়েছে—পার্সেল দেখে নেওয়ার সুযোগ আছে!";
     } else if (q.includes('location') || q.includes('শো-রুম') || q.includes('ঠিকানা') || q.includes('address') || q.includes('অফিস')) {
-      return "আমাদের শো-রুম ও অফিস ঠিকানা: লেভেল ৪, ব্লক বি, যমুনা ফিউচার পার্ক, ঢাকা। ট্রেড লাইসেন্স নং: TRAD/DNCC/012984/2026।";
+      return "আমাদের শো-রুম ও অফিস ঠিকানা: লেভেল ৪, ব্লক বি, যমুনা ফিউচার পার্ক, ঢাকা। ট্রেড লাইসেন্স নং: TRAD/DNCC/012984/2026। হটলাইন: +880 1712-345678।";
     }
     
-    return `রেয়ার ড্রিমসে (Rare Dreams) আপনার প্রশ্নটির জন্য ধন্যবাদ! 🌸\n\nআমাদের কাছে ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা রয়েছে। ঢাকা সিটিতে ১-২ দিন ও ঢাকার বাইরে ২-৪ দিনে ক্যাশ অন ডেলিভারি পাবেন (২০০০ টাকার অর্ডারে ডেলিভারি ফ্রী)। আপনার নির্দিষ্ট কোনো সাহায্য লাগলে বিস্তারিত লিখুন!`;
+    return `রেয়ার ড্রিমসে (Rare Dreams) আপনার প্রশ্নটির জন্য ধন্যবাদ! 🌸\n\nআমাদের কাছে ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা রয়েছে। ঢাকা সিটিতে ১-২ দিন (৳৮০) ও ঢাকার বাইরে ২-৪ দিনে (৳১২০) ক্যাশ অন ডেলিভারি পাবেন (২০০০ টাকার অর্ডারে ডেলিভারি ফ্রী)। আপনার নির্দিষ্ট কোনো সাহায্য লাগলে বিস্তারিত লিখুন!`;
   };
 
   // 1. Primary: Call Grok AI API
   try {
-    const grokConfig = getGrokConfig();
+    const grokConfig = getGrokConfig(req);
     if (grokConfig) {
       try {
         const messages: GrokMessage[] = [
@@ -791,7 +820,7 @@ RESPONSE FORMAT:
 
         messages.push({ role: "user", content: message || "Hello" });
 
-        const response = await callGrokAPI(messages, { temperature: 0.7 });
+        const response = await callGrokAPI(messages, { temperature: 0.7, req });
 
         if (response && response.content) {
           addSystemLog({

@@ -7,12 +7,16 @@ interface GrokConfig {
   providerName: string;
 }
 
-function getGrokConfig(): GrokConfig | null {
+function getGrokConfig(req?: any): GrokConfig | null {
+  const headerAuth = (req?.headers?.authorization || req?.headers?.['x-grok-api-key'] || "") as string;
+  const headerKey = headerAuth.startsWith("Bearer ") ? headerAuth.slice(7).trim() : headerAuth.trim();
+
   const envKey = (
     process.env.GROK_API_KEY ||
     process.env.XAI_API_KEY ||
     process.env.GROQ_API_KEY ||
     process.env.GEMINI_API_KEY ||
+    headerKey ||
     ""
   ).trim();
 
@@ -108,10 +112,22 @@ export default async function handler(req: any, res: any) {
   }
   const { message, history } = body || {};
   const query = message || "Hello";
+  const lower = query.toLowerCase();
 
-  const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh. Powered by Grok AI. Speak warmly and naturally in polite Bengali or English.`;
+  const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh. Powered by Grok AI.
 
-  const config = getGrokConfig();
+SHIPPING & DELIVERY POLICY:
+- Inside Dhaka City: 1-2 business days. Delivery fee ৳80.
+- Outside Dhaka / Nationwide: 2-4 business days. Delivery fee ৳120.
+- Free Nationwide Delivery on orders above ৳2000!
+- Cash on Delivery (COD): Available in all 64 districts with open-box verification upon delivery before payment.
+- 7 Days Free Replacement & Return Guarantee for size issues or quality defects.
+- Showroom / Office: Level 4, Block B, Jamuna Future Park, Dhaka. Support Hotline: +880 1712-345678.
+
+RESPONSE FORMAT:
+- Speak warmly and naturally in polite Bengali or English.`;
+
+  const config = getGrokConfig(req);
   if (config) {
     const modelsToTry = await getActiveCandidateModels(config);
     for (const model of modelsToTry) {
@@ -179,8 +195,17 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  // Knowledge base fallback with accurate delivery
+  if (lower.includes('delivery') || lower.includes('ডেলিভারি') || lower.includes('চার্জ') || lower.includes('শিপিং') || lower.includes('ভাড়া')) {
+    return res.status(200).json({
+      reply: "আমাদের ডেলিভারি পলিসি ও চার্জ:\n\n🚚 ঢাকা সিটির ভিতরে: মাত্র ৳৮০ (১-২ দিনের মধ্যে ফাস্ট হোম ডেলিভারি)\n🚛 ঢাকার বাইরে / সারাদেশে: মাত্র ৳১২০ (২-৪ দিনের মধ্যে ডেলিভারি)\n🎁 ২০০০ টাকার বেশি অর্ডারে সারা বাংলাদেশে সম্পূর্ণ ডেলিভারি ফ্রী!\n💵 সারাদেশে ক্যাশ অন ডেলিভারি (COD) সুবিধা রয়েছে—পার্সেল দেখে নেওয়ার সুযোগ আছে!",
+      fallback: true,
+      source: 'knowledge_base'
+    });
+  }
+
   return res.status(200).json({
-    reply: "আসসালামু আলাইকুম! রেয়ার ড্রিমসে (Rare Dreams) আপনাকে স্বাগতম। 🌸\n\nআমরা ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা সরবরাহ করি। ঢাকা সিটিতে ১-২ দিন ও ঢাকার বাইরে ২-৪ দিনে ক্যাশ অন ডেলিভারি পাবেন (২০০০ টাকার অর্ডারে ডেলিভারি ফ্রী)। আপনার যেকোনো প্রশ্নে সাহায্য করতে আমরা প্রস্তুত!",
+    reply: "আসসালামু আলাইকুম! রেয়ার ড্রিমসে (Rare Dreams) আপনাকে স্বাগতম। 🌸\n\nআমরা ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা সরবরাহ করি। ঢাকা সিটিতে ১-২ দিন (৳৮০) ও ঢাকার বাইরে ২-৪ দিনে (৳১২০) ক্যাশ অন ডেলিভারি পাবেন (২০০০ টাকার অর্ডারে সম্পূর্ণ ডেলিভারি ফ্রী)। আপনার যেকোনো প্রশ্নে সাহায্য করতে আমরা প্রস্তুত!",
     fallback: true,
     source: 'knowledge_base'
   });

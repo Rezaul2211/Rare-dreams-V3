@@ -8,12 +8,16 @@ interface GrokConfig {
   providerName: 'xAI Grok' | 'Groq Llama';
 }
 
-function getGrokConfig(): GrokConfig | null {
+function getGrokConfig(req?: any): GrokConfig | null {
+  const headerAuth = (req?.headers?.authorization || req?.headers?.['x-grok-api-key'] || "") as string;
+  const headerKey = headerAuth.startsWith("Bearer ") ? headerAuth.slice(7).trim() : headerAuth.trim();
+
   const envKey = (
     process.env.GROK_API_KEY ||
     process.env.XAI_API_KEY ||
     process.env.GROQ_API_KEY ||
     process.env.GEMINI_API_KEY ||
+    headerKey ||
     ""
   ).trim();
 
@@ -27,6 +31,8 @@ function getGrokConfig(): GrokConfig | null {
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
       modelsUrl: "https://api.groq.com/openai/v1/models",
       candidateModels: [
+        "llama-3.2-11b-vision-preview",
+        "llama-3.2-90b-vision-preview",
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "qwen/qwen3.6-27b",
@@ -43,13 +49,20 @@ function getGrokConfig(): GrokConfig | null {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
       modelsUrl: "https://api.x.ai/v1/models",
-      candidateModels: ["grok-2-latest", "grok-2", "grok-beta"],
+      candidateModels: [
+        "grok-2-vision-1212",
+        "grok-2-vision-latest",
+        "grok-vision-beta",
+        "grok-2-latest",
+        "grok-2",
+        "grok-beta"
+      ],
       providerName: "xAI Grok"
     };
   }
 }
 
-async function getActiveCandidateModels(config: { key: string; modelsUrl: string; candidateModels: string[] }): Promise<string[]> {
+async function getActiveCandidateModels(config: { key: string; modelsUrl: string; candidateModels: string[] }, isVision = false): Promise<string[]> {
   let discoveredModels: string[] = [];
   try {
     const res = await fetch(config.modelsUrl, {
@@ -83,16 +96,24 @@ async function getActiveCandidateModels(config: { key: string; modelsUrl: string
     // Discovery failed
   }
 
-  return discoveredModels.length > 0 ? discoveredModels : config.candidateModels;
+  const finalModels = discoveredModels.length > 0 ? discoveredModels : config.candidateModels;
+  if (isVision) {
+    const visionModels = finalModels.filter(m => m.includes('vision') || m.includes('scout') || m.includes('120b') || m.includes('grok-2'));
+    return visionModels.length > 0 ? visionModels : finalModels;
+  }
+  return finalModels;
 }
 
-async function callGrok(messages: Array<{ role: string; content: string }>, options: { temperature?: number; max_tokens?: number } = {}) {
-  const config = getGrokConfig();
+async function callGrok(
+  messages: Array<{ role: string; content: string | any[] }>, 
+  options: { temperature?: number; max_tokens?: number; req?: any; isVision?: boolean } = {}
+) {
+  const config = getGrokConfig(options.req);
   if (!config) {
     throw new Error("GROK_API_KEY is not configured in Vercel Environment Variables.");
   }
 
-  const modelsToTry = await getActiveCandidateModels(config);
+  const modelsToTry = await getActiveCandidateModels(config, !!options.isVision);
   let lastError: any = null;
 
   for (const model of modelsToTry) {
@@ -282,10 +303,22 @@ export default async function handler(req: any, res: any) {
   if (url.includes('/api/ai-chat')) {
     const { message, history } = body;
     const queryText = message || "Hello";
+    const lower = queryText.toLowerCase();
 
-    const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh. Powered by Grok AI.`;
+    const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh. Powered by Grok AI.
 
-    const grokConfig = getGrokConfig();
+SHIPPING & DELIVERY POLICY:
+- Inside Dhaka City: 1-2 business days. Delivery fee ৳80.
+- Outside Dhaka / Nationwide: 2-4 business days. Delivery fee ৳120.
+- Free Nationwide Delivery on orders above ৳2000!
+- Cash on Delivery (COD): Available in all 64 districts with open-box verification upon delivery before payment.
+- 7 Days Free Replacement & Return Guarantee for size issues or quality defects.
+- Showroom / Office: Level 4, Block B, Jamuna Future Park, Dhaka. Support Hotline: +880 1712-345678.
+
+RESPONSE FORMAT:
+- Speak warmly and naturally in polite Bengali or English.`;
+
+    const grokConfig = getGrokConfig(req);
     if (grokConfig) {
       try {
         const messages: any[] = [{ role: "system", content: systemPrompt }];
@@ -299,16 +332,24 @@ export default async function handler(req: any, res: any) {
         }
         messages.push({ role: "user", content: queryText });
 
-        const resp = await callGrok(messages);
+        const resp = await callGrok(messages, { req });
         return res.status(200).json({ reply: resp.content, latencyMs: resp.latencyMs, source: 'grok', model: resp.model });
       } catch (err: any) {
         console.warn("Vercel AI Chat Grok error, falling back:", err);
       }
     }
 
-    // Knowledge base fallback
+    // Knowledge base fallback with accurate delivery
+    if (lower.includes('delivery') || lower.includes('ডেলিভারি') || lower.includes('চার্জ') || lower.includes('শিপিং') || lower.includes('ভাড়া')) {
+      return res.status(200).json({
+        reply: "আমাদের ডেলিভারি পলিসি ও চার্জ:\n\n🚚 ঢাকা সিটির ভিতরে: মাত্র ৳৮০ (১-২ দিনের মধ্যে ফাস্ট হোম ডেলিভারি)\n🚛 ঢাকার বাইরে / সারাদেশে: মাত্র ৳১২০ (২-৪ দিনের মধ্যে ডেলিভারি)\n🎁 ২০০০ টাকার বেশি অর্ডারে সারা বাংলাদেশে সম্পূর্ণ ডেলিভারি ফ্রী!\n💵 সারাদেশে ক্যাশ অন ডেলিভারি (COD) সুবিধা রয়েছে—পার্সেল দেখে নেওয়ার সুযোগ আছে!",
+        fallback: true,
+        source: 'knowledge_base'
+      });
+    }
+
     return res.status(200).json({
-      reply: "আসসালামু আলাইকুম! রেয়ার ড্রিমসে (Rare Dreams) আপনাকে স্বাগতম। 🌸\n\nআমরা ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা সরবরাহ করি। ঢাকা সিটিতে ১-২ দিন ও ঢাকার বাইরে ২-৪ দিনে ক্যাশ অন ডেলিভারি পাবেন। আপনার যেকোনো প্রশ্নে সাহায্য করতে আমরা প্রস্তুত!",
+      reply: "আসসালামু আলাইকুম! রেয়ার ড্রিমসে (Rare Dreams) আপনাকে স্বাগতম। 🌸\n\nআমরা ১-১৪ বছরের বাচ্চার জন্য রাজকীয় পার্টি ওয়্যার, ক্যাজুয়াল ড্রেস, পাঞ্জাবি ও জুতা সরবরাহ করি। ঢাকা সিটিতে ১-২ দিন (৳৮০) ও ঢাকার বাইরে ২-৪ দিনে (৳১২০) ক্যাশ অন ডেলিভারি পাবেন (২০০০ টাকার অর্ডারে সম্পূর্ণ ডেলিভারি ফ্রী)। আপনার যেকোনো প্রশ্নে সাহায্য করতে আমরা প্রস্তুত!",
       fallback: true,
       source: 'knowledge_base'
     });
@@ -335,7 +376,7 @@ Requirements:
       const resp = await callGrok([
         { role: "system", content: "You are a luxury fashion copywriter." },
         { role: "user", content: prompt }
-      ]);
+      ], { req });
       return res.status(200).json({ description: resp.content.trim(), latencyMs: resp.latencyMs });
     } catch (err) {
       return res.status(200).json({
@@ -345,60 +386,73 @@ Requirements:
     }
   }
 
-  // 5. AI Product Auto-Fill Route
+  // 5. AI Product Auto-Fill Route (Multimodal Vision)
   if (url.includes('/api/ai-product-auto-fill')) {
-    const { categories: clientCategories, hints } = body;
+    const { image, categories: clientCategories, hints } = body;
     const availableCategories = Array.isArray(clientCategories) && clientCategories.length > 0
       ? clientCategories
       : ["Men", "Women", "Kids", "Accessories", "Panjabi", "Sharee", "Abaya", "Kurtis", "T-Shirts", "Shirts", "Pants", "Foot wear", "Watches"];
 
-    const prompt = `You are an expert fashion catalog manager for luxury brand "Rare Dreams".
-Product Hint/Name: ${hints || 'Royal Designer Collection'}
-Available Categories: ${availableCategories.join(', ')}
+    const promptText = `Analyze this luxury fashion product and extract detailed, accurate catalog metadata for "Rare Dreams".
+${image ? 'Carefully inspect the provided image for: garment/item type, primary & secondary colors, fabric texture, styling details, patterns/embroidery, silhouette, and occasion.' : ''}
+${hints ? `Admin context/hint: "${hints}"` : ''}
+Available Store Categories: ${availableCategories.join(', ')}
 
-Return strict JSON only:
+Output strict JSON only with this structure:
 {
-  "name": "Luxury product title in English",
-  "category": "Must be ONE from: ${availableCategories.join(', ')}",
-  "subcategory": "Subcategory in English",
-  "description": "Rich English product description with 2 intro sentences, bullet highlights (✨ Key Highlights), and care note",
-  "material": "Estimated fabric/material in English",
+  "name": "Specific, descriptive luxury product title in English e.g. 'Royal Blue Embroidered Silk Panjabi Set' or 'Pastel Pink Floral Party Gown'",
+  "category": "Must be EXACTLY ONE from: ${availableCategories.join(', ')}",
+  "subcategory": "Specific subcategory in English e.g. Panjabi Set, Party Lehenga, Baby Romper, Leather Loafers, Formal Shirt, Casual Denim",
+  "description": "Rich, formatted product description in English with 2 intro sentences, bullet highlights (✨ Key Highlights), and care note (🧺 Care Instructions)",
+  "material": "Accurate fabric/material in English e.g. 'Pure Raw Silk & Georgette', '100% Combed Breathable Cotton', 'Full-Grain Genuine Leather'",
   "price": 1450,
   "comparePrice": 1850,
   "discount": 20,
   "stockQuantity": 25,
-  "sizeOptions": ["38", "40", "42", "44"],
+  "sizeOptions": ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
   "colorOptions": ["Navy Blue", "Gold"],
-  "tags": ["Exclusive", "Rare Dreams"],
+  "tags": ["Exclusive", "Rare Dreams", "New Arrival"],
   "isFlashSale": false
 }`;
 
     try {
+      const userContent: any = image
+        ? [
+            { type: "text", text: promptText },
+            { type: "image_url", image_url: { url: image } }
+          ]
+        : promptText;
+
       const resp = await callGrok([
-        { role: "system", content: "Output strict JSON only." },
-        { role: "user", content: prompt }
-      ], { temperature: 0.3 });
+        { role: "system", content: "You are a fashion catalog parser. Output strict JSON only." },
+        { role: "user", content: userContent }
+      ], { temperature: 0.2, req, isVision: Boolean(image) });
+
       const cleanText = resp.content.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanText);
-      return res.status(200).json(parsed);
-    } catch {
-      return res.status(200).json({
-        name: hints ? `Luxury ${hints}` : "Exclusive Royal Designer Collection",
-        category: availableCategories[0] || "Men",
-        subcategory: hints || "Premium Collection",
-        description: "Designed for effortless elegance, this premium piece by Rare Dreams features meticulous tailoring and luxurious breathable fabric.\n\n✨ Key Highlights:\n- Premium quality long-lasting fabric\n- Elegant silhouette with flawless craftsmanship\n- Soft on skin with breathable comfort\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.",
-        material: "100% Premium Cotton Blend",
-        price: 1450,
-        comparePrice: 1850,
-        discount: 20,
-        stockQuantity: 25,
-        sizeOptions: ["M", "L", "XL", "XXL"],
-        colorOptions: ["Navy Blue", "Black"],
-        tags: ["Exclusive", "Rare Dreams"],
-        isFlashSale: false,
-        fallback: true
-      });
+      if (parsed && parsed.name) {
+        return res.status(200).json({ ...parsed, latencyMs: resp.latencyMs });
+      }
+    } catch (e) {
+      console.warn("Vercel AI Auto-fill error, using default:", e);
     }
+
+    return res.status(200).json({
+      name: hints ? `Luxury ${hints}` : "Exclusive Royal Designer Collection",
+      category: availableCategories[0] || "Kids",
+      subcategory: hints || "Festive Exclusive",
+      description: "Designed for effortless elegance, this premium piece by Rare Dreams features meticulous tailoring and luxurious breathable fabric.\n\n✨ Key Highlights:\n- Premium quality long-lasting fabric\n- Elegant silhouette with flawless craftsmanship\n- Soft on skin with breathable comfort\n\n🧺 Care Instructions: Gentle hand wash or dry clean recommended.",
+      material: "100% Premium Cotton Blend",
+      price: 1450,
+      comparePrice: 1850,
+      discount: 20,
+      stockQuantity: 25,
+      sizeOptions: ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
+      colorOptions: ["Navy Blue", "Gold"],
+      tags: ["Exclusive", "Rare Dreams", "New Arrival"],
+      isFlashSale: false,
+      fallback: true
+    });
   }
 
   // 6. AI Tag Product Route
