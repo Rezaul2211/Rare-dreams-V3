@@ -130,18 +130,55 @@ export default function AdminSystem() {
 
   const { config: storeConfig, updateConfig: updateStoreConfig } = useStoreConfigStore();
 
-  // Helper for calling Grok directly from the client when backend /api returns static HTML
+  // Helper for calling Grok directly from the client with dynamic model discovery and deprecation resilience
   const callDirectClientGrok = async (key: string, promptText: string) => {
     const trimmedKey = key.trim();
     const isGroq = trimmedKey.startsWith('gsk_');
     const endpoint = isGroq 
       ? 'https://api.groq.com/openai/v1/chat/completions' 
       : 'https://api.x.ai/v1/chat/completions';
-      
-    // Candidate models in order of priority & universal availability
-    const candidateModels = isGroq
-      ? ['llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma2-9b-it']
-      : ['grok-beta', 'grok-2-latest', 'grok-2-1212'];
+    const modelsEndpoint = isGroq
+      ? 'https://api.groq.com/openai/v1/models'
+      : 'https://api.x.ai/v1/models';
+
+    // 1. Try to fetch active models dynamically from the provider
+    let candidateModels: string[] = [];
+    try {
+      const modelsRes = await fetch(modelsEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${trimmedKey}` }
+      });
+      if (modelsRes.ok) {
+        const modelsData = await modelsRes.json();
+        if (Array.isArray(modelsData?.data)) {
+          const fetchedIds: string[] = modelsData.data
+            .map((m: any) => m.id)
+            .filter((id: string) => typeof id === 'string' && !id.includes('whisper') && !id.includes('tts') && !id.includes('guard'));
+          
+          if (fetchedIds.length > 0) {
+            // Prioritize fast & popular chat models
+            const prioritized = isGroq
+              ? ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.3-70b-specdec', 'llama-3.2-3b-preview', 'llama-3.2-1b-preview']
+              : ['grok-beta', 'grok-2-latest', 'grok-2-1212', 'grok-2'];
+            
+            const sorted = [
+              ...prioritized.filter(p => fetchedIds.includes(p)),
+              ...fetchedIds.filter(f => !prioritized.includes(f))
+            ];
+            candidateModels = sorted;
+          }
+        }
+      }
+    } catch {
+      // Dynamic models list fetch failed, continue to fallback list
+    }
+
+    // Default static fallback models if dynamic discovery was empty
+    if (candidateModels.length === 0) {
+      candidateModels = isGroq
+        ? ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.3-70b-specdec', 'llama-3.2-3b-preview', 'llama-3.2-1b-preview', 'qwen-2.5-32b']
+        : ['grok-beta', 'grok-2-latest', 'grok-2-1212', 'grok-2'];
+    }
 
     let lastError: any = null;
 
@@ -182,11 +219,19 @@ export default function AdminSystem() {
 
         lastError = new Error(`Direct Grok API Error (${res.status}): ${errText}`);
         
-        // If it's a 404 or model_not_found, try the next model in the candidate list
-        if (res.status === 404 || errText.includes('model_not_found') || errText.includes('does not exist')) {
+        // If it's a model decommissioned, model not found, or 404/400 model error, try next candidate model
+        const isModelIssue = res.status === 404 ||
+          errText.includes('model_decommissioned') ||
+          errText.includes('model_not_found') ||
+          errText.includes('decommissioned') ||
+          errText.includes('does not exist') ||
+          errText.includes('not supported') ||
+          errText.includes('deprecat');
+
+        if (isModelIssue) {
           continue;
         } else {
-          // If it's 401 unauthenticated or other fatal error, stop and throw immediately
+          // If it's 401 unauthenticated or other fatal error, stop and throw
           throw lastError;
         }
       } catch (e: any) {

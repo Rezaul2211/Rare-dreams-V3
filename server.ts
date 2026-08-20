@@ -77,7 +77,7 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
-      candidateModels: ["llama-3.1-8b-instant", "llama3-70b-8192", "llama3-8b-8192", "mixtral-8x7b-32768", "gemma2-9b-it"],
+      candidateModels: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama-3.3-70b-specdec", "llama-3.2-3b-preview", "llama-3.2-1b-preview", "qwen-2.5-32b"],
       providerName: "Groq Llama"
     };
   } else {
@@ -85,7 +85,7 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
-      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212"],
+      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212", "grok-2"],
       providerName: "xAI Grok"
     };
   }
@@ -155,7 +155,15 @@ async function callGrokAPI(
       err.details = errorDetail;
       lastError = err;
 
-      if (response.status === 404 || errorDetail.includes("model_not_found") || errorDetail.includes("does not exist")) {
+      const isModelIssue = response.status === 404 ||
+        errorDetail.includes("model_decommissioned") ||
+        errorDetail.includes("model_not_found") ||
+        errorDetail.includes("decommissioned") ||
+        errorDetail.includes("does not exist") ||
+        errorDetail.includes("not supported") ||
+        errorDetail.includes("deprecat");
+
+      if (isModelIssue) {
         continue; // Try next candidate model
       }
 

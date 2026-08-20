@@ -43,10 +43,44 @@ async function callDirectGrok(key: string, query: string): Promise<string> {
   const endpoint = isGroq 
     ? 'https://api.groq.com/openai/v1/chat/completions' 
     : 'https://api.x.ai/v1/chat/completions';
-  
-  const candidateModels = isGroq
-    ? ['llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma2-9b-it']
-    : ['grok-beta', 'grok-2-latest', 'grok-2-1212'];
+  const modelsEndpoint = isGroq
+    ? 'https://api.groq.com/openai/v1/models'
+    : 'https://api.x.ai/v1/models';
+
+  let candidateModels: string[] = [];
+  try {
+    const modelsRes = await fetch(modelsEndpoint, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${key}` }
+    });
+    if (modelsRes.ok) {
+      const modelsData = await modelsRes.json();
+      if (Array.isArray(modelsData?.data)) {
+        const fetchedIds: string[] = modelsData.data
+          .map((m: any) => m.id)
+          .filter((id: string) => typeof id === 'string' && !id.includes('whisper') && !id.includes('tts') && !id.includes('guard'));
+        
+        if (fetchedIds.length > 0) {
+          const prioritized = isGroq
+            ? ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.3-70b-specdec', 'llama-3.2-3b-preview', 'llama-3.2-1b-preview']
+            : ['grok-beta', 'grok-2-latest', 'grok-2-1212', 'grok-2'];
+          
+          candidateModels = [
+            ...prioritized.filter(p => fetchedIds.includes(p)),
+            ...fetchedIds.filter(f => !prioritized.includes(f))
+          ];
+        }
+      }
+    }
+  } catch {
+    // Dynamic fetch failed, proceed to fallback list
+  }
+
+  if (candidateModels.length === 0) {
+    candidateModels = isGroq
+      ? ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.3-70b-specdec', 'llama-3.2-3b-preview', 'llama-3.2-1b-preview', 'qwen-2.5-32b']
+      : ['grok-beta', 'grok-2-latest', 'grok-2-1212', 'grok-2'];
+  }
 
   const systemPrompt = `You are the official AI Assistant & Personal Shopping Consultant for "Rare Dreams" (রেয়ার ড্রিমস), the premier luxury fashion e-commerce brand for kids and family in Bangladesh. Powered by Grok AI. Speak warmly and naturally in polite Bengali or English.`;
 
@@ -76,10 +110,6 @@ async function callDirectGrok(key: string, query: string): Promise<string> {
         return data.choices?.[0]?.message?.content || '';
       }
 
-      if (response.status === 404) {
-        continue;
-      }
-
       let errText = '';
       try {
         const errJson = await response.json();
@@ -88,7 +118,15 @@ async function callDirectGrok(key: string, query: string): Promise<string> {
         errText = await response.text();
       }
 
-      if (errText.includes('model_not_found') || errText.includes('does not exist')) {
+      const isModelIssue = response.status === 404 ||
+        errText.includes('model_decommissioned') ||
+        errText.includes('model_not_found') ||
+        errText.includes('decommissioned') ||
+        errText.includes('does not exist') ||
+        errText.includes('not supported') ||
+        errText.includes('deprecat');
+
+      if (isModelIssue) {
         continue;
       }
 

@@ -24,14 +24,14 @@ function getGrokConfig(): GrokConfig | null {
     return {
       key: envKey,
       baseUrl: "https://api.groq.com/openai/v1/chat/completions",
-      candidateModels: ["llama-3.1-8b-instant", "llama3-70b-8192", "llama3-8b-8192", "mixtral-8x7b-32768", "gemma2-9b-it"],
+      candidateModels: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "llama-3.3-70b-specdec", "llama-3.2-3b-preview", "llama-3.2-1b-preview", "qwen-2.5-32b"],
       providerName: "Groq Llama"
     };
   } else {
     return {
       key: envKey,
       baseUrl: "https://api.x.ai/v1/chat/completions",
-      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212"],
+      candidateModels: ["grok-beta", "grok-2-latest", "grok-2-1212", "grok-2"],
       providerName: "xAI Grok"
     };
   }
@@ -105,7 +105,23 @@ export default async function handler(req: any, res: any) {
           });
         }
 
-        if (response.status === 404) {
+        let errText = '';
+        try {
+          const errJson = await response.json();
+          errText = JSON.stringify(errJson);
+        } catch {
+          errText = await response.text();
+        }
+
+        const isModelIssue = response.status === 404 ||
+          errText.includes('model_decommissioned') ||
+          errText.includes('model_not_found') ||
+          errText.includes('decommissioned') ||
+          errText.includes('does not exist') ||
+          errText.includes('not supported') ||
+          errText.includes('deprecat');
+
+        if (isModelIssue) {
           continue;
         }
       } catch (e) {
