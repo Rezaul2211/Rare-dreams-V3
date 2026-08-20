@@ -4,9 +4,21 @@ import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
+
+// Lazy initialized Gemini client
+let geminiClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI | null {
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+  if (!apiKey || apiKey.startsWith("MY_")) return null;
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({ apiKey });
+  }
+  return geminiClient;
+}
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -241,18 +253,22 @@ async function callGrokAPI(
       lastError = err;
 
       const isModelIssue = response.status === 404 ||
+        response.status === 400 ||
         errorDetail.includes("model_decommissioned") ||
         errorDetail.includes("model_not_found") ||
         errorDetail.includes("decommissioned") ||
         errorDetail.includes("does not exist") ||
         errorDetail.includes("not supported") ||
+        errorDetail.includes("image_url") ||
+        errorDetail.includes("invalid_parameter") ||
         errorDetail.includes("deprecat");
 
       if (isModelIssue) {
         continue; // Try next candidate model
       }
 
-      throw err;
+      // If other error, keep trying remaining models before giving up
+      continue;
     } catch (e: any) {
       if (e.status === 401 || e.message?.includes("401") || e.message?.includes("invalid_api_key")) {
         throw e;
@@ -465,7 +481,7 @@ Instructions:
 });
 
 // -------------------------------------------------------------
-// 3. AI Product Auto-Fill Metadata (Grok AI & Vision)
+// 3. AI Product Auto-Fill Metadata (Gemini Vision + Grok AI)
 // -------------------------------------------------------------
 app.post("/api/ai-product-auto-fill", async (req, res) => {
   const startTime = Date.now();
@@ -476,37 +492,107 @@ app.post("/api/ai-product-auto-fill", async (req, res) => {
       ? clientCategories.map(c => typeof c === 'string' ? c : c.title || c.name).filter(Boolean)
       : ["Men", "Women", "Kids", "Accessories", "Panjabi", "Sharee", "Abaya", "Kurtis", "T-Shirts", "Shirts", "Pants", "Foot wear", "Watches"];
 
-    const promptText = `Analyze this luxury fashion product and extract detailed, accurate catalog metadata for "Rare Dreams".
-${image ? 'Carefully inspect the provided image for: garment/item type, primary & secondary colors, fabric texture, styling details, patterns/embroidery, silhouette, and occasion.' : ''}
-${hints ? `Admin context/hint: "${hints}"` : ''}
-Available Store Categories: ${availableCategories.join(', ')}
+    const universalPrompt = `You are an expert e-commerce catalog auditor and product manager for "Rare Dreams" store.
+Carefully analyze the provided product image and any extra hints.
 
-Output strict JSON only with this structure:
+CRITICAL PRODUCT IDENTIFICATION RULES:
+1. Examine the visual details with 100% precision:
+   - If the product is an ELECTRONIC / GADGET / ACCESSORY (such as a Samsung / Apple / Anker Charger, 25W/45W Adapter, USB-C Cable, Powerbank, Earbuds, Watch, Sunglasses, Belt, Bag):
+     * Accurately identify the exact brand (e.g., Samsung, Apple, Anker), model name, wattage, ports (Type-C / USB), and color.
+     * DO NOT label or describe it as clothing or fabric!
+     * Set category to the closest matching store category: e.g. "Accessories" or "Watches".
+     * Set material to the actual build material (e.g., "Fire-Retardant Polycarbonate & Pure Copper Cable").
+     * Set sizeOptions to appropriate sizing (e.g., ["Standard"] or ["1 Meter", "2 Meter"] or ["One Size"]).
+   - If the product is APPAREL / CLOTHING (Panjabi, Sharee, Dress, Kids Romper, T-Shirt, Shirt, Pants, Abaya):
+     * Accurately identify the garment type, fabric texture, embroidery, patterns, styling, and occasion.
+     * Set category to matching category from available list (${availableCategories.join(', ')}).
+     * Set realistic clothing sizes (e.g. ["2-3Y", "4-5Y", "6-7Y"] for kids or ["M", "L", "XL", "XXL"] for adults).
+   - If the product is FOOTWEAR:
+     * Identify footwear type (Loafers, Sneakers, Sandals), genuine upper/sole materials, and shoe sizes (["39", "40", "41", "42", "43"]).
+
+2. Generate an attractive, professional, high-converting English product title.
+3. Generate a rich, formatted English description with:
+   - 2-sentence captivating intro
+   - ✨ Key Features / Specifications (bullet points with specs, wattage, compatibility, or fabric details)
+   - 🛡️ Quality & Warranty / Care Note
+4. Provide realistic BDT (৳) pricing, compare price, discount %, stock quantity, and search tags.
+
+Available Store Categories: ${availableCategories.join(', ')}
+${hints ? `Context / Hint: "${hints}"` : ''}
+
+Output STRICT JSON only without markdown formatting:
 {
-  "name": "Specific, descriptive luxury product title in English e.g. 'Royal Blue Embroidered Silk Panjabi Set' or 'Pastel Pink Floral Party Gown'",
+  "name": "Accurate product title in English",
   "category": "Must be EXACTLY ONE from: ${availableCategories.join(', ')}",
-  "subcategory": "Specific subcategory in English e.g. Panjabi Set, Party Lehenga, Baby Romper, Leather Loafers, Formal Shirt, Casual Denim",
-  "description": "Rich, formatted product description in English. Include a 2-sentence luxury intro, bullet points (✨ Key Highlights: Premium Quality Fabric, Tailored Precision Finish, Regal Aesthetic, Ideal for Festive Celebrations), and care note (🧺 Care Instructions).",
-  "material": "Accurate fabric/material in English e.g. 'Pure Raw Silk & Georgette', '100% Combed Breathable Cotton', 'Full-Grain Genuine Leather'",
-  "price": 1450,
-  "comparePrice": 1850,
-  "discount": 20,
-  "stockQuantity": 25,
-  "sizeOptions": ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
-  "colorOptions": ["Navy Blue", "Gold"],
-  "tags": ["Panjabi", "Festive", "Silk", "Rare Dreams", "New Arrival"],
+  "subcategory": "Specific subcategory in English e.g. 'Fast Chargers & Adapters', 'Silk Panjabi', 'Leather Footwear'",
+  "description": "Rich formatted description in English with bullet points and specs",
+  "material": "Accurate physical build material or fabric in English",
+  "price": 1250,
+  "comparePrice": 1650,
+  "discount": 24,
+  "stockQuantity": 30,
+  "sizeOptions": ["Standard"],
+  "colorOptions": ["Black"],
+  "tags": ["Brand", "Type", "Rare Dreams", "New Arrival"],
   "isFlashSale": false
 }`;
 
+    // 1. Try Gemini Vision First if Gemini API Key is available
+    const gemini = getGeminiClient();
+    if (gemini) {
+      try {
+        const parts: any[] = [];
+        if (image && typeof image === 'string') {
+          if (image.startsWith('data:')) {
+            const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            if (matches && matches.length === 3) {
+              parts.push({
+                inlineData: {
+                  mimeType: matches[1],
+                  data: matches[2]
+                }
+              });
+            }
+          }
+        }
+        parts.push({ text: universalPrompt });
+
+        const geminiRes = await gemini.models.generateContent({
+          model: 'gemini-3.7-flash',
+          contents: [{ role: 'user', parts }]
+        });
+
+        const text = geminiRes.text || '';
+        if (text) {
+          const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanText);
+          if (parsed && parsed.name) {
+            addSystemLog({
+              level: 'success',
+              module: 'AUTO_FILL',
+              endpoint: '/api/ai-product-auto-fill',
+              message: `Gemini Vision generated details for "${parsed.name}"`,
+              latencyMs: Date.now() - startTime,
+              details: { name: parsed.name, category: parsed.category, price: parsed.price }
+            });
+            return res.json({ ...parsed, latencyMs: Date.now() - startTime });
+          }
+        }
+      } catch (geminiErr: any) {
+        console.warn("Gemini vision auto-fill warning:", geminiErr?.message || geminiErr);
+      }
+    }
+
+    // 2. Try Grok / Groq API
     const grokConfig = getGrokConfig(req);
     if (grokConfig) {
       try {
         const userContent: any = image
           ? [
-              { type: "text", text: promptText },
+              { type: "text", text: universalPrompt },
               { type: "image_url", image_url: { url: image } }
             ]
-          : promptText;
+          : universalPrompt;
 
         const response = await callGrokAPI([
           { role: "system", content: "You are a product catalog parser. Output strict JSON only without explanation or markdown quotes." },
@@ -544,8 +630,53 @@ Output strict JSON only with this structure:
       }
     }
 
-    // High-Quality English Default Fallback Data
-    const defaultCat = availableCategories[0] || "Kids";
+    // 3. Dynamic context-aware Fallback
+    const hintLower = (hints || '').toLowerCase();
+    const isChargerOrElectronic = hintLower.includes('charger') || hintLower.includes('adapter') || hintLower.includes('samsung') || hintLower.includes('cable') || hintLower.includes('fast') || hintLower.includes('type-c');
+    const isFootwear = hintLower.includes('shoe') || hintLower.includes('loafer') || hintLower.includes('sandal') || hintLower.includes('sneaker');
+    const isWatch = hintLower.includes('watch') || hintLower.includes('clock');
+
+    if (isChargerOrElectronic) {
+      const cat = availableCategories.find(c => c.toLowerCase().includes('access')) || availableCategories[0] || "Accessories";
+      return res.json({
+        name: hints ? `${hints} Super Fast Charger` : "Samsung 25W Super Fast Type-C Wall Charger & Cable",
+        category: cat,
+        subcategory: "Fast Chargers & Cables",
+        description: "Experience ultra-rapid power delivery with the 25W Super Fast Power Adapter and Type-C to Type-C cable. Engineered with intelligent power management to safely charge all smartphones, tablets, and compatible USB-C gadgets at peak efficiency.\n\n✨ Key Highlights:\n- 25W Super Fast Charging with USB-PD 3.0 support\n- Includes heavy-duty Type-C to Type-C charging cable\n- Multi-protect safety system against over-voltage and overheating\n- Compact travel-ready design with durable construction\n\n🛡️ Warranty: 6 Months Official Brand Replacement Warranty.",
+        material: "Fire-Retardant Polycarbonate (PC) & Pure Copper Core",
+        price: 1250,
+        comparePrice: 1650,
+        discount: 24,
+        stockQuantity: 35,
+        sizeOptions: ["Standard"],
+        colorOptions: ["Black", "White"],
+        tags: ["Fast Charger", "Type-C", "Samsung", "25W", "Accessories", "Rare Dreams"],
+        isFlashSale: false,
+        fallback: true
+      });
+    }
+
+    if (isFootwear) {
+      const cat = availableCategories.find(c => c.toLowerCase().includes('foot')) || availableCategories.find(c => c.toLowerCase().includes('men')) || "Men";
+      return res.json({
+        name: hints ? `Premium ${hints}` : "Handcrafted Genuine Leather Loafers",
+        category: cat,
+        subcategory: "Leather Footwear",
+        description: "Elevate your style with these meticulously handcrafted leather loafers. Featuring cushioned orthopedic insoles and flexible non-slip soles for effortless luxury from morning to evening.\n\n✨ Key Highlights:\n- Full-grain genuine leather upper\n- Soft padded memory foam insole\n- Anti-skid rubber outsole with reinforced stitching\n- Versatile styling for formal and festive occasions\n\n🧺 Care: Polish with neutral leather cream.",
+        material: "100% Genuine Full-Grain Leather",
+        price: 2450,
+        comparePrice: 3200,
+        discount: 23,
+        stockQuantity: 20,
+        sizeOptions: ["39", "40", "41", "42", "43", "44"],
+        colorOptions: ["Classic Brown", "Midnight Black"],
+        tags: ["Footwear", "Leather", "Loafers", "Rare Dreams"],
+        isFlashSale: false,
+        fallback: true
+      });
+    }
+
+    const defaultCat = availableCategories.find(c => c.toLowerCase().includes('kid')) || availableCategories[0] || "Kids";
     res.json({
       name: hints ? `Luxury ${hints}` : "Exclusive Royal Designer Collection",
       category: defaultCat,
@@ -565,18 +696,18 @@ Output strict JSON only with this structure:
   } catch (err: any) {
     console.error("AI Product Auto-fill error:", err);
     res.json({
-      name: "Exclusive Royal Designer Collection",
-      category: "Kids",
-      subcategory: "Festive Exclusive",
-      description: "Exquisite craftsmanship and premium luxury design from Rare Dreams.",
-      material: "100% Premium Cotton",
-      price: 1450,
-      comparePrice: 1850,
-      discount: 20,
+      name: "Exclusive Product Collection",
+      category: "Accessories",
+      subcategory: "New Arrival",
+      description: "Premium quality crafted for luxury, everyday durability, and maximum performance.",
+      material: "Premium Grade Material",
+      price: 1250,
+      comparePrice: 1650,
+      discount: 24,
       stockQuantity: 25,
-      sizeOptions: ["2-3Y", "4-5Y", "6-7Y", "8-9Y"],
-      colorOptions: ["Royal Navy", "Gold"],
-      tags: ["Exclusive", "Rare Dreams"],
+      sizeOptions: ["Standard"],
+      colorOptions: ["Black", "White"],
+      tags: ["Exclusive", "Rare Dreams", "New Arrival"],
       isFlashSale: false,
       fallback: true
     });
