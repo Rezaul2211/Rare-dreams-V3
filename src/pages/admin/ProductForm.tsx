@@ -107,13 +107,17 @@ export default function ProductForm() {
     }
 
     setIsAiGenerating(true);
-    setAiStatusStep("Analyzing product details with Grok AI...");
+    setAiStatusStep("Analyzing product photo with Vision AI...");
     setAiGeneratedSuccess(false);
 
     try {
       setTimeout(() => {
-        setAiStatusStep("Generating titles, tags & English description...");
-      }, 800);
+        setAiStatusStep("Detecting garment type, material & specifications...");
+      }, 700);
+
+      setTimeout(() => {
+        setAiStatusStep("Mapping pricing, sizing options & English description...");
+      }, 1400);
 
       const categoryList = (categories || []).map(c => c.title);
 
@@ -131,20 +135,39 @@ export default function ProductForm() {
             if (found) matchedCat = found.title;
           }
 
+          // Clean size options
+          const cleanSizes = Array.isArray(data.sizeOptions) 
+            ? Array.from(new Set(data.sizeOptions.map(s => String(s).trim()).filter(Boolean)))
+            : (prev.sizeOptions || []);
+
+          // Clean color options
+          const cleanColors = Array.isArray(data.colorOptions)
+            ? Array.from(new Set(data.colorOptions.map(c => String(c).trim()).filter(Boolean)))
+            : (prev.colorOptions || []);
+
+          const parsedPrice = data.price !== undefined && !isNaN(Number(data.price)) ? Number(data.price) : (prev.price || 0);
+          const parsedCompare = data.comparePrice !== undefined && !isNaN(Number(data.comparePrice)) ? Number(data.comparePrice) : (prev.comparePrice || 0);
+          
+          let parsedDiscount = data.discount !== undefined && !isNaN(Number(data.discount)) ? Number(data.discount) : prev.discount;
+          if ((!parsedDiscount || parsedDiscount <= 0) && parsedCompare > parsedPrice && parsedPrice > 0) {
+            parsedDiscount = Math.round(((parsedCompare - parsedPrice) / parsedCompare) * 100);
+          }
+
           return {
             ...prev,
-            name: data.name || prev.name,
+            name: (data.name || prev.name || '').trim(),
             category: matchedCat,
-            subcategory: data.subcategory || prev.subcategory || '',
-            description: data.description || prev.description || '',
-            material: data.material || prev.material || '',
-            price: data.price !== undefined ? Number(data.price) : prev.price,
-            comparePrice: data.comparePrice !== undefined ? Number(data.comparePrice) : prev.comparePrice,
-            discount: data.discount !== undefined ? Number(data.discount) : prev.discount,
-            stockQuantity: data.stockQuantity !== undefined ? Number(data.stockQuantity) : (prev.stockQuantity || 25),
-            sizeOptions: Array.isArray(data.sizeOptions) && data.sizeOptions.length > 0 ? data.sizeOptions : prev.sizeOptions,
-            colorOptions: Array.isArray(data.colorOptions) && data.colorOptions.length > 0 ? data.colorOptions : prev.colorOptions,
-            isFlashSale: data.isFlashSale !== undefined ? data.isFlashSale : prev.isFlashSale
+            subcategory: (data.subcategory || prev.subcategory || '').trim(),
+            description: (data.description || prev.description || '').trim(),
+            material: (data.material || prev.material || '').trim(),
+            price: parsedPrice,
+            comparePrice: parsedCompare,
+            discount: parsedDiscount,
+            discountPercentage: parsedDiscount,
+            stockQuantity: data.stockQuantity !== undefined && !isNaN(Number(data.stockQuantity)) ? Number(data.stockQuantity) : (prev.stockQuantity || 25),
+            sizeOptions: cleanSizes.length > 0 ? cleanSizes : prev.sizeOptions,
+            colorOptions: cleanColors.length > 0 ? cleanColors : prev.colorOptions,
+            isFlashSale: data.isFlashSale !== undefined ? Boolean(data.isFlashSale) : prev.isFlashSale
           };
         });
 
@@ -152,7 +175,7 @@ export default function ProductForm() {
       }
     } catch (err: any) {
       console.error("AI Auto-fill failed:", err);
-      alert(`AI Generation Notice: ${err.message || "Could not generate. Please ensure your Grok API key is saved."}`);
+      alert(`AI Generation Notice: ${err.message || "Could not generate product details. Please ensure your API key is configured in Admin Settings."}`);
     } finally {
       setIsAiGenerating(false);
       setAiStatusStep("");
@@ -325,13 +348,6 @@ export default function ProductForm() {
         ...prev,
         images: [...(prev.images || []), ...processedList]
       }));
-
-      // Auto-trigger AI if form is completely fresh
-      if (!formData.name && (!formData.images || formData.images.length === 0)) {
-        setTimeout(() => {
-          runAiAutoFill(processedList[0]);
-        }, 300);
-      }
     }
 
     // Clear input so the same file can be selected again
@@ -557,7 +573,7 @@ export default function ProductForm() {
               {isEditing ? 'Edit Product' : 'Add New Product'}
             </h1>
             <p className="text-xs text-neutral-500">
-              {isEditing ? 'Update product specifications and inventory' : 'Upload photo and click Auto-Generate with AI'}
+              {isEditing ? 'Update product specifications and inventory' : 'Upload photos and click Generate Product Details'}
             </p>
           </div>
         </div>
@@ -568,15 +584,15 @@ export default function ProductForm() {
             type="button"
             onClick={() => runAiAutoFill()}
             disabled={isAiGenerating}
-            className="bg-amber-500 hover:bg-amber-600 text-neutral-950 px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+            className="bg-amber-500 hover:bg-amber-600 text-neutral-950 px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
           >
             {isAiGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            <span>Auto-Generate with AI</span>
+            <span>Generate Product Details</span>
           </button>
           <button
             type="button"
             onClick={() => navigate('/admin/products')}
-            className="px-3.5 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded-xl bg-white hover:bg-neutral-50 transition-colors"
+            className="px-3.5 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded-xl bg-white hover:bg-neutral-50 transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -584,7 +600,7 @@ export default function ProductForm() {
             type="button"
             onClick={(e) => handleSubmit(e as any)}
             disabled={loading || isAiGenerating}
-            className="bg-neutral-950 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-black transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+            className="bg-neutral-950 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-black transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             <span>{loading ? 'Saving...' : 'Save Product'}</span>
@@ -601,14 +617,14 @@ export default function ProductForm() {
                 <Sparkles size={16} />
               </span>
               <h2 className="text-sm sm:text-base font-bold text-white">
-                AI Product Auto-Fill
+                AI Vision Product Generator
               </h2>
               <span className="text-[10px] font-black uppercase bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-400/30">
                 Gemini 3.7 Vision
               </span>
             </div>
             <p className="text-xs text-neutral-300 max-w-2xl">
-              Upload product photo and click Auto-Generate to instantly fill name, English description, category, size recommendations, and price.
+              Upload product photos below and click <span className="text-amber-300 font-bold">Generate Product Details</span> to auto-populate title, category, fabrics/materials, optimal pricing, sizes & specifications.
             </p>
           </div>
 
@@ -627,7 +643,7 @@ export default function ProductForm() {
               ) : (
                 <>
                   <Wand2 size={16} className="text-black" />
-                  <span>Auto-Generate All</span>
+                  <span>Generate Product Details</span>
                 </>
               )}
             </button>
@@ -635,7 +651,7 @@ export default function ProductForm() {
             <button
               type="button"
               onClick={() => setShowAiHintInput(!showAiHintInput)}
-              className="text-xs text-neutral-300 hover:text-white font-semibold px-2.5 py-2 rounded-lg border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              className="text-xs text-neutral-300 hover:text-white font-semibold px-2.5 py-2 rounded-lg border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 transition-colors cursor-pointer"
             >
               {showAiHintInput ? 'Close Hint' : '+ Add Prompt Hint'}
             </button>
@@ -656,9 +672,9 @@ export default function ProductForm() {
               type="button"
               onClick={() => runAiAutoFill(undefined, aiPromptHint)}
               disabled={isAiGenerating}
-              className="bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-xl text-xs font-bold shrink-0 disabled:opacity-50"
+              className="bg-amber-400 hover:bg-amber-300 text-black px-3 py-2 rounded-xl text-xs font-bold shrink-0 disabled:opacity-50 cursor-pointer"
             >
-              Apply Hint
+              Generate with Hint
             </button>
           </div>
         )}
@@ -679,13 +695,13 @@ export default function ProductForm() {
             <div className="flex items-center gap-2">
               <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
               <span className="text-xs font-bold">
-                All fields have been auto-filled by AI. Review and make any adjustments before saving.
+                Product details and visual attributes successfully generated! Review and make any adjustments before saving.
               </span>
             </div>
             <button
               type="button"
               onClick={() => setAiGeneratedSuccess(false)}
-              className="text-emerald-400 hover:text-emerald-200 p-1 text-xs font-bold"
+              className="text-emerald-400 hover:text-emerald-200 p-1 text-xs font-bold cursor-pointer"
             >
               ✕
             </button>
@@ -707,7 +723,7 @@ export default function ProductForm() {
                     <span>Product Images</span>
                   </h2>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    Upload product photos. Click the AI Auto-Fill button above to generate details.
+                    Upload product photos from your device, then click <span className="font-bold text-neutral-800">Generate Product Details</span>.
                   </p>
                 </div>
               </div>
@@ -731,7 +747,7 @@ export default function ProductForm() {
                     <span className="text-sm font-extrabold text-neutral-900 underline decoration-2 block">
                       Choose product photos from your device
                     </span>
-                    <p className="text-xs text-neutral-500 mt-0.5">Supports JPG, PNG, and WEBP formats</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">Supports JPG, PNG, and WEBP formats (Max 15MB each)</p>
                   </div>
                 </label>
               </div>
@@ -750,12 +766,54 @@ export default function ProductForm() {
                   <button 
                     type="button" 
                     onClick={addImage} 
-                    className="bg-neutral-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-black shrink-0"
+                    className="bg-neutral-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-black shrink-0 cursor-pointer"
                   >
                     Add URL
                   </button>
                 </div>
               </div>
+
+              {/* Dedicated Explicit "Generate Product Details" Action Card when images exist */}
+              {formData.images && formData.images.length > 0 && (
+                <div className="p-4 bg-amber-50/80 border border-amber-300/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-12 h-14 rounded-xl overflow-hidden bg-neutral-200 shrink-0 border border-amber-300 shadow-xs">
+                      <img src={formData.images[0]} alt="Primary image thumbnail" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/10" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-amber-600 shrink-0" />
+                        <h4 className="text-xs sm:text-sm font-extrabold text-neutral-900">
+                          Ready to Generate Product Details
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-neutral-600 leading-tight mt-0.5">
+                        Analyzes your primary image to fill title, fabric/material, pricing, size options, and description.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => runAiAutoFill(formData.images?.[0])}
+                    disabled={isAiGenerating}
+                    className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-neutral-950 font-black px-4 py-2.5 rounded-xl text-xs shadow-sm transition-all shrink-0 cursor-pointer disabled:opacity-50"
+                  >
+                    {isAiGenerating ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-black" />
+                        <span>Analyzing Photo...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 size={14} className="text-black" />
+                        <span>Generate Product Details</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
 
               {/* Image Previews */}
               {formData.images && formData.images.length > 0 && (
@@ -793,7 +851,7 @@ export default function ProductForm() {
                           <button
                             type="button"
                             onClick={() => makeMainImage(idx)}
-                            className="absolute top-2 left-2 bg-black/80 hover:bg-black text-white text-[10px] font-bold px-2 py-0.5 rounded-md opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                            className="absolute top-2 left-2 bg-black/80 hover:bg-black text-white text-[10px] font-bold px-2 py-0.5 rounded-md opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity shadow cursor-pointer"
                           >
                             Make Main
                           </button>
@@ -804,7 +862,7 @@ export default function ProductForm() {
                           <button
                             type="button"
                             onClick={() => rotateImage(idx)}
-                            className="bg-black/75 hover:bg-amber-500 hover:text-black text-white p-1.5 rounded-full transition-colors shadow-md opacity-90 sm:opacity-0 group-hover:opacity-100"
+                            className="bg-black/75 hover:bg-amber-500 hover:text-black text-white p-1.5 rounded-full transition-colors shadow-md opacity-90 sm:opacity-0 group-hover:opacity-100 cursor-pointer"
                             title="Rotate 90° clockwise"
                           >
                             <RotateCw size={13} />
@@ -812,7 +870,7 @@ export default function ProductForm() {
                           <button
                             type="button"
                             onClick={() => flipImage(idx)}
-                            className="bg-black/75 hover:bg-amber-500 hover:text-black text-white p-1.5 rounded-full transition-colors shadow-md opacity-90 sm:opacity-0 group-hover:opacity-100"
+                            className="bg-black/75 hover:bg-amber-500 hover:text-black text-white p-1.5 rounded-full transition-colors shadow-md opacity-90 sm:opacity-0 group-hover:opacity-100 cursor-pointer"
                             title="Flip horizontally"
                           >
                             <FlipHorizontal size={13} />
@@ -820,23 +878,24 @@ export default function ProductForm() {
                           <button
                             type="button"
                             onClick={() => removeImage(idx)}
-                            className="bg-black/75 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-md"
+                            className="bg-black/75 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-md cursor-pointer"
                             title="Remove photo"
                           >
                             <X size={13} />
                           </button>
                         </div>
 
-                        {/* Bottom Actions: Scan with AI */}
-                        <div className="absolute bottom-2 inset-x-2 flex items-center justify-between pointer-events-none">
+                        {/* Bottom Actions: Generate Details from this photo */}
+                        <div className="absolute bottom-2 inset-x-2 flex items-center justify-center pointer-events-none">
                           <button
                             type="button"
                             onClick={() => runAiAutoFill(img)}
                             disabled={isAiGenerating}
-                            className="pointer-events-auto bg-amber-500/95 hover:bg-amber-400 text-neutral-950 text-[10px] font-black px-2 py-1 rounded-lg shadow-md flex items-center gap-1 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            className="pointer-events-auto bg-amber-500/95 hover:bg-amber-400 text-neutral-950 text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow-md flex items-center gap-1 opacity-95 sm:opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50 cursor-pointer"
+                            title="Generate Product Details from this image"
                           >
                             <Sparkles size={11} />
-                            <span>Scan with AI</span>
+                            <span>Generate Details</span>
                           </button>
                         </div>
                       </div>
