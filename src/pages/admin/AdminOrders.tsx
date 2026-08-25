@@ -524,9 +524,9 @@ export default function AdminOrders() {
                   <MapPin size={14} className="text-black" />
                   <span>Delivery Address</span>
                 </h4>
-                {selectedOrder.district && (
+                {(selectedOrder.district || selectedOrder.thana) && (
                   <p className="text-xs text-neutral-900 font-semibold">
-                    District: <span className="font-bold text-black">{selectedOrder.district}</span>
+                    Location: <span className="font-bold text-black">{selectedOrder.thana ? `${selectedOrder.thana}, ` : ''}{selectedOrder.district || ''}</span>
                   </p>
                 )}
                 <p className="text-xs font-bold text-neutral-900 whitespace-pre-wrap">{selectedOrder.address}</p>

@@ -273,9 +273,9 @@ export default function OrderSuccess() {
               <div className="text-xs space-y-1 text-neutral-800">
                 <p className="font-bold text-sm text-neutral-900">{order.customerName}</p>
                 <p className="font-mono text-neutral-700">{order.phone}</p>
-                {order.district && (
-                  <p className="text-neutral-900 font-semibold">District: <span className="font-normal text-neutral-700">{order.district}</span></p>
-                )}
+                <p className="text-neutral-900 font-semibold">
+                  Location: <span className="font-normal text-neutral-700">{order.thana ? `${order.thana}, ` : ''}{order.district || 'N/A'}</span>
+                </p>
                 <p className="text-neutral-700 font-medium whitespace-pre-wrap">{order.address}</p>
                 {order.deliveryArea && (
                   <p className="text-neutral-500 font-medium">Area: {order.deliveryAreaBn || order.deliveryArea}</p>

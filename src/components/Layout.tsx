@@ -632,39 +632,41 @@ function LayoutInner() {
       {/* Background Push Notification Opt-in Prompt */}
       <PushNotificationPrompt />
 
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 flex justify-around items-center h-16 z-50 px-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-        <Link to="/" onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname === '/' ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
-          <Home size={20} className={location.pathname === '/' ? 'stroke-black' : ''} />
-          <span className="text-[10px] mt-1 font-bold">{t('nav.home')}</span>
-        </Link>
-        <Link to="/shop" onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname.includes('/shop') || location.pathname.includes('/category') ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
-          <Grid size={20} className={location.pathname.includes('/shop') || location.pathname.includes('/category') ? 'stroke-black' : ''} />
-          <span className="text-[10px] mt-1 font-bold">{t('nav.shop_all')}</span>
-        </Link>
-        <Link 
-          id="mobile-cart-icon"
-          to="/cart" 
-          onClick={scrollToTop}
-          className={`flex flex-col items-center justify-center w-full h-full relative transition-all ${
-            location.pathname === '/cart' ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'
-          } ${isCartBouncing ? 'scale-125 text-black' : ''}`}
-        >
-          <div className="relative">
-            <ShoppingBag size={20} className={location.pathname === '/cart' ? 'stroke-black' : ''} />
-            {itemCount > 0 && (
-              <span className="absolute -top-1.5 -right-2.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-black text-white bg-neutral-900 rounded-full shadow-xs">
-                {itemCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] mt-1 font-bold">{t('nav.cart')}</span>
-        </Link>
-        <Link to={user ? '/account' : '/login'} onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname.includes('/account') || location.pathname.includes('/login') ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
-          <User size={20} className={location.pathname.includes('/account') || location.pathname.includes('/login') ? 'stroke-black' : ''} />
-          <span className="text-[10px] mt-1 font-bold">{user ? t('nav.account') : t('nav.login')}</span>
-        </Link>
-      </div>
+      {/* Mobile Bottom Navigation (Hidden on Checkout page to prioritize sticky checkout action bar) */}
+      {!location.pathname.startsWith('/checkout') && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 flex justify-around items-center h-16 z-50 px-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+          <Link to="/" onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname === '/' ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
+            <Home size={20} className={location.pathname === '/' ? 'stroke-black' : ''} />
+            <span className="text-[10px] mt-1 font-bold">{t('nav.home')}</span>
+          </Link>
+          <Link to="/shop" onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname.includes('/shop') || location.pathname.includes('/category') ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
+            <Grid size={20} className={location.pathname.includes('/shop') || location.pathname.includes('/category') ? 'stroke-black' : ''} />
+            <span className="text-[10px] mt-1 font-bold">{t('nav.shop_all')}</span>
+          </Link>
+          <Link 
+            id="mobile-cart-icon"
+            to="/cart" 
+            onClick={scrollToTop}
+            className={`flex flex-col items-center justify-center w-full h-full relative transition-all ${
+              location.pathname === '/cart' ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'
+            } ${isCartBouncing ? 'scale-125 text-black' : ''}`}
+          >
+            <div className="relative">
+              <ShoppingBag size={20} className={location.pathname === '/cart' ? 'stroke-black' : ''} />
+              {itemCount > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-black text-white bg-neutral-900 rounded-full shadow-xs">
+                  {itemCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] mt-1 font-bold">{t('nav.cart')}</span>
+          </Link>
+          <Link to={user ? '/account' : '/login'} onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname.includes('/account') || location.pathname.includes('/login') ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
+            <User size={20} className={location.pathname.includes('/account') || location.pathname.includes('/login') ? 'stroke-black' : ''} />
+            <span className="text-[10px] mt-1 font-bold">{user ? t('nav.account') : t('nav.login')}</span>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
