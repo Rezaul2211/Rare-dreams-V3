@@ -29,7 +29,10 @@ import {
   ArrowRight,
   Sparkles,
   CreditCard,
-  Banknote
+  Banknote,
+  Trash2,
+  User,
+  LogIn
 } from 'lucide-react';
 
 interface DeliveryOption {
@@ -61,7 +64,7 @@ const DELIVERY_OPTIONS: DeliveryOption[] = [
 const BD_PHONE_REGEX = /^(?:\+8801|8801|01)[3-9]\d{8}$/;
 
 export default function Checkout() {
-  const { directCheckoutItem, getCheckoutItems, getCheckoutSubtotal, clearCart, setDirectCheckoutItem, removeItem } = useCartStore();
+  const { directCheckoutItem, getCheckoutItems, getCheckoutSubtotal, clearCart, setDirectCheckoutItem, removeItem, updateQuantity } = useCartStore();
   const { user } = useAuthStore();
   const { config } = useStoreConfigStore();
   const { t } = useLanguageStore();
@@ -84,10 +87,11 @@ export default function Checkout() {
 
   const checkoutItems = getCheckoutItems();
 
-  // Form State initialized to Dhaka / Dhanmondi by default
+  // Form State initialized clean by default
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    email: '',
     district: 'Dhaka',
     thana: 'Dhanmondi',
     address: '',
@@ -191,31 +195,26 @@ export default function Checkout() {
     setTimeout(() => setCopiedNumber(false), 2000);
   };
 
-  // Validation function with clear Bengali error messages
+  // Validation function with clear Bengali & English error messages
   const validateForm = () => {
     if (!formData.name.trim() || formData.name.trim().length < 2) {
-      setErrorMessage('অনুগ্রহ করে আপনার সম্পূর্ণ নাম লিখুন।');
+      setErrorMessage('Please enter your full name (আপনার সম্পূর্ণ নাম লিখুন)।');
       return false;
     }
 
     const cleanPhone = formData.phone.trim().replace(/[\s-]/g, '');
     if (!cleanPhone || !BD_PHONE_REGEX.test(cleanPhone)) {
-      setErrorMessage('সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX বা 019XXXXXXXX)।');
+      setErrorMessage('Please enter a valid 11-digit Bangladeshi mobile number (সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন, যেমন: 017XXXXXXXX)।');
       return false;
     }
 
     if (!formData.address.trim() || formData.address.trim().length < 5) {
-      setErrorMessage('অনুগ্রহ করে সম্পূর্ণ ডেলিভারি ঠিকানা লিখুন (বাসা/ফ্ল্যাট, রোড, এলাকা)।');
+      setErrorMessage('Please enter full delivery address (বাসা/ফ্ল্যাট, রোড, এলাকা উল্লেখ করুন)।');
       return false;
     }
 
     if (!formData.district.trim()) {
-      setErrorMessage('অনুগ্রহ করে আপনার জেলা নির্বাচন করুন।');
-      return false;
-    }
-
-    if (!formData.thana.trim() && currentDistrictThanas.length > 0) {
-      setErrorMessage('অনুগ্রহ করে আপনার থানা/উপজেলা নির্বাচন করুন।');
+      setErrorMessage('Please select your District (জেলা নির্বাচন করুন)।');
       return false;
     }
 
@@ -285,7 +284,7 @@ export default function Checkout() {
         district: formData.district,
         thana: formData.thana || '',
         address: formData.address.trim(),
-        email: '',
+        email: formData.email.trim() || '',
         orderNotes: formData.orderNotes.trim() || '',
         deliveryArea: selectedDeliveryOption.labelEn,
         deliveryAreaBn: selectedDeliveryOption.labelBn,
@@ -326,7 +325,7 @@ export default function Checkout() {
       });
 
       try {
-        requestPushNotificationPermission(user?.uid, cleanPhone, user?.role || 'customer');
+        requestPushNotificationPermission(user?.uid, cleanPhone, (user as any)?.role || 'customer');
       } catch (e) {
         console.warn('Push permission after order:', e);
       }
@@ -380,7 +379,7 @@ export default function Checkout() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 w-full flex-grow relative pb-28 lg:pb-12 bg-neutral-50/50">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 md:py-10 w-full flex-grow relative pb-28 lg:pb-16 bg-neutral-50/60 min-h-screen">
       
       {/* ERROR BANNER */}
       {errorMessage && (
@@ -599,465 +598,469 @@ export default function Checkout() {
         </div>
       )}
 
-      {/* Back Link */}
-      <div className="mb-4">
+      {/* TOP HEADER: Clean Back Link */}
+      <div className="flex items-center justify-between mb-4">
         <Link 
           to="/cart" 
           onClick={() => setDirectCheckoutItem(null)}
-          className="inline-flex items-center text-xs font-bold text-neutral-500 hover:text-black transition-colors"
+          className="inline-flex items-center text-xs font-bold text-neutral-500 hover:text-neutral-900 transition-colors"
         >
-          <ChevronLeft size={16} className="mr-1" /> কার্টে ফিরে যান
+          <ChevronLeft size={16} className="mr-0.5" /> Back
         </Link>
       </div>
 
-      {/* Main Container */}
-      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
-        
-        {/* Left Column: Checkout Form adhering to the exact screenshot layout */}
-        <div className="w-full lg:w-7/12 space-y-5">
-          
-          {/* Main Shipping Information Card (EXACT REPLICA OF THE IMAGE DESIGN) */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 border border-neutral-200/90 shadow-sm space-y-5">
-            
-            {/* Header: Shipping Information */}
-            <div className="border-b border-neutral-100 pb-3">
-              <h2 className="text-xl sm:text-2xl font-black text-neutral-900 tracking-tight">
-                Shipping Information
-              </h2>
-              <p className="text-xs text-neutral-500 mt-0.5">
-                ডেলিভারি তথ্য সঠিকভাবে পূরণ করুন
-              </p>
-            </div>
-
-            <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
-              
-              {/* Field 1: Full Name (আপনার নাম) * */}
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-neutral-800 mb-1.5">
-                  Full Name (আপনার নাম) <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="text" 
-                  name="name" 
-                  placeholder="আপনার সম্পূর্ণ নাম লিখুন" 
-                  required 
-                  autoComplete="name"
-                  value={formData.name} 
-                  onChange={handleChange} 
-                  className="w-full bg-white border border-neutral-300 focus:border-neutral-900 px-4 py-3.5 outline-none rounded-xl text-sm font-medium text-neutral-900 transition-all placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-900/10" 
-                />
-              </div>
-
-              {/* Field 2: Mobile Number (মোবাইল নাম্বার) * */}
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-neutral-800 mb-1.5">
-                  Mobile Number (মোবাইল নাম্বার) <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="tel" 
-                  name="phone" 
-                  placeholder="01XXXXXXXXX or +8801XXXXXXX" 
-                  required 
-                  autoComplete="tel"
-                  value={formData.phone} 
-                  onChange={handleChange} 
-                  className="w-full bg-white border border-neutral-300 focus:border-neutral-900 px-4 py-3.5 outline-none rounded-xl text-sm font-medium text-neutral-900 font-mono transition-all placeholder:text-neutral-400 placeholder:font-sans focus:ring-2 focus:ring-neutral-900/10" 
-                />
-              </div>
-
-              {/* Field 3: Delivery Address (ঠিকানা) * */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs sm:text-sm font-bold text-neutral-800">
-                    Delivery Address (ঠিকানা) <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAutoLocate}
-                    disabled={isLocating}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-600 hover:text-black bg-neutral-100 hover:bg-neutral-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                  >
-                    {isLocating ? (
-                      <>
-                        <Loader2 size={11} className="animate-spin" />
-                        <span>লোকেশন খোঁজা হচ্ছে...</span>
-                      </>
-                    ) : locationStatus === 'success' ? (
-                      <>
-                        <Check size={11} className="text-emerald-600" />
-                        <span>যুক্ত হয়েছে</span>
-                      </>
-                    ) : (
-                      <>
-                        <MapPin size={11} />
-                        <span>অটো লোকেশন</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <input 
-                  type="text" 
-                  name="address" 
-                  placeholder="বাসা/ফ্ল্যাট, রোড, এলাকা" 
-                  required 
-                  autoComplete="street-address"
-                  value={formData.address} 
-                  onChange={handleChange} 
-                  className="w-full bg-white border border-neutral-300 focus:border-neutral-900 px-4 py-3.5 outline-none rounded-xl text-sm font-medium text-neutral-900 transition-all placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-900/10" 
-                />
-              </div>
-
-              {/* Field 4: District * and Area/Thana * (SIDE BY SIDE 2-COLUMN GRID AS IN SCREENSHOT) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                
-                {/* District Dropdown Selector */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs sm:text-sm font-bold text-neutral-800">
-                      District <span className="text-red-500">*</span>
-                    </label>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                      {formData.district.toLowerCase() === 'dhaka' ? 'চার্জ ৳৮০' : 'চার্জ ৳১২০'}
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <select
-                      value={formData.district}
-                      onChange={handleDistrictChange}
-                      className="w-full bg-white border border-neutral-300 focus:border-neutral-900 px-3.5 py-3.5 pr-9 outline-none rounded-xl text-xs sm:text-sm font-semibold text-neutral-900 appearance-none cursor-pointer focus:ring-2 focus:ring-neutral-900/10 transition-all truncate"
-                    >
-                      <option value="" disabled>Select District</option>
-                      {BD_DISTRICTS.map((dist) => (
-                        <option key={dist.nameEn} value={dist.nameEn}>
-                          {dist.nameEn} ({dist.nameBn}) {dist.isDhaka ? '— ৳৮০' : '— ৳১২০'}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-500">
-                      <ChevronDown size={16} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Area/Thana Dropdown Selector */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs sm:text-sm font-bold text-neutral-800">
-                      Area/Thana <span className="text-red-500">*</span>
-                    </label>
-                    <span className="text-[10px] font-bold text-neutral-500">
-                      {currentDistrictThanas.length} টি থানা
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <select
-                      value={formData.thana}
-                      onChange={handleThanaChange}
-                      className="w-full bg-white border border-neutral-300 focus:border-neutral-900 px-3.5 py-3.5 pr-9 outline-none rounded-xl text-xs sm:text-sm font-semibold text-neutral-900 appearance-none cursor-pointer focus:ring-2 focus:ring-neutral-900/10 transition-all truncate"
-                    >
-                      <option value="" disabled>Select Area / Thana</option>
-                      {currentDistrictThanas.map((thana) => (
-                        <option key={thana.nameEn} value={thana.nameEn}>
-                          {thana.nameEn} {thana.nameBn ? `(${thana.nameBn})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-500">
-                      <ChevronDown size={16} />
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Field 5: Order Notes (Optional) */}
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-neutral-800 mb-1.5">
-                  Order Notes (Optional)
-                </label>
-                <textarea 
-                  name="orderNotes" 
-                  rows={2}
-                  placeholder="Any special instructions for your order..." 
-                  autoComplete="off"
-                  value={formData.orderNotes} 
-                  onChange={handleChange} 
-                  className="w-full bg-white border border-neutral-300 focus:border-neutral-900 px-4 py-3 outline-none rounded-xl text-sm font-medium text-neutral-900 transition-all placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-900/10 resize-none" 
-                />
-              </div>
-
-              {/* Delivery Charge Auto-Set Banner Indicator */}
-              <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-neutral-700">
-                  <Truck size={16} className="text-neutral-800 shrink-0" />
-                  <span>
-                    ডেলিভারি চার্জ ({selectedDeliveryOption.labelBn}):
-                  </span>
-                </div>
-                <span className="font-black text-neutral-900 text-sm">
-                  ৳{shipping}
-                </span>
-              </div>
-
-              {/* Payment Method Selector */}
-              <div className="pt-2">
-                <label className="block text-xs sm:text-sm font-bold text-neutral-800 mb-2">
-                  পেমেন্ট মেথড নির্বাচন করুন
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  
-                  {/* Cash on Delivery */}
-                  <label 
-                    onClick={() => setFormData({ ...formData, paymentMethod: 'cod' })}
-                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                      formData.paymentMethod === 'cod' 
-                        ? 'border-neutral-900 bg-neutral-900 text-white shadow-xs' 
-                        : 'border-neutral-200 hover:border-neutral-300 bg-white text-neutral-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Banknote size={18} className={formData.paymentMethod === 'cod' ? 'text-white' : 'text-neutral-700'} />
-                      <div>
-                        <p className="font-bold text-xs sm:text-sm">ক্যাশ অন ডেলিভারি</p>
-                        <p className={`text-[11px] ${formData.paymentMethod === 'cod' ? 'text-neutral-300' : 'text-neutral-500'}`}>
-                          পণ্য পেয়ে মূল্য পরিশোধ করুন
-                        </p>
-                      </div>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                      formData.paymentMethod === 'cod' ? 'border-white bg-white' : 'border-neutral-300'
-                    }`}>
-                      {formData.paymentMethod === 'cod' && <div className="w-1.5 h-1.5 rounded-full bg-neutral-900" />}
-                    </div>
-                  </label>
-
-                  {/* bKash / Nagad */}
-                  <label 
-                    onClick={() => setFormData({ ...formData, paymentMethod: 'bKash' })}
-                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                      formData.paymentMethod === 'bKash' || formData.paymentMethod === 'nagad'
-                        ? 'border-[#D12053] bg-[#D12053] text-white shadow-xs' 
-                        : 'border-neutral-200 hover:border-neutral-300 bg-white text-neutral-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <CreditCard size={18} className={formData.paymentMethod === 'bKash' ? 'text-white' : 'text-neutral-700'} />
-                      <div>
-                        <p className="font-bold text-xs sm:text-sm">বিকাশ / নগদ</p>
-                        <p className={`text-[11px] ${formData.paymentMethod === 'bKash' ? 'text-pink-100' : 'text-neutral-500'}`}>
-                          মোবাইল ব্যাংকিং পেমেন্ট
-                        </p>
-                      </div>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                      formData.paymentMethod === 'bKash' ? 'border-white bg-white' : 'border-neutral-300'
-                    }`}>
-                      {formData.paymentMethod === 'bKash' && <div className="w-1.5 h-1.5 rounded-full bg-[#D12053]" />}
-                    </div>
-                  </label>
-
-                </div>
-              </div>
-
-              {/* DESKTOP-ONLY ACTION BUTTON (HIDDEN ON MOBILE TO PREVENT DUPLICATE BUTTON WITH STICKY BAR) */}
-              <div className="pt-3 hidden lg:block">
-                <button 
-                  type="submit"
-                  disabled={loading || isConnectingGateway}
-                  className="w-full bg-[#9f1239] hover:bg-[#881337] active:scale-[0.99] text-white py-4 px-6 rounded-xl text-base font-bold tracking-wide shadow-md transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center space-x-2"
-                >
-                  {isConnectingGateway ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      <span>গেটওয়ে ওপেন হচ্ছে...</span>
-                    </>
-                  ) : loading ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      <span>অর্ডার সম্পন্ন হচ্ছে...</span>
-                    </>
-                  ) : (
-                    <span>Continue to Payment (অর্ডার কনফার্ম করুন)</span>
-                  )}
-                </button>
-              </div>
-
-            </form>
-
-          </div>
-
-        </div>
-
-        {/* Right Column: Order Summary Card */}
-        <div className="w-full lg:w-5/12">
-          <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-neutral-200/90 shadow-sm sticky top-24 space-y-5">
-            
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-              <h3 className="text-base font-bold text-neutral-900 flex items-center gap-2">
-                <ShoppingBag size={18} className="text-neutral-700" />
-                <span>অর্ডার সামারি ({checkoutItems.length} টি পণ্য)</span>
-              </h3>
-            </div>
-            
-            {/* Items List */}
-            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-              {checkoutItems.map((item) => (
-                <div key={item.cartItemId} className="flex items-center justify-between gap-3 text-sm pb-2.5 border-b border-neutral-100 last:border-b-0 last:pb-0">
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <div className="w-12 h-14 bg-neutral-100 rounded-xl overflow-hidden border border-neutral-200/70 shrink-0 relative">
-                      {item.images && item.images.length > 0 ? (
-                        <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-neutral-400 text-xs">ছবি নেই</div>
-                      )}
-                      <span className="absolute top-1 right-1 bg-black text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
-                        {item.quantity}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-xs sm:text-sm text-neutral-900 truncate">{item.name}</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">
-                        {item.selectedSize && <span className="bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-700 mr-1.5">সাইজ: {item.selectedSize}</span>}
-                        {item.selectedColor && <span>রং: {item.selectedColor}</span>}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="font-black text-xs sm:text-sm text-neutral-900 shrink-0">
-                    ৳ {(item.price * item.quantity).toFixed(0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Calculations */}
-            <div className="space-y-2 pt-3 border-t border-neutral-100 text-xs sm:text-sm">
-              <div className="flex justify-between text-neutral-600">
-                <span>পণ্যের মূল্য (Subtotal):</span>
-                <span className="font-bold text-neutral-900">৳ {subtotal.toFixed(0)}</span>
-              </div>
-              <div className="flex justify-between text-neutral-600 items-center">
-                <span>
-                  ডেলিভারি চার্জ:
-                  <span className="text-[11px] text-neutral-400 block sm:inline sm:ml-1">
-                    ({selectedDeliveryOption.labelBn})
-                  </span>
-                </span>
-                <span className="font-bold text-neutral-900">
-                  ৳ {shipping.toFixed(0)}
-                </span>
-              </div>
-            </div>
-            
-            {/* Total */}
-            <div className="flex justify-between items-center pt-3 border-t border-neutral-200">
-              <div>
-                <span className="text-[11px] font-bold text-neutral-500 block">
-                  সর্বমোট বিল (Total)
-                </span>
-                <span className="text-2xl font-black text-neutral-900">
-                  ৳ {total.toFixed(0)}
-                </span>
-              </div>
-              <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-3 py-1.5 rounded-lg">
-                {formData.paymentMethod === 'cod' ? 'ক্যাশ অন ডেলিভারি' : 'বিকাশ/নগদ'}
-              </span>
-            </div>
-
-            {/* Desktop Order Confirmation Button inside Summary */}
-            <button 
-              type="button"
-              onClick={() => handleSubmit()}
-              disabled={loading || isConnectingGateway}
-              className="w-full hidden lg:flex bg-[#9f1239] hover:bg-[#881337] active:scale-[0.99] text-white py-3.5 px-5 rounded-xl text-sm font-bold shadow-md transition-all items-center justify-center space-x-2 cursor-pointer disabled:opacity-60"
+      {/* ACCOUNT BANNER (ONLY IF NOT LOGGED IN) */}
+      {!user && (
+        <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-neutral-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <p className="text-xs sm:text-sm font-medium text-neutral-700">
+            Have an account? please login or register
+          </p>
+          <div className="flex items-center gap-2">
+            <Link 
+              to="/login?redirect=/checkout" 
+              className="px-4 py-1.5 text-xs font-bold text-neutral-800 bg-white border border-neutral-300 hover:bg-neutral-50 rounded-xl transition-colors text-center"
             >
-              {isConnectingGateway ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>গেটওয়ে ওপেন হচ্ছে...</span>
-                </>
-              ) : loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>অর্ডার সম্পন্ন হচ্ছে...</span>
-                </>
-              ) : (
-                <>
-                  <span>অর্ডার সম্পন্ন করুন (৳{total.toFixed(0)})</span>
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-
-            {/* Guarantees */}
-            <div className="pt-3 border-t border-neutral-100 space-y-2 text-[11px] text-neutral-500 font-medium">
-              <div className="flex items-center space-x-2 text-neutral-700">
-                <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
-                <span>১০০% প্রিমিয়াম কোয়ালিটি ও অরিজিনাল পণ্য</span>
-              </div>
-              <div className="flex items-center space-x-2 text-neutral-700">
-                <Truck size={15} className="text-blue-600 shrink-0" />
-                <span>দ্রুত হোম ডেলিভারি ও রিয়েল-টাইম ট্র্যাকিং</span>
-              </div>
-              <div className="flex items-center space-x-2 text-neutral-700">
-                <RotateCcw size={15} className="text-amber-600 shrink-0" />
-                <span>চেক করে মূল্য পরিশোধের সুবিধা</span>
-              </div>
-            </div>
-
+              Login
+            </Link>
+            <Link 
+              to="/register?redirect=/checkout" 
+              className="px-4 py-1.5 text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-xl transition-colors text-center shadow-2xs"
+            >
+              Register
+            </Link>
           </div>
         </div>
+      )}
 
+      {/* 1. ORDER REVIEW SECTION */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-1.5 h-4.5 bg-orange-600 rounded-full inline-block"></span>
+          <h2 className="text-base sm:text-lg font-black text-neutral-900 tracking-tight">
+            Order review
+          </h2>
+        </div>
+
+        <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-neutral-200 shadow-2xs space-y-3.5">
+          {checkoutItems.map((item) => (
+            <div 
+              key={item.cartItemId} 
+              className="flex items-center justify-between gap-3 pb-3 border-b border-neutral-100 last:border-b-0 last:pb-0"
+            >
+              {/* Product Image Thumbnail */}
+              <div className="w-14 h-16 sm:w-16 sm:h-18 bg-neutral-100 rounded-xl overflow-hidden border border-neutral-200 shrink-0 relative">
+                {item.images && item.images.length > 0 ? (
+                  <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-neutral-400 text-xs">No Image</div>
+                )}
+              </div>
+
+              {/* Title, Variant & Quantity Pill + Price */}
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <h4 className="font-bold text-xs sm:text-sm text-neutral-900 truncate">
+                  {item.name}
+                </h4>
+
+                {(item.selectedSize || item.selectedColor) && (
+                  <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+                    {item.selectedSize && (
+                      <span className="bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-700 font-semibold">
+                        Size: {item.selectedSize}
+                      </span>
+                    )}
+                    {item.selectedColor && (
+                      <span className="text-neutral-600">
+                        Color: {item.selectedColor}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Quantity Controls and Unit/Total Price */}
+                <div className="flex items-center gap-3">
+                  {/* Quantity Stepper */}
+                  <div className="inline-flex items-center border border-neutral-200 rounded-xl bg-neutral-50 overflow-hidden shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.quantity > 1) {
+                          updateQuantity(item.cartItemId, item.quantity - 1);
+                        } else {
+                          removeItem(item.cartItemId);
+                        }
+                      }}
+                      className="px-2.5 py-1 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200 transition-colors font-bold text-sm cursor-pointer"
+                      title="Decrease quantity"
+                    >
+                      -
+                    </button>
+                    <span className="px-2.5 py-1 text-xs font-bold text-neutral-900 bg-white border-x border-neutral-200 min-w-[26px] text-center font-mono">
+                      {item.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}
+                      className="px-2.5 py-1 text-orange-600 hover:text-orange-700 hover:bg-neutral-200 transition-colors font-bold text-sm cursor-pointer"
+                      title="Increase quantity"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {/* Price */}
+                  <span className="font-extrabold text-sm sm:text-base text-neutral-900 font-mono">
+                    ৳{(item.price * item.quantity).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Red Delete Trash Button */}
+              <button
+                type="button"
+                onClick={() => removeItem(item.cartItemId)}
+                className="w-8 h-8 rounded-xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors shadow-2xs shrink-0 cursor-pointer"
+                title="Remove item"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* MOBILE STICKY BOTTOM ACTION BAR (REMAINS VISIBLE WHILE SCROLLING) */}
-      <div 
-        id="mobile-sticky-checkout-bar"
-        className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-neutral-200/90 shadow-[0_-6px_30px_rgba(0,0,0,0.12)] px-4 pt-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] lg:hidden animate-in slide-in-from-bottom duration-300"
-      >
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
-          
-          {/* Price & Summary Info */}
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-tight">
-                মোট বিল:
-              </span>
-              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
-                {formData.paymentMethod === 'cod' ? 'ক্যাশ অন ডেলিভারি' : 'বিকাশ/নগদ'}
-              </span>
-            </div>
-
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="text-xl sm:text-2xl font-black text-neutral-900 leading-none">
-                ৳{total.toFixed(0)}
-              </span>
-              <span className="text-[10px] text-neutral-400 font-medium">
-                ({checkoutItems.length} টি পণ্য + ডেলিভারি)
-              </span>
-            </div>
+      {/* MAIN CHECKOUT FORM: SHIPPING ADDRESS, DISTRICT & THANA SIDE BY SIDE */}
+      <form id="checkout-form" onSubmit={handleSubmit} className="space-y-6">
+        
+        {/* 2. SHIPPING ADDRESS SECTION */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-4.5 bg-orange-600 rounded-full inline-block"></span>
+            <h2 className="text-base sm:text-lg font-black text-neutral-900 tracking-tight">
+              Shipping Address
+            </h2>
           </div>
 
-          {/* Sticky Action Button */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-200 shadow-2xs space-y-3.5">
+            
+            {/* Field 1: Your Full Name * */}
+            <div>
+              <input 
+                type="text" 
+                name="name" 
+                placeholder="Your Full Name *" 
+                required 
+                autoComplete="name"
+                value={formData.name} 
+                onChange={handleChange} 
+                className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-4 py-3.5 outline-none rounded-xl text-sm font-medium text-neutral-900 transition-all placeholder:text-neutral-400 focus:ring-2 focus:ring-orange-500/10" 
+              />
+            </div>
+
+            {/* Field 2: Phone with 88 prefix box */}
+            <div className="flex rounded-xl border border-neutral-300 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/10 overflow-hidden transition-all bg-white">
+              <div className="bg-neutral-100 px-4 py-3.5 text-sm font-bold text-neutral-700 border-r border-neutral-300 flex items-center shrink-0">
+                88
+              </div>
+              <input
+                type="tel"
+                name="phone"
+                placeholder="017********"
+                required
+                autoComplete="tel"
+                value={formData.phone}
+                onChange={handleChange}
+                className="w-full px-4 py-3.5 outline-none text-sm font-mono font-medium text-neutral-900 placeholder:text-neutral-400 placeholder:font-sans"
+              />
+            </div>
+
+            {/* Field 3: example@gmail.com (Optional) */}
+            <div>
+              <input 
+                type="email" 
+                name="email" 
+                placeholder="example@gmail.com (Optional)" 
+                autoComplete="email"
+                value={formData.email} 
+                onChange={handleChange} 
+                className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-4 py-3.5 outline-none rounded-xl text-sm font-medium text-neutral-900 transition-all placeholder:text-neutral-400 focus:ring-2 focus:ring-orange-500/10" 
+              />
+            </div>
+
+            {/* Field 4: ex: House no. / building / street / area with Auto Locate Button */}
+            <div className="relative">
+              <input 
+                type="text" 
+                name="address" 
+                placeholder="ex: House no. / building / street / area *" 
+                required 
+                autoComplete="street-address"
+                value={formData.address} 
+                onChange={handleChange} 
+                className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-4 py-3.5 pr-28 outline-none rounded-xl text-sm font-medium text-neutral-900 transition-all placeholder:text-neutral-400 focus:ring-2 focus:ring-orange-500/10" 
+              />
+              <button
+                type="button"
+                onClick={handleAutoLocate}
+                disabled={isLocating}
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] font-bold text-neutral-600 hover:text-orange-600 bg-neutral-100 hover:bg-neutral-200 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                {isLocating ? (
+                  <>
+                    <Loader2 size={11} className="animate-spin" />
+                    <span>Locating...</span>
+                  </>
+                ) : locationStatus === 'success' ? (
+                  <>
+                    <Check size={11} className="text-emerald-600" />
+                    <span>Located</span>
+                  </>
+                ) : (
+                  <>
+                    <MapPin size={11} />
+                    <span>Auto Locate</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Field 5: District & Thana Side-by-Side strictly in 2 columns */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              
+              {/* Select District Dropdown */}
+              <div className="relative">
+                <select
+                  value={formData.district}
+                  onChange={handleDistrictChange}
+                  className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-2.5 sm:px-3.5 py-3.5 pr-7 sm:pr-9 outline-none rounded-xl text-xs sm:text-sm font-semibold text-neutral-900 appearance-none cursor-pointer focus:ring-2 focus:ring-orange-500/10 transition-all truncate"
+                >
+                  <option value="" disabled>Select District</option>
+                  {BD_DISTRICTS.map((dist) => (
+                    <option key={dist.nameEn} value={dist.nameEn}>
+                      {dist.nameEn} ({dist.nameBn}) {dist.isDhaka ? '— ৳৮০' : '— ৳১২০'}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-neutral-500">
+                  <ChevronDown size={15} />
+                </div>
+              </div>
+
+              {/* Select Thana Dropdown */}
+              <div className="relative">
+                <select
+                  value={formData.thana}
+                  onChange={handleThanaChange}
+                  className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-2.5 sm:px-3.5 py-3.5 pr-7 sm:pr-9 outline-none rounded-xl text-xs sm:text-sm font-semibold text-neutral-900 appearance-none cursor-pointer focus:ring-2 focus:ring-orange-500/10 transition-all truncate"
+                >
+                  <option value="" disabled>Select Thana</option>
+                  {currentDistrictThanas.map((thana) => (
+                    <option key={thana.nameEn} value={thana.nameEn}>
+                      {thana.nameEn} {thana.nameBn ? `(${thana.nameBn})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-neutral-500">
+                  <ChevronDown size={15} />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Field 6: Order Notes (Optional) */}
+            <div>
+              <textarea 
+                name="orderNotes" 
+                rows={2}
+                placeholder="Order notes (Optional special instructions)..." 
+                autoComplete="off"
+                value={formData.orderNotes} 
+                onChange={handleChange} 
+                className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-4 py-3 outline-none rounded-xl text-xs sm:text-sm font-medium text-neutral-900 transition-all placeholder:text-neutral-400 focus:ring-2 focus:ring-orange-500/10 resize-none" 
+              />
+            </div>
+
+          </div>
+        </div>
+
+        {/* 3. PAYMENT & BILLING SUMMARY SECTION */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-4.5 bg-orange-600 rounded-full inline-block"></span>
+            <h2 className="text-base sm:text-lg font-black text-neutral-900 tracking-tight">
+              Payment & Delivery
+            </h2>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-neutral-200 shadow-2xs space-y-4">
+            
+            {/* Delivery Charge Indicator */}
+            <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl flex items-center justify-between text-xs sm:text-sm">
+              <div className="flex items-center gap-2 text-neutral-700">
+                <Truck size={16} className="text-orange-600 shrink-0" />
+                <span>
+                  Delivery Charge ({selectedDeliveryOption.labelBn}):
+                </span>
+              </div>
+              <span className="font-black text-neutral-900 text-sm">
+                ৳{shipping}
+              </span>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-neutral-700">
+                Select Payment Method
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                
+                {/* Cash on Delivery */}
+                <label 
+                  onClick={() => setFormData({ ...formData, paymentMethod: 'cod' })}
+                  className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                    formData.paymentMethod === 'cod' 
+                      ? 'border-orange-600 bg-orange-50/50 text-neutral-900 shadow-2xs' 
+                      : 'border-neutral-200 hover:border-neutral-300 bg-white text-neutral-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Banknote size={18} className={formData.paymentMethod === 'cod' ? 'text-orange-600' : 'text-neutral-600'} />
+                    <div>
+                      <p className="font-bold text-xs sm:text-sm">Cash on Delivery</p>
+                      <p className="text-[11px] text-neutral-500">পণ্য পেয়ে মূল্য পরিশোধ</p>
+                    </div>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    formData.paymentMethod === 'cod' ? 'border-orange-600 bg-orange-600' : 'border-neutral-300'
+                  }`}>
+                    {formData.paymentMethod === 'cod' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </label>
+
+                {/* bKash / Nagad */}
+                <label 
+                  onClick={() => setFormData({ ...formData, paymentMethod: 'bKash' })}
+                  className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
+                    formData.paymentMethod === 'bKash' || formData.paymentMethod === 'nagad'
+                      ? 'border-[#D12053] bg-pink-50/60 text-neutral-900 shadow-2xs' 
+                      : 'border-neutral-200 hover:border-neutral-300 bg-white text-neutral-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <CreditCard size={18} className={formData.paymentMethod === 'bKash' ? 'text-[#D12053]' : 'text-neutral-600'} />
+                    <div>
+                      <p className="font-bold text-xs sm:text-sm">bKash / Nagad</p>
+                      <p className="text-[11px] text-neutral-500">বিকাশ / নগদ পেমেন্ট</p>
+                    </div>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    formData.paymentMethod === 'bKash' ? 'border-[#D12053] bg-[#D12053]' : 'border-neutral-300'
+                  }`}>
+                    {formData.paymentMethod === 'bKash' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </label>
+
+              </div>
+            </div>
+
+            {/* Calculations Breakdown */}
+            <div className="space-y-2 pt-3 border-t border-neutral-100 text-xs sm:text-sm">
+              <div className="flex justify-between text-neutral-600">
+                <span>Subtotal ({checkoutItems.length} items):</span>
+                <span className="font-bold text-neutral-900">৳ {subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-neutral-600">
+                <span>Delivery:</span>
+                <span className="font-bold text-neutral-900">৳ {shipping}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-neutral-200">
+                <span className="text-sm font-extrabold text-neutral-900">Total Payable:</span>
+                <span className="text-xl font-black text-orange-600 font-mono">
+                  ৳ {total.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* DESKTOP-ONLY IN-CARD PLACE ORDER BUTTON (Hidden on mobile to prevent duplicate) */}
+            <div className="pt-2 hidden lg:block">
+              <button 
+                type="submit"
+                disabled={loading || isConnectingGateway}
+                className="w-full bg-orange-600 hover:bg-orange-700 active:scale-[0.99] text-white py-4 px-6 rounded-xl text-base font-black tracking-wide shadow-md shadow-orange-600/20 transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center space-x-2"
+              >
+                {isConnectingGateway ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Connecting Gateway...</span>
+                  </>
+                ) : loading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Placing Order...</span>
+                  </>
+                ) : (
+                  <span>PLACE ORDER (৳{total.toLocaleString()})</span>
+                )}
+              </button>
+            </div>
+
+            {/* Trust & Guarantee Badges */}
+            <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-500 font-medium px-1">
+              <div className="flex items-center gap-1">
+                <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
+                <span>100% Authentic</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Truck size={14} className="text-blue-600 shrink-0" />
+                <span>Fast Home Delivery</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <RotateCcw size={14} className="text-amber-600 shrink-0" />
+                <span>Easy Return</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </form>
+
+      {/* MOBILE STICKY BOTTOM ACTION BAR (Single place order button on mobile) */}
+      <div 
+        id="mobile-sticky-checkout-bar"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-lg border-t border-neutral-200/90 shadow-[0_-6px_30px_rgba(0,0,0,0.12)] px-4 pt-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] lg:hidden"
+      >
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
+          
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight block">
+              Total Amount
+            </span>
+            <span className="text-lg sm:text-xl font-black text-neutral-900 leading-none font-mono">
+              ৳{total.toLocaleString()}
+            </span>
+          </div>
+
           <button 
             type="button"
             onClick={handleSubmit}
             disabled={loading || isConnectingGateway}
-            className="flex-1 max-w-[240px] bg-[#9f1239] hover:bg-[#881337] active:scale-[0.98] text-white py-3.5 px-4 rounded-xl text-sm font-bold shadow-md shadow-rose-950/20 transition-all flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+            className="flex-1 max-w-[220px] bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-xl text-sm font-black shadow-md shadow-orange-600/20 transition-all flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
           >
             {isConnectingGateway ? (
               <>
                 <Loader2 size={16} className="animate-spin shrink-0" />
-                <span>গেটওয়ে ওপেন হচ্ছে...</span>
+                <span>Connecting...</span>
               </>
             ) : loading ? (
               <>
                 <Loader2 size={16} className="animate-spin shrink-0" />
-                <span>অর্ডার সম্পন্ন হচ্ছে...</span>
+                <span>Placing...</span>
               </>
             ) : (
               <>
-                <span>অর্ডার সম্পন্ন করুন</span>
-                <ArrowRight size={16} className="shrink-0 ml-0.5" />
+                <span>PLACE ORDER</span>
+                <ArrowRight size={15} className="shrink-0 ml-0.5" />
               </>
             )}
           </button>
@@ -1068,3 +1071,4 @@ export default function Checkout() {
     </div>
   );
 }
+

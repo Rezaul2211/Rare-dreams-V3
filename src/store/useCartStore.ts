@@ -31,14 +31,28 @@ export const useCartStore = create<CartState>()(
         }
         return { items: [...state.items, item] };
       }),
-      removeItem: (cartItemId) => set((state) => ({
-        items: state.items.filter((i) => i.cartItemId !== cartItemId)
-      })),
-      updateQuantity: (cartItemId, quantity) => set((state) => ({
-        items: state.items.map((i) => 
-          i.cartItemId === cartItemId ? { ...i, quantity: Math.max(1, quantity) } : i
-        )
-      })),
+      removeItem: (cartItemId) => set((state) => {
+        if (state.directCheckoutItem && state.directCheckoutItem.cartItemId === cartItemId) {
+          return { directCheckoutItem: null, items: state.items.filter((i) => i.cartItemId !== cartItemId) };
+        }
+        return { items: state.items.filter((i) => i.cartItemId !== cartItemId) };
+      }),
+      updateQuantity: (cartItemId, quantity) => set((state) => {
+        const nextQty = Math.max(1, quantity);
+        if (state.directCheckoutItem && state.directCheckoutItem.cartItemId === cartItemId) {
+          return {
+            directCheckoutItem: { ...state.directCheckoutItem, quantity: nextQty },
+            items: state.items.map((i) => 
+              i.cartItemId === cartItemId ? { ...i, quantity: nextQty } : i
+            )
+          };
+        }
+        return {
+          items: state.items.map((i) => 
+            i.cartItemId === cartItemId ? { ...i, quantity: nextQty } : i
+          )
+        };
+      }),
       clearCart: () => set({ items: [], directCheckoutItem: null }),
       setDirectCheckoutItem: (item) => set({ directCheckoutItem: item }),
       getCheckoutItems: () => {
