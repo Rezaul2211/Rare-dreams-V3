@@ -1,32 +1,144 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
+    <!-- Background Gradient -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0a0a0a"/>
-      <stop offset="100%" stop-color="#171717"/>
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F1F5F9"/>
     </linearGradient>
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F59E0B"/>
-      <stop offset="50%" stop-color="#D97706"/>
-      <stop offset="100%" stop-color="#B45309"/>
+
+    <!-- Cobalt 3D Blue Gradient for Rare -->
+    <linearGradient id="rdBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2575FC"/>
+      <stop offset="35%" stop-color="#0052D4"/>
+      <stop offset="70%" stop-color="#003399"/>
+      <stop offset="100%" stop-color="#001F66"/>
     </linearGradient>
+
+    <!-- Glossy Highlight for 3D bevel -->
+    <linearGradient id="rdBlueGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#80B5FF" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#3385FF" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#0052D4" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#001F66" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <!-- Chrome Silver Gradient for dreams -->
+    <linearGradient id="rdChromeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="25%" stop-color="#64748B"/>
+      <stop offset="50%" stop-color="#1E293B"/>
+      <stop offset="75%" stop-color="#64748B"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+
+    <!-- Arc Glow Gradient -->
+    <linearGradient id="rdArcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0052D4" stop-opacity="0.4"/>
+      <stop offset="40%" stop-color="#0080FF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#00D2FF" stop-opacity="1"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="rdShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#002266" flood-opacity="0.2"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#002266" flood-opacity="0.15"/>
+    </filter>
+
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
   </defs>
-  
-  <!-- App Background -->
+
+  <!-- Clean App Icon Container -->
   <rect width="512" height="512" rx="115" fill="url(#bgGrad)"/>
-  <rect width="504" height="504" x="4" y="4" rx="111" fill="none" stroke="#F59E0B" stroke-opacity="0.3" stroke-width="6"/>
-  
-  <!-- Crown / Diamond Emblem -->
-  <g transform="translate(256, 175)">
-    <path d="M-60,35 L-85,-25 L-30,0 L0,-45 L30,0 L85,-25 L60,35 Z" fill="url(#goldGrad)" />
-    <circle cx="0" cy="-55" r="7" fill="#FDE68A" />
-    <circle cx="-90" cy="-32" r="6" fill="#FDE68A" />
-    <circle cx="90" cy="-32" r="6" fill="#FDE68A" />
+  <rect width="506" height="506" x="3" y="3" rx="112" fill="none" stroke="#CBD5E1" stroke-width="4" stroke-opacity="0.6"/>
+
+  <!-- Centered Rare Dreams Logo Composition -->
+  <g transform="translate(18, 95)" filter="url(#rdShadow)">
+    
+    <!-- Dynamic Arched Orbit Curve -->
+    <path
+      d="M 120,95 C 150,15 320,-8 395,35"
+      fill="none"
+      stroke="url(#rdArcGrad)"
+      stroke-width="10"
+      stroke-linecap="round"
+      filter="url(#glow)"
+    />
+
+    <!-- Four-Point Diamond Sparkle Star at end of arc -->
+    <g transform="translate(395, 35)">
+      <path
+        d="M 0,-24 Q 3,-3 24,0 Q 3,3 0,24 Q -3,3 -24,0 Q -3,-3 0,-24 Z"
+        fill="#0099FF"
+      />
+      <path
+        d="M 0,-18 Q 2,-2 18,0 Q 2,2 0,18 Q -2,2 -18,0 Q -2,-2 0,-18 Z"
+        fill="#80DFFF"
+      />
+      <circle cx="0" cy="0" r="5" fill="#FFFFFF" />
+    </g>
+
+    <!-- Shopping Bag Motif -->
+    <g transform="translate(48, 20)">
+      <path
+        d="M 12,38 L 48,38 L 54,98 L 6,98 Z"
+        fill="url(#rdBlueGrad)"
+        opacity="0.9"
+      />
+      <!-- Handle -->
+      <path
+        d="M 20,38 C 20,20 40,20 40,38"
+        fill="none"
+        stroke="url(#rdBlueGloss)"
+        stroke-width="6"
+        stroke-linecap="round"
+      />
+    </g>
+
+    <!-- Bold 3D 'Rare' Text -->
+    <text
+      x="65"
+      y="110"
+      font-family="system-ui, -apple-system, sans-serif"
+      font-weight="900"
+      font-size="112"
+      letter-spacing="-2"
+      fill="url(#rdBlueGrad)"
+    >
+      Rare
+    </text>
+    <!-- Highlight Layer for 3D bevel -->
+    <text
+      x="65"
+      y="110"
+      font-family="system-ui, -apple-system, sans-serif"
+      font-weight="900"
+      font-size="112"
+      letter-spacing="-2"
+      fill="url(#rdBlueGloss)"
+    >
+      Rare
+    </text>
+
+    <!-- Metallic Chrome 'dreams' Text -->
+    <text
+      x="70"
+      y="166"
+      font-family="system-ui, -apple-system, sans-serif"
+      font-weight="800"
+      font-size="58"
+      letter-spacing="1.5"
+      fill="url(#rdChromeGrad)"
+      stroke="#334155"
+      stroke-width="1"
+    >
+      dreams
+    </text>
+
   </g>
 
-  <!-- Typography RD & Rare Dreams -->
-  <text x="256" y="325" font-family="'Playfair Display', Georgia, serif" font-size="110" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="4">RD</text>
-  
-  <!-- Subtitle -->
-  <text x="256" y="380" font-family="'Outfit', 'Plus Jakarta Sans', sans-serif" font-size="28" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="8">RARE DREAMS</text>
-  <text x="256" y="415" font-family="'Outfit', sans-serif" font-size="14" font-weight="600" fill="#F59E0B" text-anchor="middle" letter-spacing="6">PREMIUM LIFESTYLE</text>
+  <!-- Bottom Accent Pill Line -->
+  <rect x="180" y="440" width="152" height="6" rx="3" fill="#0052D4" opacity="0.8"/>
 </svg>

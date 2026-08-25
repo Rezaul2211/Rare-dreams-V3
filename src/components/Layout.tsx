@@ -27,6 +27,7 @@ import Footer from './Footer';
 import WhatsAppSupportWidget from './WhatsAppSupportWidget';
 import PushNotificationPrompt from './PushNotificationPrompt';
 import Logo from './Logo';
+import PullToRefresh from './PullToRefresh';
 
 // Navigation Subcategory Structure
 interface NavCategoryConfig {
@@ -607,20 +608,25 @@ function LayoutInner() {
         </AnimatePresence>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-grow flex flex-col min-h-[85vh] overflow-x-hidden">
-        <AnimatePresence>
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.1, ease: 'easeOut' }}
-            className="flex-grow flex flex-col w-full min-h-[85vh]"
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+      {/* Main Content with Smooth Page Transitions & Pull-to-Refresh */}
+      <main className="flex-grow flex flex-col min-h-[85vh] overflow-x-hidden relative">
+        <PullToRefresh>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ 
+                duration: 0.22, 
+                ease: [0.25, 1, 0.5, 1] 
+              }}
+              className="flex-grow flex flex-col w-full min-h-[85vh]"
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
+        </PullToRefresh>
       </main>
 
       {/* Footer */}
