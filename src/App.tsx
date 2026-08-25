@@ -22,6 +22,7 @@ const Shop = lazyWithRetry(() => import('./pages/Shop'));
 const ProductDetail = lazyWithRetry(() => import('./pages/ProductDetail'));
 const Cart = lazyWithRetry(() => import('./pages/Cart'));
 const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
+const PaymentGateway = lazyWithRetry(() => import('./pages/PaymentGateway'));
 const Login = lazyWithRetry(() => import('./pages/Login'));
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
 const Returns = lazyWithRetry(() => import("./pages/Returns"));
@@ -120,6 +121,7 @@ export default function App() {
             <Route path="product/:id" element={<ProductDetail />} />
             <Route path="cart" element={<Cart />} />
             <Route path="checkout" element={<Checkout />} />
+            <Route path="payment" element={<PaymentGateway />} />
             <Route path="order-success/:id" element={<OrderSuccess />} />
             <Route path="login" element={<Login />} />
             <Route path="account" element={<Account />} />
