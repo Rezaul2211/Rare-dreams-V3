@@ -85,7 +85,7 @@ export default function PullToRefresh({ children, onRefresh }: PullToRefreshProp
 
     const onTouchStart = (e: TouchEvent) => {
       // Only initiate pull when at the exact top of the viewport
-      if (window.scrollY <= 2 && !isRefreshingRef.current) {
+      if ((window.scrollY || document.documentElement.scrollTop || 0) <= 0 && !isRefreshingRef.current) {
         startYRef.current = e.touches[0].clientY;
         isPullingRef.current = true;
       } else {
@@ -96,7 +96,8 @@ export default function PullToRefresh({ children, onRefresh }: PullToRefreshProp
     const onTouchMove = (e: TouchEvent) => {
       if (!isPullingRef.current || isRefreshingRef.current) return;
 
-      if (window.scrollY > 2) {
+      const currentScroll = window.scrollY || document.documentElement.scrollTop || 0;
+      if (currentScroll > 0) {
         isPullingRef.current = false;
         pullDistRef.current = 0;
         setPullDistance(0);
@@ -106,19 +107,23 @@ export default function PullToRefresh({ children, onRefresh }: PullToRefreshProp
       const currentY = e.touches[0].clientY;
       const rawDelta = currentY - startYRef.current;
 
-      if (rawDelta > 0) {
-        // Prevent default browser black spinner
+      // If user is swiping UP to scroll down the page, immediately release pull-to-refresh
+      if (rawDelta <= 0) {
+        isPullingRef.current = false;
+        pullDistRef.current = 0;
+        setPullDistance(0);
+        return;
+      }
+
+      // Only engage if pulling downwards with significant intentional distance
+      if (rawDelta > 15) {
         if (e.cancelable) {
           e.preventDefault();
         }
 
-        // Apply smooth resistance damping
-        const damped = Math.min(MAX_PULL, Math.pow(rawDelta, 0.8) * 2.1);
+        const damped = Math.min(MAX_PULL, Math.pow(rawDelta - 15, 0.8) * 2.1);
         pullDistRef.current = damped;
         setPullDistance(damped);
-      } else {
-        pullDistRef.current = 0;
-        setPullDistance(0);
       }
     };
 

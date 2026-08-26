@@ -609,7 +609,7 @@ function LayoutInner() {
       </header>
 
       {/* Main Content with Smooth Page Transitions & Pull-to-Refresh */}
-      <main className="flex-grow flex flex-col min-h-[85vh] overflow-x-hidden relative">
+      <main className="flex-grow flex flex-col min-h-[85vh] relative">
         <PullToRefresh>
           <AnimatePresence mode="wait">
             <motion.div

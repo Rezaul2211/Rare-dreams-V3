@@ -120,7 +120,7 @@ export default function AdminLayout() {
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 min-w-0 w-full max-w-full flex flex-col p-3 sm:p-5 lg:p-6 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 min-w-0 w-full flex flex-col p-3 sm:p-5 lg:p-6">
           <Outlet />
         </main>
       </div>
