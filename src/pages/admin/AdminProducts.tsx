@@ -3,7 +3,7 @@ import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Product } from '../../types';
 import { useCategoryStore } from '../../store/useCategoryStore';
-import { Plus, Edit, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Filter, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function AdminProducts() {
@@ -64,8 +64,16 @@ export default function AdminProducts() {
   if (loading) return <div className="p-8 text-neutral-600 font-medium">Loading product inventory...</div>;
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="space-y-4">
+      <Link 
+        to="/admin" 
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-900 transition-colors"
+      >
+        <ArrowLeft size={14} />
+        <span>Back to Admin Dashboard</span>
+      </Link>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <div>
           <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tight">Products Management</h1>
           <p className="text-neutral-500 text-xs sm:text-sm mt-0.5">Manage stock, add items, upload photos and customize products.</p>

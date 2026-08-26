@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Bell, 
   Send, 
@@ -21,7 +22,8 @@ import {
   HelpCircle,
   Radio,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  ArrowLeft
 } from 'lucide-react';
 import { 
   collection, 
@@ -320,7 +322,15 @@ export default function AdminPushNotifications() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl pb-12">
+    <div className="space-y-4 max-w-6xl pb-12">
+      <Link 
+        to="/admin" 
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-900 transition-colors"
+      >
+        <ArrowLeft size={14} />
+        <span>Back to Admin Dashboard</span>
+      </Link>
+
       {/* 1. Header with Stats & Live Badge */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-neutral-200/80 shadow-xs">
         <div>

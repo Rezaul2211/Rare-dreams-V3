@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, getDocs, query, where, updateDoc, doc, deleteDoc, writeBatch, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { assignUserRoleByEmail, revokeUserRoleByEmail } from '../../lib/roles';
@@ -8,7 +9,7 @@ import {
   ShieldAlert, Trash2, Mail, ShieldCheck, Database, Server, Loader2, AlertTriangle, 
   CheckCircle2, UserMinus, Cpu, Sparkles, RefreshCw, Key, Eye, EyeOff, ExternalLink,
   Check, XCircle, Zap, Activity, Clock, Terminal, Search, Filter, Play, AlertCircle,
-  Info, ChevronDown, ChevronRight, Copy, Globe, HelpCircle, Code, Bot
+  Info, ChevronDown, ChevronRight, Copy, Globe, HelpCircle, Code, Bot, ArrowLeft
 } from 'lucide-react';
 
 interface SystemLog {
@@ -695,7 +696,15 @@ export default function AdminSystem() {
   const firebaseState = diagnostics?.firebase || DEFAULT_DIAGNOSTICS.firebase;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-16 animate-in fade-in slide-in-from-bottom-3 duration-300">
+    <div className="max-w-6xl mx-auto space-y-4 pb-16 animate-in fade-in slide-in-from-bottom-3 duration-300">
+      <Link 
+        to="/admin" 
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-900 transition-colors"
+      >
+        <ArrowLeft size={14} />
+        <span>Back to Admin Dashboard</span>
+      </Link>
+
       {/* Top Header Card */}
       <div className="bg-white p-6 sm:p-7 rounded-3xl border border-neutral-200/90 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

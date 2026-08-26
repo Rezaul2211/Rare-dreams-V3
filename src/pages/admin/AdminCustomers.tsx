@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Users, Search, Trash2, Mail, Phone, ShoppingBag } from 'lucide-react';
+import { Users, Search, Trash2, Mail, Phone, ShoppingBag, ArrowLeft } from 'lucide-react';
 
 interface CustomerData {
   id: string;
@@ -58,8 +59,16 @@ export default function AdminCustomers() {
   if (loading) return <div className="p-8 text-neutral-600 font-medium">Loading customer directory...</div>;
 
   return (
-    <div>
-      <div className="mb-6">
+    <div className="space-y-4">
+      <Link 
+        to="/admin" 
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-900 transition-colors"
+      >
+        <ArrowLeft size={14} />
+        <span>Back to Admin Dashboard</span>
+      </Link>
+
+      <div className="mb-2">
         <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tight">Customer Management</h1>
         <p className="text-neutral-500 text-xs sm:text-sm mt-0.5">View and manage registered customer profiles and account information.</p>
       </div>

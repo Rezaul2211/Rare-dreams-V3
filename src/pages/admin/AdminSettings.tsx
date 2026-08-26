@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Image as ImageIcon, Save, Loader2, Sparkles, Upload, Check, RefreshCw, AlertCircle, Phone, MessageCircle, Share2, CreditCard, ShieldCheck, FileText, Plus, Trash2, Search, Globe, ExternalLink, Copy } from 'lucide-react';
+import { Image as ImageIcon, Save, Loader2, Sparkles, Upload, Check, RefreshCw, AlertCircle, Phone, MessageCircle, Share2, CreditCard, ShieldCheck, FileText, Plus, Trash2, Search, Globe, ExternalLink, Copy, ArrowLeft } from 'lucide-react';
 import { useStoreConfigStore, DEFAULT_STORE_CONFIG } from '../../store/useStoreConfigStore';
 import { useCategoryStore, CategoryItem } from '../../store/useCategoryStore';
 import { StoreConfig } from '../../types';
@@ -432,7 +433,15 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-12">
+    <div className="max-w-5xl mx-auto space-y-6 pb-12">
+      <Link 
+        to="/admin" 
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-900 transition-colors"
+      >
+        <ArrowLeft size={14} />
+        <span>Back to Admin Dashboard</span>
+      </Link>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-neutral-200 shadow-xs">
         <div>

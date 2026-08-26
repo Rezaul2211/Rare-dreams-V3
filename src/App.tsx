@@ -132,18 +132,18 @@ export default function App() {
             <Route path="terms" element={<Terms />} />
             <Route path="track-order" element={<TrackOrder />} />
             <Route path="track" element={<TrackOrder />} />
-          </Route>
-          
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="products" element={<AdminProducts />} />
-            <Route path="products/new" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
-            <Route path="products/edit/:id" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="notifications" element={<AdminPushNotifications />} />
-            <Route path="customers" element={<AdminCustomers />} />
-            <Route path="settings" element={<AdminSettings />} />
-            <Route path="system" element={<AdminSystem />} />
+
+            <Route path="admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="products/new" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
+              <Route path="products/edit/:id" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="notifications" element={<AdminPushNotifications />} />
+              <Route path="customers" element={<AdminCustomers />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route path="system" element={<AdminSystem />} />
+            </Route>
           </Route>
         </Routes>
       </Suspense>
