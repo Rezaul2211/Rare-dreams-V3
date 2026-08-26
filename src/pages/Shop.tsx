@@ -1224,69 +1224,66 @@ export default function Shop() {
       />
 
       {/* Main Category Content Container */}
-      <main className="max-w-7xl mx-auto px-3.5 sm:px-6 md:px-8 pt-4 sm:pt-6 space-y-4 sm:space-y-5">
+      <main className="max-w-7xl mx-auto px-3.5 sm:px-6 md:px-8 pt-3 sm:pt-4 space-y-3 sm:space-y-4">
         
-        {/* Navigation Breadcrumb / Back Button */}
-        <div className="flex items-center space-x-2 text-xs font-medium text-neutral-500">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Go Back"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 -ml-1 text-neutral-700 hover:text-black hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
-          >
-            <ArrowLeft size={16} strokeWidth={2} />
-            <span className="font-semibold">Back</span>
-          </button>
-          <span className="text-neutral-300">/</span>
-          <Link to="/" className="hover:text-black transition-colors">Home</Link>
-          <span className="text-neutral-300">/</span>
-          <span className="text-neutral-900 font-semibold">{currentMeta.title}</span>
-        </div>
+        {/* 1. SEARCH & FILTER BAR (Embedded iOS Pill Container) */}
+        <section className="w-full">
+          <div className="relative flex items-center w-full bg-[#F2F2F6] rounded-[22px] p-1.5 pl-3.5 pr-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-black/[0.02]">
+            <Search size={17} className="text-neutral-400 shrink-0 mr-2" />
+            <input
+              type="text"
+              placeholder="Search for brands, styles..."
+              value={searchQuery}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val) {
+                  setSearchParams({ search: val });
+                } else {
+                  searchParams.delete('search');
+                  searchParams.delete('q');
+                  setSearchParams(searchParams);
+                }
+                setCurrentPage(1);
+              }}
+              className="w-full bg-transparent text-xs sm:text-sm font-medium text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  searchParams.delete('search');
+                  searchParams.delete('q');
+                  setSearchParams(searchParams);
+                }}
+                className="text-neutral-400 hover:text-neutral-700 p-1 mr-1 cursor-pointer"
+                aria-label="Clear Search"
+              >
+                <X size={14} />
+              </button>
+            )}
 
-        {/* 2. DYNAMIC HERO BANNER MATCHING BLUEPRINT SCREENSHOT EXACTLY */}
-        {currentMeta && (
-          <section className={`relative overflow-hidden rounded-2xl ${currentMeta.bannerBg} shadow-sm px-4 py-3 sm:px-6 sm:py-4 md:px-7 md:py-5 min-h-[108px] xs:min-h-[118px] sm:min-h-[135px] flex items-center`}>
-            {/* Background Decorative Pattern */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_70%)] pointer-events-none" />
-            
-            <div className="relative z-10 w-full flex flex-row items-center justify-between gap-2.5 sm:gap-6">
-              {/* Left Text Content */}
-              <div className="flex-1 min-w-0 pr-1 sm:pr-2">
-                {currentMeta.badge && (
-                  <span className={`inline-block px-2 sm:px-2.5 py-0.5 mb-1 sm:mb-1.5 rounded-full text-[8px] xs:text-[9px] sm:text-[10px] font-bold tracking-wider uppercase ${currentMeta.badgeColor || 'bg-white/10 text-white border border-white/15'}`}>
-                    {currentMeta.badge}
-                  </span>
-                )}
-                <h1 className={`text-lg xs:text-xl sm:text-2xl md:text-3xl font-bold font-serif tracking-tight leading-tight mb-0.5 sm:mb-1 ${currentMeta.textColor}`}>
-                  {currentMeta.title}
-                </h1>
-                <p className={`text-[10px] xs:text-[11px] sm:text-xs md:text-sm font-normal leading-snug whitespace-pre-line opacity-90 ${currentMeta.textColor}`}>
-                  {currentMeta.subtitle}
-                </p>
-              </div>
-
-              {/* Right Visual / Product Element (Seamlessly integrated, NO box/nested frame) */}
-              {currentMeta.bannerImage && (
-                <div className="shrink-0 relative w-20 h-20 xs:w-24 xs:h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 flex items-center justify-center">
-                  <img 
-                    src={currentMeta.bannerImage} 
-                    alt={currentMeta.title}
-                    className="w-full h-full object-cover rounded-xl shadow-xs transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
-                  {currentMeta.hasDiscountTag && (
-                    <div className="absolute -bottom-1 -right-1 sm:bottom-0 sm:right-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#E5B54F] text-neutral-950 flex items-center justify-center font-black text-xs shadow-md ring-2 ring-[#0C2417]">
-                      <Percent size={13} strokeWidth={3} />
-                    </div>
-                  )}
-                </div>
+            {/* Embedded iOS Filter Button */}
+            <button
+              onClick={() => setIsFilterOpen(prev => !prev)}
+              aria-label="Filter"
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-[14px] flex items-center justify-center transition-transform active:scale-95 cursor-pointer shrink-0 shadow-xs ${
+                isFilterOpen || activeFilterCount > 0
+                  ? 'bg-black text-white'
+                  : 'bg-[#18181A] text-white hover:bg-black'
+              }`}
+            >
+              <SlidersHorizontal size={15} strokeWidth={2.2} />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-neutral-950 font-black text-[10px] flex items-center justify-center shadow-xs">
+                  {activeFilterCount}
+                </span>
               )}
-            </div>
-          </section>
-        )}
+            </button>
+          </div>
+        </section>
 
-        {/* 3. SUB-CATEGORY FILTER PILLS ROW (Only for standard broad categories, hidden for curated drops like Daily Drops, Most Loved, Best Sellers) */}
-        {currentMeta.subcategories && !['daily-drops', 'most-loved', 'best-sellers'].includes(collectionKey) && (
-          <section className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
+        {/* 3. SUB-CATEGORY FILTER PILLS ROW (Compact & Clean initial screen fit) */}
+        {currentMeta.subcategories && (
+          <section className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-3.5 px-3.5 sm:mx-0 sm:px-0">
             {currentMeta.subcategories.map((subcat) => {
               const isActive = activeSubcat === subcat;
               return (
@@ -1296,10 +1293,10 @@ export default function Shop() {
                     setActiveSubcat(subcat);
                     setCurrentPage(1);
                   }}
-                  className={`px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-tight transition-all cursor-pointer whitespace-nowrap shrink-0 shadow-2xs ${
                     isActive
-                      ? 'bg-black text-white shadow-2xs'
-                      : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-neutral-900'
+                      ? 'bg-neutral-950 text-white shadow-xs'
+                      : 'bg-[#F2F2F6] text-neutral-600 hover:bg-[#EAEAEF] hover:text-neutral-950'
                   }`}
                 >
                   {subcat}
@@ -1309,52 +1306,7 @@ export default function Shop() {
           </section>
         )}
 
-        {/* 4. FILTER & SORT TOOLBAR (Filter button + Sort by: dropdown) */}
-        <section className="flex items-center justify-between pt-1.5 pb-1.5 border-b border-neutral-100">
-          {/* Filter Toggle Button */}
-          <button
-            onClick={() => setIsFilterOpen(prev => !prev)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer active:scale-95 transition-all shadow-2xs ${
-              isFilterOpen || activeFilterCount > 0
-                ? 'border-neutral-900 bg-neutral-900 text-white'
-                : 'border-neutral-200 hover:border-neutral-300 text-neutral-800 bg-white'
-            }`}
-          >
-            <SlidersHorizontal size={13} className={isFilterOpen || activeFilterCount > 0 ? 'text-white' : 'text-neutral-600'} />
-            <span>Filter</span>
-            {activeFilterCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-amber-400 text-neutral-950 font-black text-[10px] flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
-          {/* Sort By Dropdown - Flushed to right edge */}
-          <div className="flex items-center justify-end text-xs shrink-0 ml-auto">
-            <span className="text-neutral-500 font-medium mr-1.5 hidden xs:inline">Sort by:</span>
-            <div className="relative inline-flex items-center">
-              <select
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value as any);
-                  setCurrentPage(1);
-                }}
-                className="appearance-none bg-transparent pr-4.5 pl-1 py-1 text-xs font-bold text-neutral-900 focus:outline-none cursor-pointer text-right"
-              >
-                <option value="popular">Popular</option>
-                <option value="newest">Newest</option>
-                <option value="best-selling">Best Selling</option>
-                <option value="discount-high">Discount: High to Low</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="rating">Top Rated</option>
-              </select>
-              <ChevronDown size={13} className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500" />
-            </div>
-          </div>
-        </section>
-
-        {/* Filter Drawer / Panel (Expandable) */}
+        {/* Filter Drawer / Panel (Expandable when Filter button is tapped) */}
         {isFilterOpen && (
           <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 sm:p-5 space-y-4 transition-all animate-fadeIn">
             <div className="flex items-center justify-between pb-2.5 border-b border-neutral-200">

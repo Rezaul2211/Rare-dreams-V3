@@ -142,6 +142,7 @@ function LayoutInner() {
     location.pathname.startsWith('/returns');
 
   const isCheckoutPage = location.pathname.startsWith('/checkout');
+  const isCategoryOrShopPage = location.pathname.startsWith('/category') || location.pathname.startsWith('/shop');
 
   useEffect(() => {
     fetchCategories();
@@ -166,7 +167,7 @@ function LayoutInner() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC] font-sans text-neutral-900 pb-16 md:pb-0">
       {/* ========================================================= */}
-      {/* HEADER: MATCHING EXACT REFERENCE WITH WEBSITE THEME COLORS */}
+      {/* HEADER: ALWAYS VISIBLE ON ALL PAGES WITH WEBSITE THEME */}
       {/* ========================================================= */}
       <header className="sticky top-0 z-50 bg-white border-b border-neutral-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
@@ -616,12 +617,12 @@ function LayoutInner() {
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
+              initial={{ opacity: 0, y: 12, filter: 'blur(3px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
               transition={{ 
-                duration: 0.22, 
-                ease: [0.25, 1, 0.5, 1] 
+                duration: 0.36, 
+                ease: [0.16, 1, 0.3, 1] 
               }}
               className="flex-grow flex flex-col w-full min-h-[85vh]"
             >
@@ -646,70 +647,122 @@ function LayoutInner() {
           aria-label="Mobile Navigation"
           className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto"
         >
-          <div className="bg-white/92 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.05)] rounded-[26px] px-3.5 py-1.5 flex items-center gap-3.5 xs:gap-5 min-w-[260px] justify-around">
+          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.05)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px]">
             {/* 1. Home */}
-            <Link
-              to="/"
-              onClick={scrollToTop}
-              aria-label="Home"
-              className={`transition-all duration-300 ${
-                location.pathname === '/'
-                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
-                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
-              }`}
-            >
-              <Home size={20} className={location.pathname === '/' ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
-            </Link>
+            {(() => {
+              const isActive = location.pathname === '/';
+              return (
+                <Link
+                  to="/"
+                  onClick={scrollToTop}
+                  aria-label="Home"
+                  className="relative w-11 h-11 flex items-center justify-center rounded-[16px] transition-transform active:scale-90"
+                >
+                  {isActive && (
+                    <motion.div 
+                      layoutId="mobileNavActivePill" 
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                    />
+                  )}
+                  <Home 
+                    size={20} 
+                    className={`relative z-10 transition-colors duration-200 ${
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                    }`} 
+                  />
+                </Link>
+              );
+            })()}
 
             {/* 2. Shop / Explore */}
-            <Link
-              to="/shop"
-              onClick={scrollToTop}
-              aria-label="Explore Shop"
-              className={`transition-all duration-300 ${
-                location.pathname.startsWith('/shop') || location.pathname.startsWith('/category')
-                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
-                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
-              }`}
-            >
-              <Grid size={20} className={location.pathname.startsWith('/shop') || location.pathname.startsWith('/category') ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
-            </Link>
+            {(() => {
+              const isActive = location.pathname.startsWith('/shop') || location.pathname.startsWith('/category');
+              return (
+                <Link
+                  to="/shop"
+                  onClick={scrollToTop}
+                  aria-label="Explore Shop"
+                  className="relative w-11 h-11 flex items-center justify-center rounded-[16px] transition-transform active:scale-90"
+                >
+                  {isActive && (
+                    <motion.div 
+                      layoutId="mobileNavActivePill" 
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                    />
+                  )}
+                  <Grid 
+                    size={20} 
+                    className={`relative z-10 transition-colors duration-200 ${
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                    }`} 
+                  />
+                </Link>
+              );
+            })()}
 
             {/* 3. Cart */}
-            <Link
-              id="mobile-cart-icon"
-              to="/cart"
-              onClick={scrollToTop}
-              aria-label="Cart"
-              className={`transition-all duration-300 relative ${
-                location.pathname === '/cart'
-                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
-                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
-              } ${isCartBouncing ? 'scale-115 text-black' : ''}`}
-            >
-              <ShoppingBag size={20} className={location.pathname === '/cart' ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
-              {itemCount > 0 && (
-                <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[17px] h-[17px] px-1 text-[9px] font-black rounded-full shadow-xs ${
-                  location.pathname === '/cart' ? 'bg-white text-neutral-950 ring-1 ring-neutral-200' : 'bg-neutral-900 text-white'
-                }`}>
-                  {itemCount}
-                </span>
-              )}
-            </Link>
+            {(() => {
+              const isActive = location.pathname === '/cart';
+              return (
+                <Link
+                  id="mobile-cart-icon"
+                  to="/cart"
+                  onClick={scrollToTop}
+                  aria-label="Cart"
+                  className={`relative w-11 h-11 flex items-center justify-center rounded-[16px] transition-transform active:scale-90 ${isCartBouncing ? 'scale-115' : ''}`}
+                >
+                  {isActive && (
+                    <motion.div 
+                      layoutId="mobileNavActivePill" 
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                    />
+                  )}
+                  <ShoppingBag 
+                    size={20} 
+                    className={`relative z-10 transition-colors duration-200 ${
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                    }`} 
+                  />
+                  {itemCount > 0 && (
+                    <span className={`absolute -top-0.5 -right-0.5 z-20 inline-flex items-center justify-center min-w-[17px] h-[17px] px-1 text-[9px] font-black rounded-full shadow-xs ${
+                      isActive ? 'bg-white text-neutral-950 ring-1 ring-neutral-200' : 'bg-neutral-900 text-white'
+                    }`}>
+                      {itemCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })()}
 
             {/* 4. Account */}
-            <Link
-              to={user ? '/account' : '/login'}
-              onClick={scrollToTop}
-              aria-label="Account"
-              className={`transition-all duration-300 ${
-                location.pathname.startsWith('/account') || location.pathname.startsWith('/login')
-                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
-                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
-              }`}
-            >
-              <User size={20} className={location.pathname.startsWith('/account') || location.pathname.startsWith('/login') ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
-            </Link>
+            {(() => {
+              const isActive = location.pathname.startsWith('/account') || location.pathname.startsWith('/login');
+              return (
+                <Link
+                  to={user ? '/account' : '/login'}
+                  onClick={scrollToTop}
+                  aria-label="Account"
+                  className="relative w-11 h-11 flex items-center justify-center rounded-[16px] transition-transform active:scale-90"
+                >
+                  {isActive && (
+                    <motion.div 
+                      layoutId="mobileNavActivePill" 
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                    />
+                  )}
+                  <User 
+                    size={20} 
+                    className={`relative z-10 transition-colors duration-200 ${
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                    }`} 
+                  />
+                </Link>
+              );
+            })()}
           </div>
         </nav>
       )}
