@@ -16,9 +16,26 @@ import {
   Plus,
   Trash2,
   ListPlus,
-  Layers,
-  Sparkles
+  Star,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
+
+// Strips undefined fields to prevent Firestore serialization errors
+function cleanFirestoreObject<T extends Record<string, any>>(obj: T): T {
+  const result: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) continue;
+    if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      result[key] = cleanFirestoreObject(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
 
 export default function ProductForm() {
   const { id } = useParams();
@@ -30,6 +47,7 @@ export default function ProductForm() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEditing);
   const [initialProductPrice, setInitialProductPrice] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
@@ -105,13 +123,16 @@ export default function ProductForm() {
     }
   };
 
+  // High-performance image compressor: max 800px & 0.72 quality (~35KB-50KB per image)
   const processImageFile = async (file: File): Promise<string> => {
     return new Promise((resolve) => {
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
+      const QUALITY = 0.72;
+
       if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
         createImageBitmap(file, { imageOrientation: 'from-image' })
           .then((bitmap) => {
-            const MAX_WIDTH = 1200;
-            const MAX_HEIGHT = 1200;
             let width = bitmap.width;
             let height = bitmap.height;
 
@@ -135,29 +156,33 @@ export default function ProductForm() {
               ctx.imageSmoothingEnabled = true;
               ctx.imageSmoothingQuality = 'high';
               ctx.drawImage(bitmap, 0, 0, width, height);
-              resolve(canvas.toDataURL('image/jpeg', 0.85));
+              resolve(canvas.toDataURL('image/jpeg', QUALITY));
             } else {
-              fallbackReader(file, resolve);
+              fallbackReader(file, resolve, MAX_WIDTH, MAX_HEIGHT, QUALITY);
             }
           })
           .catch(() => {
-            fallbackReader(file, resolve);
+            fallbackReader(file, resolve, MAX_WIDTH, MAX_HEIGHT, QUALITY);
           });
       } else {
-        fallbackReader(file, resolve);
+        fallbackReader(file, resolve, MAX_WIDTH, MAX_HEIGHT, QUALITY);
       }
     });
   };
 
-  const fallbackReader = (file: File, resolve: (val: string) => void) => {
+  const fallbackReader = (
+    file: File, 
+    resolve: (val: string) => void,
+    MAX_WIDTH = 800,
+    MAX_HEIGHT = 800,
+    QUALITY = 0.72
+  ) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       const img = new Image();
       img.onload = () => {
         try {
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
           let width = img.width;
           let height = img.height;
 
@@ -181,7 +206,7 @@ export default function ProductForm() {
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.85));
+            resolve(canvas.toDataURL('image/jpeg', QUALITY));
           } else {
             resolve(dataUrl);
           }
@@ -200,14 +225,14 @@ export default function ProductForm() {
 
     const validFiles = (Array.from(files) as File[]).filter(f => f.type && f.type.startsWith('image/'));
     if (validFiles.length === 0) {
-      alert('Please select valid image files (JPG, PNG, WEBP)');
+      alert('সঠিক ছবি ফাইল (JPG, PNG, WEBP) নির্বাচন করুন');
       return;
     }
 
     const processedList: string[] = [];
     for (const file of validFiles) {
-      if (file.size > 20 * 1024 * 1024) {
-        alert(`${file.name} exceeds 20MB limit.`);
+      if (file.size > 25 * 1024 * 1024) {
+        alert(`${file.name} ফাইলটি অনেক বড় (২৫ মেগাবাইটের বেশি)`);
         continue;
       }
       try {
@@ -245,7 +270,7 @@ export default function ProductForm() {
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((90 * Math.PI) / 180);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        const newSrc = canvas.toDataURL('image/jpeg', 0.85);
+        const newSrc = canvas.toDataURL('image/jpeg', 0.75);
         setFormData(prev => {
           const next = [...(prev.images || [])];
           next[index] = newSrc;
@@ -271,7 +296,7 @@ export default function ProductForm() {
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
         ctx.drawImage(img, 0, 0);
-        const newSrc = canvas.toDataURL('image/jpeg', 0.85);
+        const newSrc = canvas.toDataURL('image/jpeg', 0.75);
         setFormData(prev => {
           const next = [...(prev.images || [])];
           next[index] = newSrc;
@@ -286,7 +311,7 @@ export default function ProductForm() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('video/')) {
-      alert('Please select a valid video file (MP4, WEBM, MOV)');
+      alert('সঠিক ভিডিও ফাইল (MP4, WEBM, MOV) নির্বাচন করুন');
       return;
     }
     const reader = new FileReader();
@@ -316,12 +341,26 @@ export default function ProductForm() {
     }));
   };
 
+  // Makes selected image index #0 (The Main Cover Photo)
   const makeMainImage = (index: number) => {
     setFormData(prev => {
       const images = [...(prev.images || [])];
       if (index <= 0 || index >= images.length) return prev;
       const [selected] = images.splice(index, 1);
       images.unshift(selected);
+      return { ...prev, images };
+    });
+  };
+
+  // Reorder left / right
+  const moveImage = (index: number, direction: 'left' | 'right') => {
+    setFormData(prev => {
+      const images = [...(prev.images || [])];
+      const targetIdx = direction === 'left' ? index - 1 : index + 1;
+      if (targetIdx < 0 || targetIdx >= images.length) return prev;
+      const temp = images[index];
+      images[index] = images[targetIdx];
+      images[targetIdx] = temp;
       return { ...prev, images };
     });
   };
@@ -366,6 +405,7 @@ export default function ProductForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSaveError(null);
     
     let calcDiscountPct = 0;
     if (formData.discount && Number(formData.discount) > 0) {
@@ -374,12 +414,35 @@ export default function ProductForm() {
       calcDiscountPct = Math.round(((Number(formData.comparePrice) - Number(formData.price)) / Number(formData.comparePrice)) * 100);
     }
 
-    const payload = {
+    const rawPayload = {
       ...formData,
+      name: formData.name?.trim() || 'Untitled Product',
+      category: formData.category || 'Men',
+      subcategory: formData.subcategory || '',
+      price: Number(formData.price || 0),
+      comparePrice: formData.comparePrice ? Number(formData.comparePrice) : 0,
+      discount: formData.discount ? Number(formData.discount) : (calcDiscountPct > 0 ? calcDiscountPct : 0),
+      discountPercentage: calcDiscountPct > 0 ? calcDiscountPct : 0,
+      stockQuantity: Number(formData.stockQuantity !== undefined ? formData.stockQuantity : 25),
+      sizeOptions: formData.sizeOptions || [],
+      colorOptions: formData.colorOptions || [],
+      material: formData.material || '',
+      fit: formData.fit || '',
+      sleeve: formData.sleeve || '',
+      collar: formData.collar || '',
+      pocket: formData.pocket || '',
+      usage: formData.usage || '',
+      specifications: formData.specifications || [],
+      description: formData.description || '',
+      images: formData.images || [],
       image: formData.images?.[0] || '',
-      discount: formData.discount ? Number(formData.discount) : (calcDiscountPct > 0 ? calcDiscountPct : undefined),
-      discountPercentage: calcDiscountPct > 0 ? calcDiscountPct : undefined,
+      videoUrl: formData.videoUrl || '',
+      status: formData.status || 'published',
+      sku: formData.sku || ''
     };
+
+    // Clean any undefined keys before sending to Firestore
+    const payload = cleanFirestoreObject(rawPayload);
 
     try {
       if (isEditing && id) {
@@ -444,15 +507,17 @@ export default function ProductForm() {
         });
       }
       navigate('/admin/products');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving product", error);
-      alert("Failed to save product");
+      const errMsg = error?.message || "প্রোডাক্ট সংরক্ষণ করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।";
+      setSaveError(errMsg);
+      alert(`Failed to save product: ${errMsg}`);
     } finally {
       setLoading(false);
     }
   };
 
-  if (fetching) return <div className="p-8 text-center text-sm font-semibold text-neutral-500">Loading product details...</div>;
+  if (fetching) return <div className="p-8 text-center text-sm font-semibold text-neutral-500">প্রোডাক্ট তথ্য লোড হচ্ছে...</div>;
 
   return (
     <div className="max-w-5xl mx-auto px-3 sm:px-6 py-6 w-full font-sans">
@@ -497,6 +562,16 @@ export default function ProductForm() {
         </div>
       </div>
 
+      {saveError && (
+        <div className="mb-5 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-start gap-2.5">
+          <AlertCircle size={18} className="shrink-0 text-red-500 mt-0.5" />
+          <div>
+            <div className="font-bold">সংরক্ষণ করতে সমস্যা হয়েছে:</div>
+            <div>{saveError}</div>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
         {/* Left Column (2 Cols): Media, Basic Info, Specifications, Variants */}
         <div className="lg:col-span-2 space-y-6 w-full min-w-0">
@@ -504,24 +579,29 @@ export default function ProductForm() {
           {/* 1. PRODUCT IMAGES */}
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4 w-full min-w-0">
             <div className="flex items-center justify-between">
-              <h2 className="text-base sm:text-lg font-bold flex items-center gap-2 text-neutral-900">
-                <ImageIcon size={20} className="text-blue-600" />
-                <span>প্রোডাক্ট ছবি (Product Images)</span>
-              </h2>
-              <span className="text-xs text-neutral-500">
-                {formData.images?.length || 0} টি ছবি আপলোড করা হয়েছে
+              <div>
+                <h2 className="text-base sm:text-lg font-bold flex items-center gap-2 text-neutral-900">
+                  <ImageIcon size={20} className="text-[#5B46E8]" />
+                  <span>প্রোডাক্টের ছবি (Product Images)</span>
+                </h2>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  প্রথম ছবিটি ওয়েবসাইটে প্রধান কভার (Main Cover) ফটো হিসেবে প্রদর্শিত হবে।
+                </p>
+              </div>
+              <span className="text-xs font-bold px-2.5 py-1 bg-purple-50 text-[#5B46E8] rounded-lg border border-purple-100 shrink-0">
+                {formData.images?.length || 0} টি ছবি
               </span>
             </div>
 
             {/* Upload Box */}
             <div 
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-neutral-300 hover:border-black rounded-2xl p-6 text-center cursor-pointer transition-colors bg-neutral-50 hover:bg-neutral-100/70"
+              className="border-2 border-dashed border-neutral-300 hover:border-[#5B46E8] rounded-2xl p-6 text-center cursor-pointer transition-colors bg-[#FAF9FF] hover:bg-purple-50/50 group"
             >
-              <UploadCloud size={36} className="mx-auto text-neutral-400 mb-2" />
-              <p className="text-sm font-bold text-neutral-800">ছবি আপলোড করতে ক্লিক করুন</p>
+              <UploadCloud size={38} className="mx-auto text-neutral-400 group-hover:text-[#5B46E8] mb-2 transition-colors" />
+              <p className="text-sm font-bold text-neutral-800">ছবি আপলোড করতে এখানে ক্লিক করুন</p>
               <p className="text-xs text-neutral-500 mt-1">
-                JPG, PNG, WEBP ফরম্যাট সাপোর্ট করে (যত ইচ্ছা ছবি দিতে পারেন)
+                এক সাথে একাধিক ছবি (JPG, PNG, WEBP) সিলেক্ট করতে পারেন। অটো-কমপ্রেস হয়ে সুপার ফাস্ট সেভ হবে।
               </p>
               <input
                 ref={fileInputRef}
@@ -537,72 +617,136 @@ export default function ProductForm() {
             <div className="flex gap-2">
               <input
                 type="url"
-                placeholder="বা ছবির লিংক পেস্ট করুন (Image URL)"
+                placeholder="বা ছবির অনলাইন লিংক পেস্ট করুন (Image URL)"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                className="flex-1 border border-neutral-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-black"
+                className="flex-1 border border-neutral-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-[#5B46E8]"
               />
               <button
                 type="button"
                 onClick={addImage}
-                className="bg-neutral-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0 cursor-pointer"
+                className="bg-[#5B46E8] hover:bg-[#4F39F6] text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0 cursor-pointer"
               >
                 যুক্ত করুন
               </button>
             </div>
 
-            {/* Image Preview Grid */}
+            {/* Image Preview Grid with Clear Mobile-Friendly Controls */}
             {formData.images && formData.images.length > 0 && (
-              <div className="pt-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {formData.images.map((img, idx) => (
-                    <div key={idx} className="relative group aspect-square rounded-xl overflow-hidden border border-neutral-200 bg-neutral-100 shadow-2xs">
-                      <img src={img} alt={`Product ${idx}`} className="w-full h-full object-cover" />
-                      
-                      {/* Main / Cover Badge */}
-                      {idx === 0 ? (
-                        <span className="absolute top-2 left-2 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
-                          কভার ছবি
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => makeMainImage(idx)}
-                          className="absolute top-2 left-2 bg-white/90 hover:bg-white text-neutral-800 text-[10px] font-bold px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shadow-xs cursor-pointer"
-                        >
-                          কভার বানান
-                        </button>
-                      )}
+              <div className="pt-2 space-y-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-neutral-600 bg-neutral-50 p-2.5 rounded-xl border border-neutral-200">
+                  <span className="flex items-center gap-1.5">
+                    <Star size={14} className="text-amber-500 fill-amber-500" />
+                    <span>যেকোনো ছবিকে <strong>মেইন কভার</strong> করতে সেটির "★ কভার বানান" বাটনে চাপুন।</span>
+                  </span>
+                </div>
 
-                      {/* Tool buttons */}
-                      <div className="absolute top-2 right-2 flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => rotateImage(idx)}
-                          className="bg-black/75 text-white p-1.5 rounded-full hover:bg-black transition-colors shadow-xs cursor-pointer"
-                          title="Rotate 90°"
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                  {formData.images.map((img, idx) => {
+                    const isMain = idx === 0;
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`relative rounded-2xl overflow-hidden border-2 bg-neutral-100 shadow-xs transition-all flex flex-col ${
+                          isMain 
+                            ? 'border-[#5B46E8] ring-2 ring-purple-200 bg-purple-50/20' 
+                            : 'border-neutral-200 hover:border-neutral-300'
+                        }`}
+                      >
+                        {/* Top Header Row for each image */}
+                        <div className="p-2 bg-white border-b border-neutral-100 flex items-center justify-between">
+                          <span className="text-[11px] font-black text-neutral-600">
+                            ছবি #{idx + 1}
+                          </span>
+
+                          {/* Top Tools: Rotate, Flip, Delete */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => rotateImage(idx)}
+                              className="p-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors cursor-pointer"
+                              title="Rotate 90°"
+                            >
+                              <RotateCw size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => flipImage(idx)}
+                              className="p-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors cursor-pointer"
+                              title="Flip"
+                            >
+                              <FlipHorizontal size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeImage(idx)}
+                              className="p-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors cursor-pointer"
+                              title="Remove photo"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Image Preview Container */}
+                        <div 
+                          onClick={() => {
+                            if (!isMain) makeMainImage(idx);
+                          }}
+                          className="relative aspect-square w-full bg-neutral-50 overflow-hidden cursor-pointer flex items-center justify-center"
                         >
-                          <RotateCw size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => flipImage(idx)}
-                          className="bg-black/75 text-white p-1.5 rounded-full hover:bg-black transition-colors shadow-xs cursor-pointer"
-                          title="Flip"
-                        >
-                          <FlipHorizontal size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeImage(idx)}
-                          className="bg-black/75 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-xs cursor-pointer"
-                          title="Remove photo"
-                        >
-                          <X size={12} />
-                        </button>
+                          <img 
+                            src={img} 
+                            alt={`Product ${idx}`} 
+                            className="w-full h-full object-cover" 
+                            loading="lazy"
+                          />
+                        </div>
+
+                        {/* Bottom Actions Bar (Mobile-Friendly & Always Visible) */}
+                        <div className="p-2 bg-white border-t border-neutral-100 flex items-center justify-between gap-1.5">
+                          {/* Reorder Arrows */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => moveImage(idx, 'left')}
+                              className="p-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed text-neutral-700 cursor-pointer"
+                              title="Move Left"
+                            >
+                              <ChevronLeft size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === (formData.images?.length || 0) - 1}
+                              onClick={() => moveImage(idx, 'right')}
+                              className="p-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed text-neutral-700 cursor-pointer"
+                              title="Move Right"
+                            >
+                              <ChevronRight size={13} />
+                            </button>
+                          </div>
+
+                          {/* Main Cover Status / Button */}
+                          {isMain ? (
+                            <span className="flex-1 py-1.5 px-2 bg-purple-100 text-[#5B46E8] text-[11px] font-black rounded-lg text-center flex items-center justify-center gap-1">
+                              <Star size={12} className="fill-[#5B46E8]" />
+                              <span>মেইন কভার ছবি</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => makeMainImage(idx)}
+                              className="flex-1 py-1.5 px-2 bg-neutral-100 hover:bg-[#5B46E8] text-neutral-700 hover:text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer border border-neutral-200 hover:border-[#5B46E8]"
+                            >
+                              <Star size={12} />
+                              <span>কভার বানান</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -646,7 +790,7 @@ export default function ProductForm() {
             </div>
           </div>
 
-          {/* 3. PRODUCT SPECIFICATIONS & DETAILS (CUSTOMIZABLE AS SHOWN IN SCREENSHOT) */}
+          {/* 3. PRODUCT SPECIFICATIONS & DETAILS */}
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-4 w-full min-w-0">
             <div>
               <h2 className="text-base sm:text-lg font-bold text-neutral-900 flex items-center gap-2">
