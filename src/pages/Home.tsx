@@ -520,9 +520,9 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
       </div>
 
       {loading ? (
-        <div className="flex gap-1.5 sm:gap-3.5 overflow-hidden">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="w-[calc((100%-18px)/4)] sm:w-[calc((100%-42px)/4)] shrink-0">
+        <div className="flex gap-2.5 sm:gap-4 overflow-hidden">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="w-[calc((100%-10px)/2)] sm:w-[calc((100%-42px)/4)] shrink-0">
               <ProductSkeleton index={i} />
             </div>
           ))}
@@ -530,7 +530,7 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
       ) : (
         <div
           ref={scrollRef}
-          className="flex gap-1.5 sm:gap-3.5 overflow-x-auto scrollbar-none scroll-smooth pb-1 pt-0.5"
+          className="flex gap-2.5 sm:gap-4 overflow-x-auto scrollbar-none scroll-smooth pb-1 pt-0.5"
           style={{ 
             scrollbarWidth: 'none', 
             msOverflowStyle: 'none',
@@ -541,7 +541,7 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
           {displayProducts.map((product, index) => (
             <div 
               key={product.id} 
-              className="w-[calc((100%-18px)/4)] sm:w-[calc((100%-42px)/4)] shrink-0 flex flex-col"
+              className="w-[calc((100%-10px)/2)] sm:w-[calc((100%-42px)/4)] shrink-0 flex flex-col"
             >
               <ProductCard product={product} index={index} />
             </div>
@@ -692,12 +692,12 @@ export default function Home() {
         keywords="Rare Dreams, luxury fashion, men clothing, women dresses, kids, designer accessories"
       />
 
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 pt-1.5 sm:pt-3 space-y-3.5 sm:space-y-6">
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 pt-1.5 sm:pt-3 space-y-4 sm:space-y-6">
 
-        {/* 1. HERO SLIDER BANNER (Sleek Horizontal Widescreen, Silk Smooth Crossfade) */}
+        {/* 1. HERO SLIDER BANNER (Soft Pastel Editorial Luxury Aesthetic with 3 Slides) */}
         <section 
           aria-label="Hero Carousel"
-          className="relative w-full aspect-[2.1/1] xs:aspect-[2.3/1] sm:aspect-[21/9] md:aspect-[24/9] rounded-xl sm:rounded-2xl overflow-hidden bg-neutral-900 shadow-sm"
+          className="relative w-full aspect-[2/1] xs:aspect-[2.2/1] sm:aspect-[21/9] md:aspect-[24/9] rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-r from-[#FCE8E2] via-[#FCECE8] to-[#FBE8E1] shadow-2xs"
         >
           {heroSlides.map((slide, index) => {
             const isActive = index === currentSlide;
@@ -708,77 +708,49 @@ export default function Home() {
                   isActive ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'
                 }`}
               >
-                {/* Background Image */}
-                <img
-                  src={slide.image}
-                  alt={slide.title}
-                  loading={index === 0 ? "eager" : "lazy"}
-                  className="w-full h-full object-cover object-center transform scale-100 hover:scale-102 transition-transform duration-1000"
-                />
+                {/* Background / Model Visual */}
+                <div className="absolute right-0 top-0 bottom-0 w-[55%] sm:w-[50%] h-full overflow-hidden">
+                  <img
+                    src={slide.image}
+                    alt={slide.title}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    className="w-full h-full object-cover object-center transform scale-100 hover:scale-102 transition-transform duration-1000"
+                  />
+                  {/* Smooth soft gradient blend on the left edge */}
+                  <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#FCE8E2] to-transparent pointer-events-none" />
+                </div>
 
-                {/* Ultra Crisp Transparent Gradient Overlay */}
-                <div 
-                  className={`absolute inset-0 ${
-                    slide.theme === 'pink'
-                      ? 'bg-gradient-to-r from-[#FFF5F6]/85 via-[#FFF5F6]/40 to-transparent'
-                      : slide.theme === 'olive'
-                      ? 'bg-gradient-to-r from-[#F7FAF6]/85 via-[#F7FAF6]/40 to-transparent'
-                      : 'bg-gradient-to-r from-black/75 via-black/35 to-transparent'
-                  }`}
-                />
-
-                {/* Banner Content */}
-                <div className="absolute inset-0 flex flex-col justify-center px-5 sm:px-10 md:px-14 z-20 max-w-[65%] xs:max-w-[60%] sm:max-w-[55%] md:max-w-[50%]">
-                  {slide.tag && (
-                    <div className="flex flex-col items-start mb-1.5 sm:mb-3">
-                      <span 
-                        className="text-[9px] xs:text-[10px] sm:text-xs font-bold tracking-[0.2em] uppercase block leading-none"
-                        style={{ color: slide.tagColor || (slide.theme === 'dark' ? '#C69A4C' : '#1C1917') }}
-                      >
-                        {slide.tag}
-                      </span>
-                      <div 
-                        className="w-6 sm:w-8 h-[1.5px] mt-1 sm:mt-2 opacity-85"
-                        style={{ backgroundColor: slide.tagColor || (slide.theme === 'dark' ? '#C69A4C' : '#1C1917') }}
-                      />
-                    </div>
-                  )}
+                {/* Banner Editorial Content */}
+                <div className="absolute inset-0 flex flex-col justify-center px-4 sm:px-10 md:px-14 z-20 max-w-[65%] xs:max-w-[60%] sm:max-w-[55%] md:max-w-[50%]">
+                  {/* Top Chic Micro Capsule Badge */}
+                  <div className="mb-1 sm:mb-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/95 backdrop-blur-md text-neutral-900 text-[9px] sm:text-xs font-bold shadow-2xs border border-white/60 tracking-tight">
+                      {slide.tag || 'New in'}
+                    </span>
+                  </div>
                   
-                  <h1 
-                    className="text-xl xs:text-2xl sm:text-4xl md:text-5xl font-bold font-serif leading-[1.1] mb-1.5 sm:mb-4 tracking-tight"
-                    style={{ color: slide.titleColor || (slide.theme === 'dark' ? '#FFFFFF' : '#1C1917') }}
-                  >
+                  <h1 className="text-base xs:text-lg sm:text-3xl md:text-4xl font-extrabold text-neutral-900 leading-[1.15] mb-1 sm:mb-2.5 tracking-tight font-serif">
                     {slide.title}
                     {slide.titleAccent && (
-                      <span 
-                        className="block font-normal mt-0.5 sm:mt-1"
-                        style={{ color: slide.accentColor || (slide.theme === 'dark' ? '#C69A4C' : '#556B4E') }}
-                      >
+                      <span className="block font-normal text-xs xs:text-sm sm:text-2xl text-neutral-700 mt-0.5">
                         {slide.titleAccent}
                       </span>
                     )}
                   </h1>
 
                   {slide.subtitle && (
-                    <p 
-                      className="text-[10px] xs:text-[11px] sm:text-sm md:text-base font-normal mb-2.5 sm:mb-5 leading-relaxed whitespace-pre-line block"
-                      style={{ color: slide.subtitleColor || (slide.theme === 'dark' ? '#D4D4D8' : '#4A5545') }}
-                    >
+                    <p className="text-[9.5px] xs:text-[11px] sm:text-sm text-neutral-600 font-normal mb-2.5 sm:mb-4 leading-relaxed line-clamp-2">
                       {slide.subtitle}
                     </p>
                   )}
 
-                  <div className="pt-0.5 sm:pt-2">
+                  <div className="pt-0.5">
                     <Link
                       to={slide.link || '/shop'}
-                      className="inline-flex items-center gap-1.5 px-4 py-1.5 xs:px-5 xs:py-2 sm:px-8 sm:py-3 rounded-full text-[10px] xs:text-[11px] sm:text-sm font-bold uppercase tracking-wider transition-all duration-300 shadow-xs hover:shadow-md active:scale-95 cursor-pointer"
-                      style={{
-                        backgroundColor: slide.buttonBg || '#FFFFFF',
-                        color: slide.buttonText || '#000000',
-                      }}
+                      className="inline-flex items-center gap-1 px-3.5 py-1.5 sm:px-6 sm:py-2.5 rounded-full text-[10px] sm:text-xs font-bold bg-neutral-950 text-white hover:bg-neutral-800 active:scale-95 transition-all shadow-xs"
                     >
-                      <span>SHOP NOW</span>
-                      <ArrowRight size={12} className="sm:w-4 sm:h-4" />
+                      <span>Shop Now</span>
+                      <ArrowRight size={11} className="sm:w-3.5 sm:h-3.5" />
                     </Link>
                   </div>
                 </div>
@@ -787,7 +759,7 @@ export default function Home() {
           })}
 
           {/* Hero Slider Pagination Dots */}
-          <div className="absolute bottom-1.5 sm:bottom-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center space-x-1.5">
+          <div className="absolute bottom-2 sm:bottom-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center space-x-1.5">
             {heroSlides.map((_, idx) => (
               <button
                 key={idx}
@@ -795,91 +767,55 @@ export default function Home() {
                 aria-label={`Go to slide ${idx + 1}`}
                 className={`transition-all duration-300 rounded-full cursor-pointer ${
                   currentSlide === idx
-                    ? 'w-4 h-1 bg-white shadow-xs'
-                    : 'w-1 h-1 bg-white/50 hover:bg-white/80'
+                    ? 'w-4 h-1 bg-neutral-900 shadow-xs'
+                    : 'w-1 h-1 bg-neutral-400/60 hover:bg-neutral-600'
                 }`}
               />
             ))}
           </div>
         </section>
 
-        {/* 2. VALUE PROPOSITION STRIP (4 Items in 1 Single Horizontal Row) */}
-        <section className="bg-white rounded-lg sm:rounded-xl border border-neutral-200/80 p-1.5 sm:p-2.5 shadow-2xs">
-          <div className="grid grid-cols-4 gap-1 sm:gap-2.5 divide-x divide-neutral-100">
-            {/* 1. Free Delivery */}
-            <div className="flex items-center space-x-1 sm:space-x-1.5 px-0.5 sm:px-1.5 min-w-0">
-              <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-[#FFF8EE] text-[#C69A4C] flex items-center justify-center shrink-0">
-                <Truck size={11} className="sm:w-4 sm:h-4" />
-              </div>
-              <div className="min-w-0 leading-none">
-                <h4 className="text-[7.5px] xs:text-[9px] sm:text-xs font-bold text-neutral-900 leading-tight truncate">Free Delivery</h4>
-                <p className="text-[6px] xs:text-[7.5px] sm:text-[10px] text-neutral-500 leading-tight mt-0.5 truncate">Over ৳999</p>
-              </div>
-            </div>
+        {/* 2. 4 CATEGORY CARDS (Perfect 4-Grid Balanced Sizing without Blank Space) */}
+        <section className="space-y-2.5">
+          <div className="flex items-center justify-between px-0.5">
+            <h2 className="text-sm sm:text-lg font-bold text-neutral-900 tracking-tight">Category</h2>
+            <Link to="/shop" className="text-xs font-semibold text-neutral-500 hover:text-black transition-colors">
+              See all
+            </Link>
+          </div>
 
-            {/* 2. Easy Returns */}
-            <div className="flex items-center space-x-1 sm:space-x-1.5 px-0.5 sm:px-1.5 min-w-0">
-              <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-[#FFF8EE] text-[#C69A4C] flex items-center justify-center shrink-0">
-                <RotateCcw size={11} className="sm:w-4 sm:h-4" />
-              </div>
-              <div className="min-w-0 leading-none">
-                <h4 className="text-[7.5px] xs:text-[9px] sm:text-xs font-bold text-neutral-900 leading-tight truncate">Easy Returns</h4>
-                <p className="text-[6px] xs:text-[7.5px] sm:text-[10px] text-neutral-500 leading-tight mt-0.5 truncate">14 days return</p>
-              </div>
-            </div>
-
-            {/* 3. 100% Authentic */}
-            <div className="flex items-center space-x-1 sm:space-x-1.5 px-0.5 sm:px-1.5 min-w-0">
-              <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-[#FFF8EE] text-[#C69A4C] flex items-center justify-center shrink-0">
-                <ShieldCheck size={11} className="sm:w-4 sm:h-4" />
-              </div>
-              <div className="min-w-0 leading-none">
-                <h4 className="text-[7.5px] xs:text-[9px] sm:text-xs font-bold text-neutral-900 leading-tight truncate">100% Authentic</h4>
-                <p className="text-[6px] xs:text-[7.5px] sm:text-[10px] text-neutral-500 leading-tight mt-0.5 truncate">Premium quality</p>
-              </div>
-            </div>
-
-            {/* 4. Secure Payment */}
-            <div className="flex items-center space-x-1 sm:space-x-1.5 px-0.5 sm:px-1.5 min-w-0">
-              <div className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-[#FFF8EE] text-[#C69A4C] flex items-center justify-center shrink-0">
-                <CreditCard size={11} className="sm:w-4 sm:h-4" />
-              </div>
-              <div className="min-w-0 leading-none">
-                <h4 className="text-[7.5px] xs:text-[9px] sm:text-xs font-bold text-neutral-900 leading-tight truncate">Secure Pay</h4>
-                <p className="text-[6px] xs:text-[7.5px] sm:text-[10px] text-neutral-500 leading-tight mt-0.5 truncate">100% secure</p>
-              </div>
-            </div>
+          <div className="grid grid-cols-4 gap-2 sm:gap-4 w-full">
+            {displayCategories.map((cat) => (
+              <Link
+                key={cat.id || cat.title}
+                to={cat.link || `/category/${cat.title}`}
+                className="group flex flex-col items-center w-full text-center"
+              >
+                <div className="w-full aspect-square rounded-2xl bg-gradient-to-b from-[#F3F3F6] via-[#EFEFF2] to-[#E9E9ED] p-2 sm:p-3 flex items-center justify-center overflow-hidden shadow-2xs group-hover:shadow-sm group-hover:scale-103 transition-all duration-300">
+                  <img
+                    src={cat.image}
+                    alt={cat.title}
+                    className="w-full h-full object-cover object-top rounded-xl mix-blend-multiply group-hover:scale-110 transition-transform duration-500"
+                  />
+                </div>
+                <span className="text-[11px] sm:text-xs font-semibold text-neutral-800 mt-1.5 group-hover:text-black truncate w-full">
+                  {cat.title}
+                </span>
+              </Link>
+            ))}
           </div>
         </section>
 
-        {/* 3. 4 INDIVIDUAL CATEGORY CARDS (Men, Women, Kids, Accessories) */}
-        <section className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
-          {displayCategories.map((cat) => (
-            <Link
-              key={cat.id || cat.title}
-              to={cat.link || `/category/${cat.title}`}
-              className="group flex items-center space-x-1 sm:space-x-2 p-1 sm:p-2 bg-white rounded-lg sm:rounded-xl border border-neutral-200/80 shadow-2xs hover:border-black/30 hover:shadow-xs transition-all"
-            >
-              <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 rounded-full overflow-hidden shrink-0 border border-neutral-200 shadow-2xs group-hover:border-black transition-colors">
-                <img
-                  src={cat.image}
-                  alt={cat.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-              </div>
-              <div className="min-w-0 leading-none">
-                <h3 className="text-[8.5px] xs:text-[10px] sm:text-xs font-bold text-neutral-900 leading-tight group-hover:text-black truncate">
-                  {cat.title}
-                </h3>
-                <span className="text-[6.5px] xs:text-[8px] sm:text-[9.5px] text-neutral-400 font-medium leading-none block mt-0.5">
-                  Explore
-                </span>
-              </div>
-            </Link>
-          ))}
-        </section>
+        {/* 3. PRODUCT SHOWCASE SECTIONS (2-Card Responsive Grid Slider) */}
+        {/* Trending Now Slider */}
+        <ProductSectionSlider
+          title="Trending Now"
+          link="/shop"
+          products={allProducts.length > 0 ? allProducts.slice(0, 8) : womenProducts}
+          loading={loading}
+        />
 
-        {/* 4. MEN'S COLLECTION SECTION (Slidable Left & Right Horizontal Product Carousel) */}
+        {/* Men's Collection Slider */}
         <ProductSectionSlider
           title="Men's Collection"
           link="/category/Men"
@@ -887,7 +823,7 @@ export default function Home() {
           loading={loading}
         />
 
-        {/* 5. WOMEN'S COLLECTION SECTION (Slidable Left & Right Horizontal Product Carousel) */}
+        {/* Women's Collection Slider */}
         <ProductSectionSlider
           title="Women's Collection"
           link="/category/Women"
@@ -895,72 +831,7 @@ export default function Home() {
           loading={loading}
         />
 
-        {/* 6. PROMOTIONAL BENTO 3-CARD GRID (Daily Drops, Most Loved, Up to 50% Off) */}
-        <section className="grid grid-cols-3 gap-1 sm:gap-2.5">
-          {/* Bento Card 1: Daily Drops */}
-          <Link
-            to="/daily-drops"
-            className="group relative rounded-md sm:rounded-lg overflow-hidden bg-neutral-950 px-2 py-1.5 sm:px-3 sm:py-2 flex items-center justify-between shadow-2xs min-h-[48px] xs:min-h-[54px] sm:min-h-[66px] hover:shadow-xs transition-all"
-          >
-            <div className="relative z-10 min-w-0 pr-1 flex flex-col justify-center">
-              <span className="text-[6px] xs:text-[7px] sm:text-[8px] font-bold text-[#C69A4C] tracking-wider uppercase block leading-none">NEW ARRIVALS</span>
-              <h3 className="text-[9.5px] xs:text-[10.5px] sm:text-xs font-bold font-serif text-white leading-tight mt-0.5">Daily Drops</h3>
-              <span className="inline-flex items-center gap-0.5 text-[7px] xs:text-[8px] sm:text-[10px] font-semibold text-[#C69A4C] group-hover:underline underline-offset-2 mt-0.5 leading-none">
-                Shop Now <ArrowRight size={8} className="group-hover:translate-x-0.5 transition-transform" />
-              </span>
-            </div>
-            <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 shrink-0 relative rounded overflow-hidden">
-              <img
-                src="https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=400&auto=format&fit=crop"
-                alt="Daily Drops"
-                className="w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
-              />
-            </div>
-          </Link>
-
-          {/* Bento Card 2: Most Loved */}
-          <Link
-            to="/most-loved"
-            className="group relative rounded-md sm:rounded-lg overflow-hidden bg-gradient-to-br from-[#F6E7CF] to-[#EBD2AA] px-2 py-1.5 sm:px-3 sm:py-2 flex items-center justify-between shadow-2xs min-h-[48px] xs:min-h-[54px] sm:min-h-[66px] hover:shadow-xs transition-all"
-          >
-            <div className="relative z-10 min-w-0 pr-1 flex flex-col justify-center">
-              <span className="text-[6px] xs:text-[7px] sm:text-[8px] font-bold text-[#6D4C13] tracking-wider uppercase block leading-none">BEST SELLERS</span>
-              <h3 className="text-[9.5px] xs:text-[10.5px] sm:text-xs font-bold font-serif text-neutral-900 leading-tight mt-0.5">Most Loved</h3>
-              <span className="inline-flex items-center gap-0.5 text-[7px] xs:text-[8px] sm:text-[10px] font-semibold text-neutral-900 group-hover:underline underline-offset-2 mt-0.5 leading-none">
-                Explore Now <ArrowRight size={8} className="group-hover:translate-x-0.5 transition-transform" />
-              </span>
-            </div>
-            <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center text-sm xs:text-base sm:text-xl drop-shadow-xs">
-              🏆
-            </div>
-          </Link>
-
-          {/* Bento Card 3: Up to 50% Off / Best Sellers */}
-          <Link
-            to="/best-sellers"
-            className="group relative rounded-md sm:rounded-lg overflow-hidden bg-gradient-to-br from-[#162419] to-[#1F2F23] px-2 py-1.5 sm:px-3 sm:py-2 flex items-center justify-between shadow-2xs min-h-[48px] xs:min-h-[54px] sm:min-h-[66px] hover:shadow-xs transition-all"
-          >
-            <div className="relative z-10 min-w-0 pr-1 flex flex-col justify-center">
-              <span className="text-[6px] xs:text-[7px] sm:text-[8px] font-bold text-[#C69A4C] tracking-wider uppercase block leading-none">MEGA SALE</span>
-              <h3 className="text-[9.5px] xs:text-[10.5px] sm:text-xs font-bold font-serif text-white leading-tight mt-0.5">Up to 50% Off</h3>
-              <span className="inline-flex items-center gap-0.5 text-[7px] xs:text-[8px] sm:text-[10px] font-semibold text-[#C69A4C] group-hover:underline underline-offset-2 mt-0.5 leading-none">
-                Shop Now <ArrowRight size={8} className="group-hover:translate-x-0.5 transition-transform" />
-              </span>
-            </div>
-            <div className="w-6 h-6 xs:w-7 xs:h-7 sm:w-9 sm:h-9 shrink-0 relative rounded overflow-hidden">
-              <img
-                src="https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop"
-                alt="Mega Sale"
-                className="w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
-              />
-              <div className="absolute top-0.5 right-0.5 bg-red-600 text-white text-[6px] sm:text-[7.5px] font-extrabold px-0.5 py-0.1 rounded-full shadow-xs">
-                %
-              </div>
-            </div>
-          </Link>
-        </section>
-
-        {/* 7. KIDS COLLECTION SECTION (Slidable Left & Right Horizontal Product Carousel) */}
+        {/* Kids Collection Slider */}
         <ProductSectionSlider
           title="Kids Collection"
           link="/category/Kids"
@@ -968,7 +839,7 @@ export default function Home() {
           loading={loading}
         />
 
-        {/* 8. ACCESSORIES COLLECTION SECTION (Slidable Left & Right Horizontal Product Carousel) */}
+        {/* Accessories Slider */}
         <ProductSectionSlider
           title="Accessories"
           link="/category/Accessories"

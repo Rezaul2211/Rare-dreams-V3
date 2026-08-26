@@ -9,6 +9,7 @@ import {
   Search,
   Home, 
   Grid, 
+  Heart,
   ShieldCheck, 
   X,
   ArrowRight,
@@ -110,6 +111,7 @@ function LayoutInner() {
 
   const items = useCartStore((state) => state.items);
   const user = useAuthStore((state) => state.user);
+  const { wishlistIds } = useWishlistStore();
   const { fetchCategories } = useCategoryStore();
   const { config, fetchConfig } = useStoreConfigStore();
   const { t } = useLanguageStore();
@@ -638,40 +640,78 @@ function LayoutInner() {
       {/* Background Push Notification Opt-in Prompt */}
       <PushNotificationPrompt />
 
-      {/* Mobile Bottom Navigation (Hidden on Checkout page to prioritize sticky checkout action bar) */}
+      {/* Floating Liquid Glass Mobile Bottom Navigation (Matching Reference Image) */}
       {!location.pathname.startsWith('/checkout') && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 flex justify-around items-center h-16 z-50 px-2 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
-          <Link to="/" onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname === '/' ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
-            <Home size={20} className={location.pathname === '/' ? 'stroke-black' : ''} />
-            <span className="text-[10px] mt-1 font-bold">{t('nav.home')}</span>
-          </Link>
-          <Link to="/shop" onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname.includes('/shop') || location.pathname.includes('/category') ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
-            <Grid size={20} className={location.pathname.includes('/shop') || location.pathname.includes('/category') ? 'stroke-black' : ''} />
-            <span className="text-[10px] mt-1 font-bold">{t('nav.shop_all')}</span>
-          </Link>
-          <Link 
-            id="mobile-cart-icon"
-            to="/cart" 
-            onClick={scrollToTop}
-            className={`flex flex-col items-center justify-center w-full h-full relative transition-all ${
-              location.pathname === '/cart' ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'
-            } ${isCartBouncing ? 'scale-125 text-black' : ''}`}
-          >
-            <div className="relative">
-              <ShoppingBag size={20} className={location.pathname === '/cart' ? 'stroke-black' : ''} />
+        <nav 
+          aria-label="Mobile Navigation"
+          className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto"
+        >
+          <div className="bg-white/92 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.05)] rounded-[26px] px-3.5 py-1.5 flex items-center gap-3.5 xs:gap-5 min-w-[260px] justify-around">
+            {/* 1. Home */}
+            <Link
+              to="/"
+              onClick={scrollToTop}
+              aria-label="Home"
+              className={`transition-all duration-300 ${
+                location.pathname === '/'
+                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
+                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
+              }`}
+            >
+              <Home size={20} className={location.pathname === '/' ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
+            </Link>
+
+            {/* 2. Shop / Explore */}
+            <Link
+              to="/shop"
+              onClick={scrollToTop}
+              aria-label="Explore Shop"
+              className={`transition-all duration-300 ${
+                location.pathname.startsWith('/shop') || location.pathname.startsWith('/category')
+                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
+                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
+              }`}
+            >
+              <Grid size={20} className={location.pathname.startsWith('/shop') || location.pathname.startsWith('/category') ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
+            </Link>
+
+            {/* 3. Cart */}
+            <Link
+              id="mobile-cart-icon"
+              to="/cart"
+              onClick={scrollToTop}
+              aria-label="Cart"
+              className={`transition-all duration-300 relative ${
+                location.pathname === '/cart'
+                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
+                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
+              } ${isCartBouncing ? 'scale-115 text-black' : ''}`}
+            >
+              <ShoppingBag size={20} className={location.pathname === '/cart' ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
               {itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-2.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-black text-white bg-neutral-900 rounded-full shadow-xs">
+                <span className={`absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[17px] h-[17px] px-1 text-[9px] font-black rounded-full shadow-xs ${
+                  location.pathname === '/cart' ? 'bg-white text-neutral-950 ring-1 ring-neutral-200' : 'bg-neutral-900 text-white'
+                }`}>
                   {itemCount}
                 </span>
               )}
-            </div>
-            <span className="text-[10px] mt-1 font-bold">{t('nav.cart')}</span>
-          </Link>
-          <Link to={user ? '/account' : '/login'} onClick={scrollToTop} className={`flex flex-col items-center justify-center w-full h-full transition-colors ${location.pathname.includes('/account') || location.pathname.includes('/login') ? 'text-black' : 'text-neutral-400 hover:text-neutral-700'}`}>
-            <User size={20} className={location.pathname.includes('/account') || location.pathname.includes('/login') ? 'stroke-black' : ''} />
-            <span className="text-[10px] mt-1 font-bold">{user ? t('nav.account') : t('nav.login')}</span>
-          </Link>
-        </div>
+            </Link>
+
+            {/* 4. Account */}
+            <Link
+              to={user ? '/account' : '/login'}
+              onClick={scrollToTop}
+              aria-label="Account"
+              className={`transition-all duration-300 ${
+                location.pathname.startsWith('/account') || location.pathname.startsWith('/login')
+                  ? 'w-11 h-11 bg-[#1A1A1A] text-white rounded-[16px] flex items-center justify-center shadow-xs scale-102'
+                  : 'w-10 h-10 flex items-center justify-center text-neutral-700 hover:text-black active:scale-95'
+              }`}
+            >
+              <User size={20} className={location.pathname.startsWith('/account') || location.pathname.startsWith('/login') ? 'stroke-[2.2]' : 'stroke-[1.8]'} />
+            </Link>
+          </div>
+        </nav>
       )}
     </div>
   );
