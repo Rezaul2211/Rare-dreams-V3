@@ -1,3 +1,8 @@
+export interface ProductSpecification {
+  label: string;
+  value: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -15,13 +20,21 @@ export interface Product {
   mega_sale?: boolean;
   popularityScore?: number;
   rating?: number;
+  reviewsCount?: number;
   stockQuantity: number;
   sizeOptions?: string[];
   colorOptions?: string[];
   brand?: string;
-  material?: string;
+  material?: string; // Fabric / ফ্যাব্রিক
+  fit?: string; // Fit / ফিট
+  sleeve?: string; // Sleeve / স্লিভ
+  collar?: string; // Collar / কলার
+  pocket?: string; // Pocket / পকেট
+  usage?: string; // Usage / ব্যবহার
+  specifications?: ProductSpecification[];
   description: string;
   images: string[];
+  image?: string;
   videoUrl?: string;
   status: 'published' | 'draft';
   sku?: string;
