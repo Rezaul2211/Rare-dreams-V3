@@ -46,42 +46,42 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
             </div>
           )}
 
-          {/* Floating Micro Capsule Badge (Over Smoky Mist at Bottom-Left of Image) */}
+          {/* Floating Micro Capsule Badge (Over Smoky Mist at Bottom-Left of Image with Liquid Glass) */}
           {discountPct && discountPct > 0 ? (
             <div className="absolute bottom-2 left-2.5 z-10 pointer-events-none">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-neutral-900 text-[9.5px] sm:text-[10px] font-bold shadow-[0_2px_6px_rgba(0,0,0,0.08)] border border-white/80 tracking-tight leading-none">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/45 backdrop-blur-md text-neutral-950 text-[9.5px] sm:text-[10px] font-black shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.9)] border border-white/70 tracking-tight leading-none">
                 -{discountPct}%
               </span>
             </div>
           ) : (product.isNew || product.daily_drop) ? (
             <div className="absolute bottom-2 left-2.5 z-10 pointer-events-none">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-neutral-800 text-[9.5px] sm:text-[10px] font-semibold shadow-[0_2px_6px_rgba(0,0,0,0.08)] border border-white/80 tracking-tight leading-none">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/45 backdrop-blur-md text-neutral-900 text-[9.5px] sm:text-[10px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.9)] border border-white/70 tracking-tight leading-none">
                 New in
               </span>
             </div>
           ) : (product.rating && product.rating >= 4.7) ? (
             <div className="absolute bottom-2 left-2.5 z-10 pointer-events-none">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-neutral-800 text-[9.5px] sm:text-[10px] font-semibold shadow-[0_2px_6px_rgba(0,0,0,0.08)] border border-white/80 tracking-tight leading-none">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/45 backdrop-blur-md text-neutral-900 text-[9.5px] sm:text-[10px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.9)] border border-white/70 tracking-tight leading-none">
                 Best Seller
               </span>
             </div>
           ) : null}
 
-          {/* Top-Right Floating Circular Wishlist Heart */}
+          {/* Top-Right Floating Circular Wishlist Heart with Liquid Glass */}
           <button 
             type="button"
             onClick={handleWishlistClick}
             aria-label={favorited ? "Remove from Wishlist" : "Add to Wishlist"}
             className={`absolute top-2.5 right-2.5 z-20 w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
               favorited 
-                ? 'bg-white text-red-500 shadow-[0_2px_8px_rgba(0,0,0,0.12)] scale-105' 
-                : 'bg-white/95 hover:bg-white text-neutral-700 hover:text-red-500 shadow-[0_2px_8px_rgba(0,0,0,0.08)] active:scale-90'
+                ? 'bg-white/85 backdrop-blur-md text-red-500 shadow-[0_4px_12px_rgba(239,68,68,0.25),inset_0_1px_2px_rgba(255,255,255,0.95)] border border-white scale-105' 
+                : 'bg-white/40 hover:bg-white/70 backdrop-blur-md text-neutral-800 hover:text-red-500 shadow-[0_2px_10px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.9)] border border-white/70 active:scale-90'
             }`}
           >
             <Heart 
               size={14} 
-              strokeWidth={favorited ? 0 : 1.8} 
-              className={`transition-colors ${favorited ? "text-red-500 fill-red-500" : "text-neutral-700"}`} 
+              strokeWidth={favorited ? 0 : 2} 
+              className={`transition-colors ${favorited ? "text-red-500 fill-red-500" : "text-neutral-800"}`} 
             />
           </button>
         </Link>

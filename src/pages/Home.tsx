@@ -722,9 +722,9 @@ export default function Home() {
 
                 {/* Banner Editorial Content */}
                 <div className="absolute inset-0 flex flex-col justify-center px-4 sm:px-10 md:px-14 z-20 max-w-[65%] xs:max-w-[60%] sm:max-w-[55%] md:max-w-[50%]">
-                  {/* Top Chic Micro Capsule Badge */}
-                  <div className="mb-1 sm:mb-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-white/95 backdrop-blur-md text-neutral-900 text-[9px] sm:text-xs font-bold shadow-2xs border border-white/60 tracking-tight">
+                  {/* Top Liquid Glass Box Badge (Lightly Rounded Rectangle) */}
+                  <div className="mb-1.5 sm:mb-2.5">
+                    <span className="inline-flex items-center px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-md sm:rounded-lg bg-white/40 backdrop-blur-xl text-neutral-900 text-[8.5px] xs:text-[9.5px] sm:text-xs font-bold shadow-[0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_2px_rgba(255,255,255,0.95)] border border-white/75 tracking-wide uppercase">
                       {slide.tag || 'New in'}
                     </span>
                   </div>
@@ -791,7 +791,7 @@ export default function Home() {
                 to={cat.link || `/category/${cat.title}`}
                 className="group flex flex-col items-center w-full text-center"
               >
-                <div className="w-full aspect-square rounded-2xl bg-gradient-to-b from-[#F3F3F6] via-[#EFEFF2] to-[#E9E9ED] p-2 sm:p-3 flex items-center justify-center overflow-hidden shadow-2xs group-hover:shadow-sm group-hover:scale-103 transition-all duration-300">
+                <div className="w-full aspect-square rounded-2xl bg-gradient-to-b from-[#F5F5F8] via-[#ECECEF] to-[#E5E5EA] border border-white/80 p-2 sm:p-3 flex items-center justify-center overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.03),inset_0_1px_1.5px_rgba(255,255,255,0.95)] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] group-hover:scale-103 transition-all duration-300">
                   <img
                     src={cat.image}
                     alt={cat.title}

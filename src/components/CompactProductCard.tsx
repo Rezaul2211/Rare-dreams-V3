@@ -43,36 +43,36 @@ export const CompactProductCard: React.FC<CompactProductCardProps> = React.memo(
           )}
         </Link>
 
-        {/* Discount Badge */}
+        {/* Discount Badge with Liquid Glass */}
         {product.stockQuantity === 0 ? (
-          <div className="absolute top-1 left-1 z-10 bg-neutral-900 text-white text-[7px] sm:text-[9px] font-bold px-1 py-0.2 rounded-md uppercase tracking-wider">
+          <div className="absolute top-1 left-1 z-10 bg-neutral-900/90 backdrop-blur-xs text-white text-[7px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-xs">
             {t('product.out_of_stock')}
           </div>
         ) : discountPct && discountPct > 0 ? (
-          <div className="absolute top-1 left-1 z-10 bg-red-600 text-white text-[7px] sm:text-[8px] font-black px-1 py-0.2 rounded-md shadow-xs tracking-tight">
+          <div className="absolute top-1 left-1 z-10 bg-white/60 backdrop-blur-md text-neutral-950 text-[7.5px] sm:text-[8.5px] font-black px-1.5 py-0.5 rounded-md shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.95)] border border-white/80 tracking-tight">
             -{discountPct}%
           </div>
         ) : product.isFlashSale ? (
-          <div className="absolute top-1 left-1 z-10 bg-red-600 text-white text-[7px] sm:text-[8px] font-black px-1 py-0.2 rounded-md shadow-xs">
+          <div className="absolute top-1 left-1 z-10 bg-white/60 backdrop-blur-md text-neutral-950 text-[7.5px] sm:text-[8.5px] font-black px-1.5 py-0.5 rounded-md shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.95)] border border-white/80">
             ⚡ Sale
           </div>
         ) : null}
 
-        {/* Heart Wishlist Overlay Button */}
+        {/* Heart Wishlist Overlay Button with Liquid Glass */}
         <button 
           type="button"
           onClick={handleWishlistClick}
           aria-label={favorited ? "Remove from Wishlist" : "Add to Wishlist"}
-          className={`absolute top-1 right-1 z-20 w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer ${
+          className={`absolute top-1 right-1 z-20 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
             favorited 
-              ? 'bg-white text-red-500 scale-105' 
-              : 'bg-white/80 backdrop-blur-xs text-neutral-600 hover:text-red-500 hover:bg-white'
+              ? 'bg-white/90 backdrop-blur-md text-red-500 shadow-xs scale-105 border border-white' 
+              : 'bg-white/40 hover:bg-white/70 backdrop-blur-md text-neutral-800 hover:text-red-500 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.9)] border border-white/70'
           }`}
         >
           <Heart 
-            size={10} 
+            size={11} 
             strokeWidth={favorited ? 0 : 2} 
-            className={favorited ? "text-red-500 fill-red-500" : "text-neutral-600 hover:text-red-500"} 
+            className={favorited ? "text-red-500 fill-red-500" : "text-neutral-800 hover:text-red-500"} 
           />
         </button>
       </div>

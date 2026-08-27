@@ -13,11 +13,11 @@ export default function PolicyModal({ type, onClose }: PolicyModalProps) {
   if (!type) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl p-6 max-w-xl w-full shadow-2xl space-y-5 border border-neutral-100 relative max-h-[85vh] overflow-y-auto font-sans">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white/95 backdrop-blur-2xl rounded-3xl p-6 max-w-xl w-full shadow-[0_25px_60px_rgba(0,0,0,0.2),inset_0_1px_2px_rgba(255,255,255,0.95)] space-y-5 border border-white/80 relative max-h-[85vh] overflow-y-auto font-sans will-change-[backdrop-filter,transform]">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-neutral-400 hover:text-neutral-700 p-1 rounded-full hover:bg-neutral-100 transition-colors cursor-pointer"
+          className="absolute top-5 right-5 text-neutral-400 hover:text-neutral-700 p-1.5 rounded-full hover:bg-neutral-100/80 transition-colors cursor-pointer"
         >
           <X size={20} />
         </button>

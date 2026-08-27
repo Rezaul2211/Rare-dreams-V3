@@ -168,9 +168,9 @@ function LayoutInner() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC] font-sans text-neutral-900 pb-16 md:pb-0">
       {/* ========================================================= */}
-      {/* HEADER: ALWAYS VISIBLE ON ALL PAGES WITH WEBSITE THEME */}
+      {/* HEADER: ALWAYS VISIBLE ON ALL PAGES WITH LIQUID GLASS THEME */}
       {/* ========================================================= */}
-      <header className="sticky top-0 z-50 bg-white border-b border-neutral-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+      <header className="sticky top-0 z-50 bg-white/75 backdrop-blur-xl border-b border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.03),inset_0_-1px_0_rgba(255,255,255,0.6)] will-change-[backdrop-filter]">
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
           
           {/* ----------------- MOBILE HEADER ----------------- */}
@@ -642,13 +642,13 @@ function LayoutInner() {
       {/* Background Push Notification Opt-in Prompt */}
       <PushNotificationPrompt />
 
-      {/* Floating Liquid Glass Mobile Bottom Navigation (Matching Reference Image) */}
+      {/* Floating Liquid Glass Mobile Bottom Navigation (Ultra Translucent Liquid Glass) */}
       {!location.pathname.startsWith('/checkout') && !location.pathname.startsWith('/product') && typeof document !== 'undefined' && createPortal(
         <nav 
           aria-label="Mobile Navigation"
           className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[990] pointer-events-auto"
         >
-          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.08)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px]">
+          <div className="bg-white/18 backdrop-blur-xl border border-white/65 shadow-[0_12px_40px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.02),inset_0_1.5px_2.5px_rgba(255,255,255,0.95)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px] will-change-[backdrop-filter,transform]">
             {/* 1. Home */}
             {(() => {
               const isActive = location.pathname === '/';
@@ -662,14 +662,14 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}
                   <Home 
                     size={20} 
                     className={`relative z-10 transition-colors duration-200 ${
-                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-800 hover:text-black stroke-[2]'
                     }`} 
                   />
                 </Link>
@@ -689,14 +689,14 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}
                   <Grid 
                     size={20} 
                     className={`relative z-10 transition-colors duration-200 ${
-                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-800 hover:text-black stroke-[2]'
                     }`} 
                   />
                 </Link>
@@ -717,14 +717,14 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}
                   <ShoppingBag 
                     size={20} 
                     className={`relative z-10 transition-colors duration-200 ${
-                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-800 hover:text-black stroke-[2]'
                     }`} 
                   />
                   {itemCount > 0 && (
@@ -751,14 +751,14 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-[0_2px_8px_rgba(0,0,0,0.15)] z-0"
+                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}
                   <User 
                     size={20} 
                     className={`relative z-10 transition-colors duration-200 ${
-                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-600 hover:text-black stroke-[1.8]'
+                      isActive ? 'text-white stroke-[2.2]' : 'text-neutral-800 hover:text-black stroke-[2]'
                     }`} 
                   />
                 </Link>

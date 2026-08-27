@@ -225,25 +225,25 @@ export default function WhatsAppSupportWidget() {
 
   return (
     <>
-      {/* COMPACT & SLEEK FLOATING BUTTON */}
+      {/* COMPACT & SLEEK FLOATING BUTTON WITH LIQUID GLASS */}
       <div className="fixed bottom-20 md:bottom-6 right-4 z-50">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-neutral-900 hover:bg-black text-white w-11 h-11 sm:w-12 sm:h-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 flex items-center justify-center border border-neutral-700/60"
+          className="bg-neutral-900/85 hover:bg-neutral-900 backdrop-blur-xl text-white w-11 h-11 sm:w-12 sm:h-12 rounded-full shadow-[0_8px_25px_rgba(0,0,0,0.18),inset_0_1px_2px_rgba(255,255,255,0.3)] transition-all duration-200 active:scale-95 flex items-center justify-center border border-white/20 will-change-[backdrop-filter,transform]"
           aria-label="Toggle Customer Support Chat"
         >
           {isOpen ? (
             <X size={20} className="text-white" />
           ) : (
             <div className="relative flex items-center justify-center">
-              <MessageCircle size={22} className="fill-emerald-400 text-emerald-400" />
-              <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-emerald-400"></span>
+              <MessageCircle size={22} className="fill-emerald-400 text-emerald-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]" />
+              <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-neutral-900"></span>
             </div>
           )}
         </button>
       </div>
 
-      {/* ULTRA-COMPACT, PREMIUM CHAT WINDOW */}
+      {/* ULTRA-COMPACT, PREMIUM LIQUID GLASS CHAT WINDOW */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -251,7 +251,7 @@ export default function WhatsAppSupportWidget() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 10 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="fixed bottom-33 md:bottom-20 right-3 sm:right-6 z-50 w-[310px] sm:w-[330px] bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-hidden flex flex-col font-sans"
+            className="fixed bottom-33 md:bottom-20 right-3 sm:right-6 z-50 w-[310px] sm:w-[330px] bg-white/90 backdrop-blur-2xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.18),inset_0_1px_2px_rgba(255,255,255,0.95)] border border-white/70 overflow-hidden flex flex-col font-sans will-change-[backdrop-filter,transform]"
           >
             {/* WIDGET HEADER */}
             <div className="bg-neutral-900 text-white px-3.5 py-3 relative border-b border-neutral-800">

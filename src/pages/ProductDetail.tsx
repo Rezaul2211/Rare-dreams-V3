@@ -8,6 +8,7 @@ import { useCartStore } from '../store/useCartStore';
 import { useFlyToCart } from '../context/FlyToCartContext';
 import { useWishlistStore } from '../store/useWishlistStore';
 import { useLanguageStore } from '../store/useLanguageStore';
+import { useStoreConfigStore } from '../store/useStoreConfigStore';
 import { trackViewContent, trackAddToCart } from '../lib/pixel';
 import { 
   ChevronLeft, 
@@ -20,7 +21,11 @@ import {
   Rotate3d, 
   X, 
   Ruler, 
-  Clock
+  Clock,
+  Check,
+  MessageCircle,
+  Share2,
+  Flame
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
@@ -28,12 +33,14 @@ import { ProductDetailSkeleton } from '../components/ProductDetailSkeleton';
 import { ProductReviews } from '../components/ProductReviews';
 import SEO from '../components/SEO';
 import { calculateDiscount, formatPrice } from '../utils/productUtils';
+import { getColorSwatch } from '../utils/colorUtils';
 import { usePublishedProducts } from '../hooks/usePublishedProducts';
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { language } = useLanguageStore();
+  const { config: storeConfig } = useStoreConfigStore();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -180,6 +187,15 @@ export default function ProductDetail() {
     return list;
   }, [product]);
 
+  const handleColorChange = (colorName: string, index: number) => {
+    setSelectedColor(colorName);
+    // Automatic image switching if image exists for this variant
+    if (displayImages.length > index) {
+      setSelectedImageIndex(index);
+      setIs360Mode(false);
+    }
+  };
+
   const handleAddToCart = (e?: React.MouseEvent<HTMLElement>) => {
     if (!product) return;
     trackAddToCart({
@@ -225,6 +241,41 @@ export default function ProductDetail() {
     navigate('/checkout');
   };
 
+  const handleWhatsAppOrder = () => {
+    if (!product) return;
+    const rawPhone = storeConfig?.whatsappNumber || storeConfig?.helplineNumber || '+8801712345678';
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+    const message = `হ্যালো! আমি Rare Dreams থেকে এই প্রোডাক্টটি অর্ডার করতে চাই:
+🛍️ প্রোডাক্ট: ${product.name}
+💰 মূল্য: ৳${product.price}
+${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 সাইজ: ${selectedSize}\n` : ''}📦 পরিমাণ: ${quantity} টি
+🔗 প্রোডাক্ট লিঙ্ক: ${currentUrl}`;
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleShare = async () => {
+    if (!product) return;
+    const shareData = {
+      title: product.name,
+      text: `${product.name} - ৳${product.price}`,
+      url: window.location.href,
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // Ignored if user cancels share dialog
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert('প্রোডাক্টের লিংক কপি করা হয়েছে!');
+    }
+  };
+
   if (loading) {
     return <ProductDetailSkeleton />;
   }
@@ -268,36 +319,46 @@ export default function ProductDetail() {
         {/* ========================================================= */}
         {/* TOP 3D SHOWCASE SECTION                                   */}
         {/* ========================================================= */}
-        <div className="relative w-full overflow-hidden bg-gradient-to-b from-[#EBE6FF] via-[#F4F1FE] to-white sm:rounded-t-[32px] sm:border-x sm:border-t border-purple-100/80 pt-3.5 pb-5 select-none">
+        <div className="relative w-full overflow-hidden bg-gradient-to-b from-[#EBE6FF] via-[#F4F1FE] to-white sm:rounded-t-[32px] sm:border-x sm:border-t border-purple-100/80 pt-3 pb-4 select-none">
           
-          {/* Top Floating Buttons */}
-          <div className="absolute top-3.5 left-4 right-4 z-30 flex items-center justify-between pointer-events-auto">
+          {/* Top Floating Action Bar */}
+          <div className="flex items-center justify-between px-3.5 sm:px-4 relative z-30 pointer-events-auto mb-1">
             {/* Back Button */}
             <button
               onClick={() => navigate(-1)}
               aria-label="Back"
-              className="w-10 h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center text-neutral-800 active:scale-90 transition-transform cursor-pointer"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center text-neutral-800 active:scale-90 transition-transform cursor-pointer"
             >
-              <ChevronLeft size={20} strokeWidth={2.4} />
+              <ChevronLeft size={19} strokeWidth={2.4} />
             </button>
 
-            {/* Wishlist Button */}
-            <button
-              onClick={() => toggleWishlist(product.id)}
-              aria-label="Wishlist"
-              className="w-10 h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
-            >
-              <Heart
-                size={20}
-                className={favorited ? "text-[#5B46E8] fill-[#5B46E8]" : "text-[#5B46E8]"}
-                strokeWidth={2.2}
-              />
-            </button>
+            {/* Right Buttons: Share & Wishlist */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleShare}
+                aria-label="Share"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center text-neutral-700 active:scale-90 transition-transform cursor-pointer"
+              >
+                <Share2 size={16} strokeWidth={2.2} />
+              </button>
+
+              <button
+                onClick={() => toggleWishlist(product.id)}
+                aria-label="Wishlist"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
+              >
+                <Heart
+                  size={18}
+                  className={favorited ? "text-[#5B46E8] fill-[#5B46E8]" : "text-[#5B46E8]"}
+                  strokeWidth={2.2}
+                />
+              </button>
+            </div>
           </div>
 
-          {/* Vertical Thumbnail Column (Left Side) - ONLY shown if 2+ real images exist */}
+          {/* Vertical Thumbnail Column (Left Side) - Stacked vertically */}
           {displayImages.length > 1 && (
-            <div className="absolute top-16 left-3.5 z-20 flex flex-col gap-2">
+            <div className="absolute top-14 left-3 z-20 flex flex-col gap-1.5 max-h-[210px] sm:max-h-[270px] overflow-y-auto hide-scrollbar py-1">
               {displayImages.map((img, idx) => (
                 <button
                   key={idx}
@@ -306,10 +367,10 @@ export default function ProductDetail() {
                     setIs360Mode(false);
                   }}
                   className={clsx(
-                    "w-11 h-11 sm:w-13 sm:h-13 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer",
+                    "w-10 h-10 sm:w-12 sm:h-12 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0",
                     selectedImageIndex === idx && !is360Mode
-                      ? "border-2 border-[#5B46E8] ring-2 ring-purple-100 scale-105"
-                      : "border border-neutral-200/90 opacity-85 hover:opacity-100"
+                      ? "border-2 border-[#5B46E8] ring-2 ring-purple-200 scale-105"
+                      : "border border-neutral-200/90 opacity-80 hover:opacity-100"
                   )}
                 >
                   <img
@@ -319,31 +380,12 @@ export default function ProductDetail() {
                   />
                 </button>
               ))}
-
-              {/* 360° VIEW Button */}
-              <button
-                onClick={() => {
-                  setIs360Mode(!is360Mode);
-                  setRotationAngle(0);
-                }}
-                className={clsx(
-                  "w-11 h-11 sm:w-13 sm:h-13 rounded-xl bg-white border flex flex-col items-center justify-center text-center shadow-2xs transition-all cursor-pointer px-0.5",
-                  is360Mode
-                    ? "border-2 border-[#5B46E8] bg-[#F5F3FF] text-[#5B46E8] shadow-sm"
-                    : "border-neutral-200 text-neutral-700 hover:border-[#5B46E8]/40"
-                )}
-              >
-                <Rotate3d size={16} className={is360Mode ? "text-[#5B46E8] animate-spin" : "text-neutral-700"} />
-                <span className="text-[8px] font-black tracking-tighter leading-tight mt-0.5 uppercase">
-                  360° VIEW
-                </span>
-              </button>
             </div>
           )}
 
           {/* 3D FLOATING PRODUCT PODIUM & STAGE */}
           <div 
-            className="relative w-full h-[270px] sm:h-[360px] flex items-center justify-center px-4 touch-pan-y"
+            className="relative w-full h-[260px] sm:h-[340px] flex items-center justify-center px-4 touch-pan-y"
             onTouchStart={is360Mode ? handleTouchStart360 : undefined}
             onTouchMove={is360Mode ? handleTouchMove360 : undefined}
             onTouchEnd={is360Mode ? handleTouchEnd360 : undefined}
@@ -352,17 +394,17 @@ export default function ProductDetail() {
             onMouseUp={is360Mode ? handleTouchEnd360 : undefined}
           >
             {/* Ambient Studio Lighting Glow */}
-            <div className="absolute w-64 h-64 sm:w-72 sm:h-72 rounded-full bg-radial from-purple-300/35 via-blue-200/20 to-transparent blur-2xl pointer-events-none" />
+            <div className="absolute w-60 h-60 sm:w-72 sm:h-72 rounded-full bg-radial from-purple-300/35 via-blue-200/20 to-transparent blur-2xl pointer-events-none" />
 
             {/* Glowing 3D Podium Base */}
-            <div className="absolute bottom-3 w-[220px] sm:w-[290px] h-[56px] sm:h-[64px] flex items-center justify-center pointer-events-none">
+            <div className="absolute bottom-2.5 w-[210px] sm:w-[280px] h-[52px] sm:h-[62px] flex items-center justify-center pointer-events-none">
               {/* Soft Drop Shadow under podium */}
-              <div className="absolute -bottom-2 w-[190px] sm:w-[240px] h-6 bg-purple-950/15 rounded-[100%] blur-md" />
+              <div className="absolute -bottom-2 w-[180px] sm:w-[230px] h-5 bg-purple-950/15 rounded-[100%] blur-md" />
               
               {/* Podium 3D Ellipse Body */}
               <div className="relative w-full h-full rounded-[100%] bg-gradient-to-b from-white via-[#F8F7FF] to-[#E2DEFA] shadow-[0_10px_24px_rgba(91,70,232,0.18)] border-2 border-white flex items-center justify-center">
                 {/* Glowing Neon Cyan/Violet LED Ring around podium */}
-                <div className="absolute inset-0 rounded-[100%] border-[2px] sm:border-[2.5px] border-[#818CF8]/60 shadow-[0_0_15px_rgba(129,140,248,0.7)]" />
+                <div className="absolute inset-0 rounded-[100%] border-[2px] border-[#818CF8]/60 shadow-[0_0_15px_rgba(129,140,248,0.7)]" />
                 {/* Inner Stage Platform */}
                 <div className="w-[88%] h-[82%] rounded-[100%] bg-gradient-to-t from-[#ECE9FE] to-white/95 shadow-inner" />
               </div>
@@ -380,55 +422,51 @@ export default function ProductDetail() {
                 repeat: Infinity,
                 ease: "easeInOut",
               }}
-              className="relative z-10 w-[210px] sm:w-[270px] h-[220px] sm:h-[280px] flex items-center justify-center"
+              className="relative z-10 w-[200px] sm:w-[260px] h-[210px] sm:h-[270px] flex items-center justify-center"
               style={{ perspective: 1000 }}
             >
               {activeImage ? (
                 <img
                   src={activeImage}
                   alt={product.name}
-                  className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_10px_18px_rgba(30,27,75,0.16)] rounded-xl"
+                  className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_10px_18px_rgba(30,27,75,0.16)] rounded-xl select-none pointer-events-none"
                 />
               ) : (
-                <div className="w-36 h-36 bg-purple-100 rounded-2xl flex items-center justify-center text-neutral-400 font-medium text-xs">
+                <div className="w-32 h-32 bg-purple-100 rounded-2xl flex items-center justify-center text-neutral-400 font-medium text-xs">
                   কোন ছবি নেই
                 </div>
               )}
             </motion.div>
 
+            {/* 360 Interactive View Pill Button (Always visible on stage) */}
+            <button
+              onClick={() => {
+                setIs360Mode(!is360Mode);
+                setRotationAngle(0);
+              }}
+              className={clsx(
+                "absolute bottom-2.5 right-3.5 z-20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-black shadow-md active:scale-95 transition-all cursor-pointer",
+                is360Mode
+                  ? "bg-[#5B46E8] text-white ring-2 ring-purple-300"
+                  : "bg-white/95 text-neutral-800 border border-purple-100 hover:border-[#5B46E8]/40"
+              )}
+            >
+              <Rotate3d size={14} className={is360Mode ? "animate-spin text-white" : "text-[#5B46E8]"} />
+              <span>{is360Mode ? "3D চালু আছে" : "360° ভিউ"}</span>
+            </button>
+
             {/* 360 Guide Overlay Tag */}
             {is360Mode && (
-              <div className="absolute bottom-12 z-20 bg-black/80 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse">
-                <Rotate3d size={13} />
+              <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-20 bg-black/80 backdrop-blur-md text-white text-[10.5px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse whitespace-nowrap">
+                <Rotate3d size={12} />
                 <span>ঘুরিয়ে দেখতে ডানে বা বামে টানুন</span>
               </div>
             )}
           </div>
-
-          {/* Carousel Slide Dots - ONLY shown if 2+ images exist */}
-          {displayImages.length > 1 && (
-            <div className="flex items-center justify-center gap-1.5 mt-1">
-              {displayImages.map((_, dotIdx) => (
-                <button
-                  key={dotIdx}
-                  onClick={() => {
-                    setSelectedImageIndex(dotIdx);
-                    setIs360Mode(false);
-                  }}
-                  className={clsx(
-                    "h-1.5 rounded-full transition-all duration-200",
-                    selectedImageIndex === dotIdx && !is360Mode
-                      ? "w-5 bg-[#5B46E8]"
-                      : "w-1.5 bg-neutral-300 hover:bg-neutral-400"
-                  )}
-                />
-              ))}
-            </div>
-          )}
         </div>
 
         {/* ========================================================= */}
-        {/* WHITE CARD CONTENT SHEET                                  */}
+        {/* WHITE CARD CONTENT SHEET (Balanced & Clean)               */}
         {/* ========================================================= */}
         <div className="bg-white px-4 py-4 sm:p-7 sm:rounded-b-[32px] sm:border-x sm:border-b border-neutral-100 shadow-xs space-y-3.5">
           
@@ -453,7 +491,7 @@ export default function ProductDetail() {
             )}
           </div>
 
-          {/* Real Ratings & Reviews (NO fake 128 / 4.8) */}
+          {/* Real Ratings & Reviews */}
           <div className="flex items-center gap-2">
             <div className="flex items-center text-[#F59E0B]">
               {[...Array(5)].map((_, i) => (
@@ -484,7 +522,7 @@ export default function ProductDetail() {
             )}
           </div>
 
-          {/* Pricing Row - Corrected to avoid double ৳ */}
+          {/* Pricing Row */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-2xl sm:text-3xl font-black text-[#4F39F6] tracking-tight">
               {formatPrice(product.price || 0)}
@@ -508,27 +546,39 @@ export default function ProductDetail() {
             </p>
           )}
 
-          {/* COLOR SELECTION - ONLY if real colors are available */}
+          {/* COLOR SELECTION - PURE CIRCULAR SWATCHES ONLY (NO TEXT BADGES) */}
           {colors.length > 0 && (
-            <div className="space-y-1.5 pt-0.5">
-              <div className="text-xs sm:text-sm font-bold text-neutral-900">
-                রং নির্বাচন করুন: <span className="text-[#5B46E8] font-semibold">{selectedColor}</span>
+            <div className="space-y-1.5 pt-1">
+              <div className="text-xs sm:text-sm font-bold text-neutral-900 flex items-center gap-1.5">
+                <span>রং:</span>
+                <span className="text-[#5B46E8] font-bold">{selectedColor}</span>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {colors.map((c) => {
+              <div className="flex flex-wrap items-center gap-2.5">
+                {colors.map((c, idx) => {
                   const isSelected = selectedColor === c;
+                  const swatch = getColorSwatch(c);
                   return (
                     <button
                       key={c}
-                      onClick={() => setSelectedColor(c)}
+                      type="button"
+                      title={c}
+                      aria-label={c}
+                      onClick={() => handleColorChange(c, idx)}
                       className={clsx(
-                        "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border",
+                        "w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all cursor-pointer relative",
                         isSelected
-                          ? "border-2 border-[#5B46E8] bg-[#F5F3FF] text-[#5B46E8] shadow-2xs"
-                          : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
+                          ? "ring-2 ring-offset-2 ring-[#5B46E8] scale-110 shadow-xs"
+                          : "hover:scale-105 opacity-90 hover:opacity-100 border border-black/10 shadow-2xs"
                       )}
+                      style={{ backgroundColor: swatch.hex }}
                     >
-                      {c}
+                      {isSelected && (
+                        <Check
+                          size={15}
+                          strokeWidth={3}
+                          className={swatch.isLight ? "text-neutral-900" : "text-white"}
+                        />
+                      )}
                     </button>
                   );
                 })}
@@ -574,7 +624,7 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {/* DESKTOP ONLY INLINE ACTIONS (Hidden on mobile to prevent duplicate with floating bottom bar) */}
+          {/* DESKTOP ONLY INLINE ACTIONS */}
           <div className="hidden md:block space-y-2 pt-2">
             <div className="text-xs sm:text-sm font-bold text-neutral-900">
               পরিমাণ
@@ -607,14 +657,34 @@ export default function ProductDetail() {
                 <span className="truncate">কার্টে যোগ করুন</span>
               </button>
 
-              {/* Buy Now */}
+              {/* Buy Now (High-Impact Fiery Flame Eye-Catching Button) */}
               <button
                 onClick={handleBuyNow}
-                className="h-11 rounded-xl bg-[#E11D48] hover:bg-[#BE123C] active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center shadow-[0_3px_12px_rgba(225,29,72,0.25)] transition-all cursor-pointer whitespace-nowrap px-2"
+                className="relative overflow-hidden h-11 rounded-xl bg-gradient-to-r from-[#FF0844] via-[#FF3366] to-[#FF8008] hover:from-[#E00638] hover:to-[#E67300] active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-[0_0_24px_rgba(255,50,0,0.8),0_4px_14px_rgba(255,100,0,0.4)] animate-[fire-pulse_1.5s_infinite_ease-in-out] transition-all cursor-pointer whitespace-nowrap px-3 group"
               >
-                <span className="truncate">এখনই কিনুন</span>
+                {/* Rising flame glare effect */}
+                <div className="absolute inset-0 bg-gradient-to-t from-transparent via-yellow-400/30 to-white/40 pointer-events-none animate-pulse" />
+                
+                {/* Floating flame particles */}
+                <span className="absolute -top-1 left-2 w-1.5 h-1.5 rounded-full bg-yellow-300 blur-[0.5px] animate-[flame-rise_1.6s_infinite_linear]" />
+                <span className="absolute -top-1 right-3 w-2 h-2 rounded-full bg-orange-400 blur-[0.5px] animate-[flame-rise_1.9s_infinite_linear]" />
+                
+                <Flame size={16} className="relative z-10 text-yellow-300 fill-yellow-400 animate-bounce shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
+                <span className="relative z-10 truncate font-black drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] tracking-wide">এখনই কিনুন</span>
               </button>
             </div>
+          </div>
+
+          {/* COMPACT & SLEEK PREMIUM WHATSAPP ORDER BUTTON */}
+          <div className="pt-0.5 flex justify-center">
+            <button
+              type="button"
+              onClick={handleWhatsAppOrder}
+              className="w-full sm:w-auto px-4 h-9 sm:h-9.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/90 border border-emerald-500/30 active:scale-[0.98] text-emerald-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            >
+              <MessageCircle size={15} className="text-emerald-600 fill-emerald-600" />
+              <span>হোয়াটসঅ্যাপে অর্ডার করুন</span>
+            </button>
           </div>
 
           {/* VALUE PROPOSITION / TRUST CARDS */}
@@ -755,63 +825,69 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* STANDARD SIZE GUIDE MODAL */}
-      {isSizeGuideOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl relative">
+      {/* STANDARD SIZE GUIDE MODAL (PORTALIZED FOR PERFECT CENTERING ABOVE ALL BARS) */}
+      {isSizeGuideOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsSizeGuideOpen(false);
+          }}
+          className="fixed inset-0 z-[1050] flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200"
+        >
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-7 shadow-2xl relative max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setIsSizeGuideOpen(false)}
               className="absolute top-4 right-4 p-2 text-neutral-400 hover:text-black rounded-full hover:bg-neutral-100 transition-colors cursor-pointer"
+              aria-label="Close modal"
             >
               <X size={20} />
             </button>
-            <div className="flex items-center space-x-2 text-[#5B46E8] mb-3">
+            <div className="flex items-center space-x-2 text-[#5B46E8] mb-2.5">
               <Ruler size={18} />
-              <span className="text-sm font-bold uppercase tracking-wider">সাইজ গাইড</span>
+              <span className="text-xs sm:text-sm font-bold uppercase tracking-wider">সাইজ গাইড</span>
             </div>
-            <h3 className="text-xl font-bold text-neutral-900 mb-2">সাইজ মেজারমেন্ট চার্ট</h3>
-            <p className="text-xs text-neutral-500 mb-4">আপনার সঠিক মাপ অনুযায়ী সাইজ পছন্দ করুন (ইঞ্চি):</p>
+            <h3 className="text-lg sm:text-xl font-bold text-neutral-900 mb-1.5">সাইজ মেজারমেন্ট চার্ট</h3>
+            <p className="text-xs text-neutral-500 mb-3.5">আপনার সঠিক মাপ অনুযায়ী সাইজ পছন্দ করুন (ইঞ্চি):</p>
             
-            <div className="border border-neutral-200 rounded-2xl overflow-hidden mb-5">
+            <div className="border border-neutral-200 rounded-2xl overflow-hidden mb-4">
               <table className="w-full text-xs text-center divide-y divide-neutral-200">
                 <thead className="bg-neutral-50 text-neutral-700 font-bold">
                   <tr>
-                    <th className="py-2.5 px-3 text-left">সাইজ</th>
-                    <th className="py-2.5 px-3">চেস্ট (বুক)</th>
-                    <th className="py-2.5 px-3">লম্বা (Length)</th>
-                    <th className="py-2.5 px-3">হাতা (Sleeve)</th>
+                    <th className="py-2.5 px-2.5 text-left">সাইজ</th>
+                    <th className="py-2.5 px-2">চেস্ট (বুক)</th>
+                    <th className="py-2.5 px-2">লম্বা</th>
+                    <th className="py-2.5 px-2">হাতা</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 text-neutral-800 font-medium">
                   <tr>
-                    <td className="py-2 px-3 text-left font-bold">S (৩৮)</td>
-                    <td className="py-2 px-3">৩৮"</td>
-                    <td className="py-2 px-3">২৮"</td>
-                    <td className="py-2 px-3">২৩"</td>
+                    <td className="py-2 px-2.5 text-left font-bold">S (৩৮)</td>
+                    <td className="py-2 px-2">৩৮"</td>
+                    <td className="py-2 px-2">২৮"</td>
+                    <td className="py-2 px-2">২৩"</td>
                   </tr>
                   <tr className="bg-neutral-50/50">
-                    <td className="py-2 px-3 text-left font-bold">M (৪০)</td>
-                    <td className="py-2 px-3">৪০"</td>
-                    <td className="py-2 px-3">২৯"</td>
-                    <td className="py-2 px-3">২৪"</td>
+                    <td className="py-2 px-2.5 text-left font-bold">M (৪০)</td>
+                    <td className="py-2 px-2">৪০"</td>
+                    <td className="py-2 px-2">২৯"</td>
+                    <td className="py-2 px-2">২৪"</td>
                   </tr>
                   <tr>
-                    <td className="py-2 px-3 text-left font-bold">L (৪২)</td>
-                    <td className="py-2 px-3">৪২"</td>
-                    <td className="py-2 px-3">৩০"</td>
-                    <td className="py-2 px-3">২৫"</td>
+                    <td className="py-2 px-2.5 text-left font-bold">L (৪২)</td>
+                    <td className="py-2 px-2">৪২"</td>
+                    <td className="py-2 px-2">৩০"</td>
+                    <td className="py-2 px-2">২৫"</td>
                   </tr>
                   <tr className="bg-neutral-50/50">
-                    <td className="py-2 px-3 text-left font-bold">XL (৪৪)</td>
-                    <td className="py-2 px-3">৪৪"</td>
-                    <td className="py-2 px-3">৩১"</td>
-                    <td className="py-2 px-3">২৫.৫"</td>
+                    <td className="py-2 px-2.5 text-left font-bold">XL (৪৪)</td>
+                    <td className="py-2 px-2">৪৪"</td>
+                    <td className="py-2 px-2">৩১"</td>
+                    <td className="py-2 px-2">২৫.৫"</td>
                   </tr>
                   <tr>
-                    <td className="py-2 px-3 text-left font-bold">XXL (৪৬)</td>
-                    <td className="py-2 px-3">৪৬"</td>
-                    <td className="py-2 px-3">৩২"</td>
-                    <td className="py-2 px-3">২৬"</td>
+                    <td className="py-2 px-2.5 text-left font-bold">XXL (৪৬)</td>
+                    <td className="py-2 px-2">৪৬"</td>
+                    <td className="py-2 px-2">৩২"</td>
+                    <td className="py-2 px-2">২৬"</td>
                   </tr>
                 </tbody>
               </table>
@@ -820,39 +896,40 @@ export default function ProductDetail() {
             <button
               type="button"
               onClick={() => setIsSizeGuideOpen(false)}
-              className="w-full bg-[#5B46E8] hover:bg-[#4F39F6] text-white py-3 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              className="w-full bg-[#5B46E8] hover:bg-[#4F39F6] text-white py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
             >
               বন্ধ করুন
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================= */}
-      {/* FLOATING LIQUID GLASS MOBILE ACTION BAR (iOS Glass Style) */}
+      {/* FLOATING LIQUID GLASS MOBILE ACTION BAR (Ultra Translucent Liquid Glass) */}
       {/* ========================================================= */}
       {typeof document !== 'undefined' && createPortal(
         <div 
           id="floating-product-action-bar"
           className="md:hidden fixed bottom-3 left-3 right-3 z-[999] pointer-events-auto"
         >
-          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.06)] rounded-[20px] p-1.5 xs:p-2 flex items-center gap-1.5 xs:gap-2 max-w-lg mx-auto">
+          <div className="bg-white/20 backdrop-blur-xl border border-white/65 shadow-[0_12px_40px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.02),inset_0_1.5px_2.5px_rgba(255,255,255,0.95)] rounded-[20px] p-1.5 xs:p-2 flex items-center gap-1.5 xs:gap-2 max-w-lg mx-auto will-change-[backdrop-filter,transform]">
             
-            {/* Stepper with smooth capsule styling */}
-            <div className="h-10 rounded-[14px] bg-[#F2F2F6] border border-black/[0.04] flex items-center justify-between px-1.5 shrink-0 min-w-[76px]">
+            {/* Stepper with smooth crystal glass capsule styling */}
+            <div className="h-10 rounded-[14px] bg-white/45 backdrop-blur-md border border-white/60 flex items-center justify-between px-1.5 shrink-0 min-w-[76px] shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.9)]">
               <button
                 type="button"
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
+                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/80 active:scale-90 transition-all cursor-pointer"
                 aria-label="Decrease quantity"
               >
                 −
               </button>
-              <span className="font-black text-xs sm:text-sm text-neutral-900 px-1">{quantity}</span>
+              <span className="font-black text-xs sm:text-sm text-neutral-950 px-1">{quantity}</span>
               <button
                 type="button"
                 onClick={() => setQuantity(quantity + 1)}
-                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
+                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/80 active:scale-90 transition-all cursor-pointer"
                 aria-label="Increase quantity"
               >
                 +
@@ -869,13 +946,16 @@ export default function ProductDetail() {
               <span className="truncate">কার্টে যোগ করুন</span>
             </button>
 
-            {/* Buy Now CTA */}
+            {/* Buy Now CTA (With High-Impact Fiery Flame Animation) */}
             <button
               type="button"
               onClick={handleBuyNow}
-              className="flex-1 h-10 rounded-[14px] bg-[#E11D48] hover:bg-[#BE123C] active:scale-95 text-white font-bold text-xs flex items-center justify-center shadow-[0_3px_10px_rgba(225,29,72,0.22)] transition-all cursor-pointer whitespace-nowrap px-1.5"
+              className="relative overflow-hidden flex-1 h-10 rounded-[14px] bg-gradient-to-r from-[#FF0844] via-[#FF3366] to-[#FF8008] hover:from-[#E00638] hover:to-[#E67300] active:scale-95 text-white font-black text-xs flex items-center justify-center gap-1 shadow-[0_0_22px_rgba(255,50,0,0.85),0_3px_12px_rgba(255,100,0,0.4)] animate-[fire-pulse_1.5s_infinite_ease-in-out] transition-all cursor-pointer whitespace-nowrap px-2"
             >
-              <span className="truncate">এখনই কিনুন</span>
+              {/* Flame overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-transparent via-yellow-400/30 to-white/35 pointer-events-none animate-pulse" />
+              <Flame size={14} className="relative z-10 text-yellow-300 fill-yellow-400 animate-bounce shrink-0 drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]" />
+              <span className="relative z-10 truncate font-black drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]">এখনই কিনুন</span>
             </button>
 
           </div>
