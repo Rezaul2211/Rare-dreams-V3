@@ -23,6 +23,15 @@ function getGeminiClient(): GoogleGenAI | null {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Preconnect and DNS headers for Google Fonts & Firebase to accelerate LCP & eliminate CLS
+app.use((req, res, next) => {
+  res.setHeader(
+    'Link',
+    '<https://fonts.googleapis.com>; rel=preconnect, <https://fonts.gstatic.com>; rel=preconnect; crossorigin, <https://firestore.googleapis.com>; rel=preconnect'
+  );
+  next();
+});
+
 // Real-Time System Log Store (in-memory circular buffer)
 interface SystemLogEntry {
   id: string;
