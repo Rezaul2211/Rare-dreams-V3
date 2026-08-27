@@ -366,8 +366,8 @@ export default function Checkout() {
       )}
 
       {/* FULLSCREEN ORDER PROCESSING ANIMATED MODAL */}
-      {isProcessingOrder && (
-        <div className="fixed inset-0 z-50 bg-neutral-900/80 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+      {isProcessingOrder && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[1000] bg-neutral-900/80 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl space-y-6 flex flex-col items-center border border-neutral-100 animate-in zoom-in-95">
             <div className="relative">
               <div className="w-20 h-20 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center shadow-inner">
@@ -407,7 +407,8 @@ export default function Checkout() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* TOP HEADER: Clean Back Link */}
@@ -843,7 +844,7 @@ export default function Checkout() {
       </form>
 
       {/* MOBILE FLOATING LIQUID GLASS CHECKOUT BAR (Rendered in Portal to float above all page content) */}
-      {typeof document !== 'undefined' && createPortal(
+      {!isProcessingOrder && typeof document !== 'undefined' && createPortal(
         <div 
           id="mobile-sticky-checkout-bar"
           className="fixed bottom-3.5 left-3.5 right-3.5 z-[999] pointer-events-auto lg:hidden"
