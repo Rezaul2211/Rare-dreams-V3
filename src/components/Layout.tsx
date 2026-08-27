@@ -633,17 +633,17 @@ function LayoutInner() {
         </PullToRefresh>
       </main>
 
-      {/* Footer */}
-      <Footer />
+      {/* Footer (hidden on Admin pages for clean workspace) */}
+      {!location.pathname.startsWith('/admin') && <Footer />}
 
-      {/* Floating WhatsApp Support Widget */}
-      <WhatsAppSupportWidget />
+      {/* Floating WhatsApp Support Widget (hidden on Admin pages) */}
+      {!location.pathname.startsWith('/admin') && <WhatsAppSupportWidget />}
 
       {/* Background Push Notification Opt-in Prompt */}
-      <PushNotificationPrompt />
+      {!location.pathname.startsWith('/admin') && <PushNotificationPrompt />}
 
-      {/* Floating Liquid Glass Mobile Bottom Navigation (Ultra Translucent Liquid Glass) */}
-      {!location.pathname.startsWith('/checkout') && !location.pathname.startsWith('/product') && typeof document !== 'undefined' && createPortal(
+      {/* Floating Liquid Glass Mobile Bottom Navigation (Hidden on Checkout, Product Detail, and Admin pages) */}
+      {!location.pathname.startsWith('/checkout') && !location.pathname.startsWith('/product') && !location.pathname.startsWith('/admin') && typeof document !== 'undefined' && createPortal(
         <nav 
           aria-label="Mobile Navigation"
           className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[990] pointer-events-auto"

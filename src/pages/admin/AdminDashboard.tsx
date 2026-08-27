@@ -212,7 +212,7 @@ export default function AdminDashboard() {
     {
       id: 'system',
       title: 'System Hub',
-      subtitle: 'AI Key, রোল ও ডেটাবেস',
+      subtitle: 'পারমিশন ও ডেটাবেস',
       icon: Settings,
       link: '/admin/system',
       color: 'bg-[#F1F5F9] text-[#475569] hover:border-slate-300',
