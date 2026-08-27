@@ -343,7 +343,7 @@ export default function ProductDetail() {
 
           {/* 3D FLOATING PRODUCT PODIUM & STAGE */}
           <div 
-            className="relative w-full h-[320px] sm:h-[380px] flex items-center justify-center px-4 touch-pan-y"
+            className="relative w-full h-[270px] sm:h-[360px] flex items-center justify-center px-4 touch-pan-y"
             onTouchStart={is360Mode ? handleTouchStart360 : undefined}
             onTouchMove={is360Mode ? handleTouchMove360 : undefined}
             onTouchEnd={is360Mode ? handleTouchEnd360 : undefined}
@@ -352,17 +352,17 @@ export default function ProductDetail() {
             onMouseUp={is360Mode ? handleTouchEnd360 : undefined}
           >
             {/* Ambient Studio Lighting Glow */}
-            <div className="absolute w-72 h-72 rounded-full bg-radial from-purple-300/35 via-blue-200/20 to-transparent blur-2xl pointer-events-none" />
+            <div className="absolute w-64 h-64 sm:w-72 sm:h-72 rounded-full bg-radial from-purple-300/35 via-blue-200/20 to-transparent blur-2xl pointer-events-none" />
 
             {/* Glowing 3D Podium Base */}
-            <div className="absolute bottom-4 w-[250px] sm:w-[300px] h-[64px] flex items-center justify-center pointer-events-none">
+            <div className="absolute bottom-3 w-[220px] sm:w-[290px] h-[56px] sm:h-[64px] flex items-center justify-center pointer-events-none">
               {/* Soft Drop Shadow under podium */}
-              <div className="absolute -bottom-3 w-[210px] sm:w-[250px] h-7 bg-purple-950/15 rounded-[100%] blur-md" />
+              <div className="absolute -bottom-2 w-[190px] sm:w-[240px] h-6 bg-purple-950/15 rounded-[100%] blur-md" />
               
               {/* Podium 3D Ellipse Body */}
               <div className="relative w-full h-full rounded-[100%] bg-gradient-to-b from-white via-[#F8F7FF] to-[#E2DEFA] shadow-[0_10px_24px_rgba(91,70,232,0.18)] border-2 border-white flex items-center justify-center">
                 {/* Glowing Neon Cyan/Violet LED Ring around podium */}
-                <div className="absolute inset-0 rounded-[100%] border-[2.5px] border-[#818CF8]/60 shadow-[0_0_15px_rgba(129,140,248,0.7)]" />
+                <div className="absolute inset-0 rounded-[100%] border-[2px] sm:border-[2.5px] border-[#818CF8]/60 shadow-[0_0_15px_rgba(129,140,248,0.7)]" />
                 {/* Inner Stage Platform */}
                 <div className="w-[88%] h-[82%] rounded-[100%] bg-gradient-to-t from-[#ECE9FE] to-white/95 shadow-inner" />
               </div>
@@ -373,24 +373,24 @@ export default function ProductDetail() {
               animate={is360Mode ? {
                 rotateY: rotationAngle,
               } : {
-                y: [0, -6, 0],
+                y: [0, -5, 0],
               }}
               transition={is360Mode ? { duration: 0 } : {
                 duration: 4.2,
                 repeat: Infinity,
                 ease: "easeInOut",
               }}
-              className="relative z-10 w-[240px] sm:w-[280px] h-[250px] sm:h-[290px] flex items-center justify-center"
+              className="relative z-10 w-[210px] sm:w-[270px] h-[220px] sm:h-[280px] flex items-center justify-center"
               style={{ perspective: 1000 }}
             >
               {activeImage ? (
                 <img
                   src={activeImage}
                   alt={product.name}
-                  className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_12px_20px_rgba(30,27,75,0.18)] rounded-xl"
+                  className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_10px_18px_rgba(30,27,75,0.16)] rounded-xl"
                 />
               ) : (
-                <div className="w-40 h-40 bg-purple-100 rounded-2xl flex items-center justify-center text-neutral-400 font-medium text-xs">
+                <div className="w-36 h-36 bg-purple-100 rounded-2xl flex items-center justify-center text-neutral-400 font-medium text-xs">
                   কোন ছবি নেই
                 </div>
               )}
@@ -398,7 +398,7 @@ export default function ProductDetail() {
 
             {/* 360 Guide Overlay Tag */}
             {is360Mode && (
-              <div className="absolute bottom-14 z-20 bg-black/80 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse">
+              <div className="absolute bottom-12 z-20 bg-black/80 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse">
                 <Rotate3d size={13} />
                 <span>ঘুরিয়ে দেখতে ডানে বা বামে টানুন</span>
               </div>
@@ -430,12 +430,12 @@ export default function ProductDetail() {
         {/* ========================================================= */}
         {/* WHITE CARD CONTENT SHEET                                  */}
         {/* ========================================================= */}
-        <div className="bg-white px-4 py-5 sm:p-7 sm:rounded-b-[32px] sm:border-x sm:border-b border-neutral-100 shadow-xs space-y-4">
+        <div className="bg-white px-4 py-4 sm:p-7 sm:rounded-b-[32px] sm:border-x sm:border-b border-neutral-100 shadow-xs space-y-3.5">
           
           {/* Top Discount Tag (Only if discount exists) */}
           {discountPct > 0 && (
             <div>
-              <span className="inline-block bg-[#FFF0E6] text-[#FF6A1A] text-xs font-black px-3 py-0.5 rounded-full tracking-wide">
+              <span className="inline-block bg-[#FFF0E6] text-[#FF6A1A] text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-full tracking-wide">
                 {discountPct}% ছাড়
               </span>
             </div>
@@ -443,11 +443,11 @@ export default function ProductDetail() {
 
           {/* Product Title & Material Subtitle */}
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-neutral-900 tracking-tight leading-tight">
+            <h1 className="text-xl sm:text-2xl font-black text-neutral-900 tracking-tight leading-tight">
               {product.name}
             </h1>
             {product.material && (
-              <p className="text-sm font-medium text-neutral-500 mt-0.5">
+              <p className="text-xs sm:text-sm font-medium text-neutral-500 mt-0.5">
                 {product.material}
               </p>
             )}
@@ -459,7 +459,7 @@ export default function ProductDetail() {
               {[...Array(5)].map((_, i) => (
                 <Star 
                   key={i} 
-                  size={16} 
+                  size={15} 
                   className={
                     reviewSummary.avgRating >= i + 1 
                       ? "fill-[#F59E0B] text-[#F59E0B]" 
@@ -470,32 +470,32 @@ export default function ProductDetail() {
             </div>
             {reviewSummary.totalCount > 0 ? (
               <>
-                <span className="text-sm font-black text-neutral-800">
+                <span className="text-xs sm:text-sm font-black text-neutral-800">
                   {reviewSummary.avgRating.toFixed(1)}
                 </span>
-                <span className="text-sm font-medium text-neutral-500">
+                <span className="text-xs sm:text-sm font-medium text-neutral-500">
                   ({reviewSummary.totalCount} রিভিউ)
                 </span>
               </>
             ) : (
-              <span className="text-xs font-semibold text-neutral-500">
+              <span className="text-xs font-medium text-neutral-400">
                 (০ রিভিউ - প্রথম রিভিউ দিন)
               </span>
             )}
           </div>
 
-          {/* Pricing Row */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="text-3xl sm:text-4xl font-black text-[#4F39F6] tracking-tight">
-              ৳ {formatPrice(product.price || 0)}
+          {/* Pricing Row - Corrected to avoid double ৳ */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-2xl sm:text-3xl font-black text-[#4F39F6] tracking-tight">
+              {formatPrice(product.price || 0)}
             </span>
             {product.comparePrice && product.comparePrice > product.price && (
-              <span className="text-base sm:text-lg text-neutral-400 line-through font-semibold">
-                ৳ {formatPrice(product.comparePrice)}
+              <span className="text-sm sm:text-base text-neutral-400 line-through font-semibold">
+                {formatPrice(product.comparePrice)}
               </span>
             )}
             {discountPct > 0 && (
-              <span className="bg-[#FFE6EC] text-[#FF2D55] text-xs font-black px-2.5 py-0.5 rounded-full">
+              <span className="bg-[#FFE6EC] text-[#FF2D55] text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full">
                 {discountPct}% ছাড়
               </span>
             )}
@@ -503,15 +503,15 @@ export default function ProductDetail() {
 
           {/* Product Description */}
           {product.description && (
-            <p className="text-sm text-neutral-600 leading-relaxed font-normal whitespace-pre-line">
+            <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed font-normal whitespace-pre-line">
               {product.description}
             </p>
           )}
 
           {/* COLOR SELECTION - ONLY if real colors are available */}
           {colors.length > 0 && (
-            <div className="space-y-2 pt-1">
-              <div className="text-sm font-bold text-neutral-900">
+            <div className="space-y-1.5 pt-0.5">
+              <div className="text-xs sm:text-sm font-bold text-neutral-900">
                 রং নির্বাচন করুন: <span className="text-[#5B46E8] font-semibold">{selectedColor}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -522,7 +522,7 @@ export default function ProductDetail() {
                       key={c}
                       onClick={() => setSelectedColor(c)}
                       className={clsx(
-                        "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border",
+                        "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border",
                         isSelected
                           ? "border-2 border-[#5B46E8] bg-[#F5F3FF] text-[#5B46E8] shadow-2xs"
                           : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
@@ -538,16 +538,16 @@ export default function ProductDetail() {
 
           {/* SIZE SELECTION - ONLY if real sizes are available */}
           {sizes.length > 0 && (
-            <div className="space-y-2 pt-1">
+            <div className="space-y-1.5 pt-0.5">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-bold text-neutral-900">
+                <div className="text-xs sm:text-sm font-bold text-neutral-900">
                   সাইজ নির্বাচন করুন: <span className="text-[#5B46E8] font-semibold">{selectedSize}</span>
                 </div>
                 <button
                   onClick={() => setIsSizeGuideOpen(true)}
                   className="text-xs font-bold text-[#4F39F6] hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <Ruler size={13} />
+                  <Ruler size={12} />
                   <span>সাইজ গাইড</span>
                 </button>
               </div>
@@ -560,7 +560,7 @@ export default function ProductDetail() {
                       key={sz}
                       onClick={() => setSelectedSize(sz)}
                       className={clsx(
-                        "min-w-11 h-10 px-3 rounded-xl text-sm font-bold flex items-center justify-center transition-all cursor-pointer",
+                        "min-w-10 h-9 px-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center transition-all cursor-pointer",
                         isSelected
                           ? "border-2 border-[#5B46E8] bg-[#F5F3FF] text-[#5B46E8] shadow-2xs"
                           : "border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300"
@@ -574,13 +574,13 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {/* QUANTITY & PRIMARY ACTION CTA BUTTONS */}
-          <div className="space-y-2 pt-1">
-            <div className="text-sm font-bold text-neutral-900">
+          {/* DESKTOP ONLY INLINE ACTIONS (Hidden on mobile to prevent duplicate with floating bottom bar) */}
+          <div className="hidden md:block space-y-2 pt-2">
+            <div className="text-xs sm:text-sm font-bold text-neutral-900">
               পরিমাণ
             </div>
 
-            <div className="grid grid-cols-[88px_1fr_1fr] gap-2 items-center">
+            <div className="grid grid-cols-[88px_1fr_1fr] gap-2.5 items-center">
               {/* Stepper */}
               <div className="h-11 rounded-xl border border-neutral-200 bg-white flex items-center justify-between px-2 shrink-0">
                 <button
@@ -834,25 +834,25 @@ export default function ProductDetail() {
       {typeof document !== 'undefined' && createPortal(
         <div 
           id="floating-product-action-bar"
-          className="md:hidden fixed bottom-3.5 left-3.5 right-3.5 z-[999] pointer-events-auto"
+          className="md:hidden fixed bottom-3 left-3 right-3 z-[999] pointer-events-auto"
         >
-          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.08)] rounded-[24px] p-2 flex items-center gap-2 max-w-lg mx-auto">
+          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.06)] rounded-[20px] p-1.5 xs:p-2 flex items-center gap-1.5 xs:gap-2 max-w-lg mx-auto">
             
             {/* Stepper with smooth capsule styling */}
-            <div className="h-11 rounded-[16px] bg-[#F2F2F6] border border-black/[0.04] flex items-center justify-between px-2 shrink-0 min-w-[82px]">
+            <div className="h-10 rounded-[14px] bg-[#F2F2F6] border border-black/[0.04] flex items-center justify-between px-1.5 shrink-0 min-w-[76px]">
               <button
                 type="button"
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
+                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
                 aria-label="Decrease quantity"
               >
                 −
               </button>
-              <span className="font-black text-sm text-neutral-900 px-1">{quantity}</span>
+              <span className="font-black text-xs sm:text-sm text-neutral-900 px-1">{quantity}</span>
               <button
                 type="button"
                 onClick={() => setQuantity(quantity + 1)}
-                className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
+                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
                 aria-label="Increase quantity"
               >
                 +
@@ -863,9 +863,9 @@ export default function ProductDetail() {
             <button
               type="button"
               onClick={(e) => handleAddToCart(e)}
-              className="flex-1 h-11 rounded-[16px] bg-[#6B46C1] hover:bg-[#5B3CC4] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_3px_12px_rgba(107,70,193,0.25)] transition-all cursor-pointer whitespace-nowrap px-2"
+              className="flex-1 h-10 rounded-[14px] bg-[#6B46C1] hover:bg-[#5B3CC4] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-[0_3px_10px_rgba(107,70,193,0.22)] transition-all cursor-pointer whitespace-nowrap px-1.5"
             >
-              <ShoppingBag size={15} strokeWidth={2.4} className="shrink-0" />
+              <ShoppingBag size={14} strokeWidth={2.4} className="shrink-0" />
               <span className="truncate">কার্টে যোগ করুন</span>
             </button>
 
@@ -873,7 +873,7 @@ export default function ProductDetail() {
             <button
               type="button"
               onClick={handleBuyNow}
-              className="flex-1 h-11 rounded-[16px] bg-[#E11D48] hover:bg-[#BE123C] active:scale-95 text-white font-bold text-xs flex items-center justify-center shadow-[0_3px_12px_rgba(225,29,72,0.25)] transition-all cursor-pointer whitespace-nowrap px-2"
+              className="flex-1 h-10 rounded-[14px] bg-[#E11D48] hover:bg-[#BE123C] active:scale-95 text-white font-bold text-xs flex items-center justify-center shadow-[0_3px_10px_rgba(225,29,72,0.22)] transition-all cursor-pointer whitespace-nowrap px-1.5"
             >
               <span className="truncate">এখনই কিনুন</span>
             </button>
