@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../src/lib/firebase';
@@ -246,7 +247,7 @@ export default function ProductDetail() {
   const colors = product.colorOptions && product.colorOptions.length > 0 ? product.colorOptions : [];
 
   return (
-    <div className="min-h-screen bg-[#F6F5FC] sm:bg-[#ECE9F8] text-neutral-900 pb-20 font-sans">
+    <div className="min-h-screen bg-[#F6F5FC] sm:bg-[#ECE9F8] text-neutral-900 pb-28 md:pb-12 font-sans">
       <SEO 
         title={`${product.name} - ৳${product.price.toFixed(0)}`}
         description={product.description?.substring(0, 160) || `Buy ${product.name} online.`}
@@ -825,6 +826,61 @@ export default function ProductDetail() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* FLOATING LIQUID GLASS MOBILE ACTION BAR (iOS Glass Style) */}
+      {/* ========================================================= */}
+      {typeof document !== 'undefined' && createPortal(
+        <div 
+          id="floating-product-action-bar"
+          className="md:hidden fixed bottom-3.5 left-3.5 right-3.5 z-[999] pointer-events-auto"
+        >
+          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.08)] rounded-[24px] p-2 flex items-center gap-2 max-w-lg mx-auto">
+            
+            {/* Stepper with smooth capsule styling */}
+            <div className="h-11 rounded-[16px] bg-[#F2F2F6] border border-black/[0.04] flex items-center justify-between px-2 shrink-0 min-w-[82px]">
+              <button
+                type="button"
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
+                aria-label="Decrease quantity"
+              >
+                −
+              </button>
+              <span className="font-black text-sm text-neutral-900 px-1">{quantity}</span>
+              <button
+                type="button"
+                onClick={() => setQuantity(quantity + 1)}
+                className="w-6 h-6 rounded-lg flex items-center justify-center text-base font-bold text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
+                aria-label="Increase quantity"
+              >
+                +
+              </button>
+            </div>
+
+            {/* Add to Cart CTA */}
+            <button
+              type="button"
+              onClick={(e) => handleAddToCart(e)}
+              className="flex-1 h-11 rounded-[16px] bg-[#6B46C1] hover:bg-[#5B3CC4] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_3px_12px_rgba(107,70,193,0.25)] transition-all cursor-pointer whitespace-nowrap px-2"
+            >
+              <ShoppingBag size={15} strokeWidth={2.4} className="shrink-0" />
+              <span className="truncate">কার্টে যোগ করুন</span>
+            </button>
+
+            {/* Buy Now CTA */}
+            <button
+              type="button"
+              onClick={handleBuyNow}
+              className="flex-1 h-11 rounded-[16px] bg-[#E11D48] hover:bg-[#BE123C] active:scale-95 text-white font-bold text-xs flex items-center justify-center shadow-[0_3px_12px_rgba(225,29,72,0.25)] transition-all cursor-pointer whitespace-nowrap px-2"
+            >
+              <span className="truncate">এখনই কিনুন</span>
+            </button>
+
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

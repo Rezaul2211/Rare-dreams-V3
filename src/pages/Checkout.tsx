@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -841,43 +842,46 @@ export default function Checkout() {
 
       </form>
 
-      {/* MOBILE STICKY BOTTOM ACTION BAR (Single place order button on mobile) */}
-      <div 
-        id="mobile-sticky-checkout-bar"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-lg border-t border-neutral-200/90 shadow-[0_-6px_30px_rgba(0,0,0,0.12)] px-4 pt-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] lg:hidden"
-      >
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
-          
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight block">
-              সর্বমোট মূল্য
-            </span>
-            <span className="text-lg sm:text-xl font-black text-neutral-900 leading-none font-mono">
-              ৳{total.toLocaleString()}
-            </span>
+      {/* MOBILE FLOATING LIQUID GLASS CHECKOUT BAR (Rendered in Portal to float above all page content) */}
+      {typeof document !== 'undefined' && createPortal(
+        <div 
+          id="mobile-sticky-checkout-bar"
+          className="fixed bottom-3.5 left-3.5 right-3.5 z-[999] pointer-events-auto lg:hidden"
+        >
+          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.08)] rounded-[24px] p-2.5 px-4 flex items-center justify-between gap-3 max-w-lg mx-auto">
+            
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight block">
+                সর্বমোট মূল্য
+              </span>
+              <span className="text-lg sm:text-xl font-black text-neutral-900 leading-none font-mono">
+                ৳{total.toLocaleString()}
+              </span>
+            </div>
+
+            <button 
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 max-w-[210px] h-11 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white px-4 rounded-[16px] text-xs sm:text-sm font-black shadow-[0_4px_14px_rgba(234,88,12,0.35)] transition-all flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin shrink-0" />
+                  <span>অপেক্ষা করুন...</span>
+                </>
+              ) : (
+                <>
+                  <span>অর্ডার নিশ্চিত করুন</span>
+                  <ArrowRight size={15} className="shrink-0 ml-0.5" />
+                </>
+              )}
+            </button>
+
           </div>
-
-          <button 
-            type="button"
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex-1 max-w-[220px] bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-xl text-sm font-black shadow-md shadow-orange-600/20 transition-all flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
-          >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="animate-spin shrink-0" />
-                <span>অপেক্ষা করুন...</span>
-              </>
-            ) : (
-              <>
-                <span>অর্ডার নিশ্চিত করুন</span>
-                <ArrowRight size={15} className="shrink-0 ml-0.5" />
-              </>
-            )}
-          </button>
-
-        </div>
-      </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );

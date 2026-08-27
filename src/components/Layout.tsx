@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -642,12 +643,12 @@ function LayoutInner() {
       <PushNotificationPrompt />
 
       {/* Floating Liquid Glass Mobile Bottom Navigation (Matching Reference Image) */}
-      {!location.pathname.startsWith('/checkout') && (
+      {!location.pathname.startsWith('/checkout') && !location.pathname.startsWith('/product') && typeof document !== 'undefined' && createPortal(
         <nav 
           aria-label="Mobile Navigation"
-          className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto"
+          className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[990] pointer-events-auto"
         >
-          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.05)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px]">
+          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.08)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px]">
             {/* 1. Home */}
             {(() => {
               const isActive = location.pathname === '/';
@@ -677,7 +678,7 @@ function LayoutInner() {
 
             {/* 2. Shop / Explore */}
             {(() => {
-              const isActive = location.pathname.startsWith('/shop') || location.pathname.startsWith('/category');
+              const isActive = location.pathname.startsWith('/shop') || location.pathname.startsWith('/category') || location.pathname.startsWith('/collection') || location.pathname.startsWith('/daily-drops') || location.pathname.startsWith('/most-loved') || location.pathname.startsWith('/best-sellers');
               return (
                 <Link
                   to="/shop"
@@ -764,7 +765,8 @@ function LayoutInner() {
               );
             })()}
           </div>
-        </nav>
+        </nav>,
+        document.body
       )}
     </div>
   );
