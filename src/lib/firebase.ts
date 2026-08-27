@@ -20,11 +20,11 @@ import firebaseConfig from "../../firebase-applet-config.json";
 // Initialize or reuse Firebase App
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth with graceful persistence hierarchy
+// Initialize Firebase Auth with reliable browser storage persistence hierarchy
 let authInstance: any;
 try {
   authInstance = initializeAuth(app, {
-    persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence]
+    persistence: [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence]
   });
 } catch {
   authInstance = getAuth(app);

@@ -826,7 +826,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
       </div>
 
       {/* STANDARD SIZE GUIDE MODAL (PORTALIZED FOR PERFECT CENTERING ABOVE ALL BARS) */}
-      {isSizeGuideOpen && typeof document !== 'undefined' && createPortal(
+      {isSizeGuideOpen && typeof document !== 'undefined' && document.body && createPortal(
         <div 
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsSizeGuideOpen(false);
@@ -908,7 +908,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
       {/* ========================================================= */}
       {/* FLOATING LIQUID GLASS MOBILE ACTION BAR (Ultra Translucent Liquid Glass) */}
       {/* ========================================================= */}
-      {typeof document !== 'undefined' && createPortal(
+      {typeof document !== 'undefined' && document.body && createPortal(
         <div 
           id="floating-product-action-bar"
           className="md:hidden fixed bottom-3 left-3 right-3 z-[999] pointer-events-auto"

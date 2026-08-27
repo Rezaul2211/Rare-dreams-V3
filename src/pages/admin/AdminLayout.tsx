@@ -16,7 +16,7 @@ import {
 import { auth } from '../../lib/firebase';
 
 export default function AdminLayout() {
-  const { user, loading } = useAuthStore();
+  const { user, loading, logout } = useAuthStore();
   const location = useLocation();
 
   if (loading) {
@@ -36,8 +36,8 @@ export default function AdminLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  const handleLogout = () => {
-    auth.signOut();
+  const handleLogout = async () => {
+    await logout();
   };
 
   const navItems = [

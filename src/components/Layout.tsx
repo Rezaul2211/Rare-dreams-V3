@@ -122,10 +122,45 @@ function LayoutInner() {
   const { isCartBouncing } = useFlyToCart();
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
 
-  // Automatically collapse search when navigating to a new page
+  // Smart Auto-Hide Scroll Header
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  // Automatically collapse search & close menu when navigating to a new page
   useEffect(() => {
     setIsMobileSearchExpanded(false);
+    setIsMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Smart Scroll Header: Auto-hide when scrolling down, reveal when scrolling up or at top
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      // Keep header visible if mobile search is open or mobile drawer is open
+      if (isMobileMenuOpen || isMobileSearchExpanded) {
+        setIsHeaderVisible(true);
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      // Always show when near the very top of page
+      if (currentScrollY <= 25) {
+        setIsHeaderVisible(true);
+      } else if (currentScrollY > lastScrollY.current + 8) {
+        // Scrolling down -> smoothly hide header
+        setIsHeaderVisible(false);
+      } else if (currentScrollY < lastScrollY.current - 8) {
+        // Scrolling up -> smoothly reveal header
+        setIsHeaderVisible(true);
+      }
+
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isMobileMenuOpen, isMobileSearchExpanded]);
 
   // Smart Search Visibility Logic:
   // Hide full-width search bar on focused transactional and utility pages (Checkout, Cart, Account, Login, Admin, etc.)
@@ -168,9 +203,11 @@ function LayoutInner() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC] font-sans text-neutral-900 pb-16 md:pb-0">
       {/* ========================================================= */}
-      {/* HEADER: ALWAYS VISIBLE ON ALL PAGES WITH LIQUID GLASS THEME */}
+      {/* HEADER: SMART STICKY WITH LIQUID GLASS & AUTO-HIDE ON SCROLL */}
       {/* ========================================================= */}
-      <header className="sticky top-0 z-50 bg-white/75 backdrop-blur-xl border-b border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.03),inset_0_-1px_0_rgba(255,255,255,0.6)] will-change-[backdrop-filter]">
+      <header className={`sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.03),inset_0_-1px_0_rgba(255,255,255,0.6)] transition-transform duration-300 ease-out will-change-transform ${
+        isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+      }`}>
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
           
           {/* ----------------- MOBILE HEADER ----------------- */}
@@ -424,20 +461,22 @@ function LayoutInner() {
           </div>
 
         </div>
+      </header>
 
-        {/* ----------------- MOBILE NAVIGATION SLIDE-OVER DRAWER (FROM LEFT) ----------------- */}
+      {/* ----------------- MOBILE NAVIGATION SLIDE-OVER DRAWER (RENDERED VIA PORTAL FOR ZERO CLIPPING) ----------------- */}
+      {typeof document !== 'undefined' && document.body && createPortal(
         <AnimatePresence>
           {isMobileMenuOpen && (
-            <>
+            <div className="fixed inset-0 z-[995] md:hidden">
               {/* Semi-transparent Backdrop: Clicking anywhere outside on the page closes the drawer */}
               <motion.div
                 key="mobile-drawer-backdrop"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.22 }}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 md:hidden"
+                className="fixed inset-0 bg-black/60 backdrop-blur-xs"
                 aria-hidden="true"
               />
 
@@ -447,8 +486,8 @@ function LayoutInner() {
                 initial={{ x: '-100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
-                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-                className="fixed top-0 left-0 bottom-0 w-[84%] max-w-[320px] bg-white z-50 shadow-2xl flex flex-col md:hidden overflow-hidden"
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                className="fixed top-0 left-0 bottom-0 w-[85%] max-w-[320px] bg-white shadow-2xl flex flex-col overflow-hidden z-10"
               >
                 {/* Drawer Top Header: Logo & Close Button */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 bg-white">
@@ -478,8 +517,26 @@ function LayoutInner() {
                 </div>
 
                 {/* Drawer Nav Items - Scrollable */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 divide-y divide-neutral-100">
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1 divide-y divide-neutral-100">
                   <div className="space-y-1 pb-2">
+                    {/* 1. Explicit HOME Link (Requested by User) */}
+                    <Link
+                      to="/"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        scrollToTop();
+                      }}
+                      className={`flex items-center space-x-3 py-3 px-3.5 text-sm font-black rounded-xl transition-all ${
+                        location.pathname === '/' 
+                          ? 'bg-neutral-900 text-white shadow-xs' 
+                          : 'text-neutral-900 hover:bg-neutral-100'
+                      }`}
+                    >
+                      <Home size={18} strokeWidth={2.4} />
+                      <span>Home (হোম)</span>
+                    </Link>
+
+                    {/* 2. All Categories & Navigation Items */}
                     {DESKTOP_NAV_ITEMS.map((navItem) => {
                       const hasSub = navItem.subcategories && navItem.subcategories.length > 0;
                       const isExpanded = activeDropdown === navItem.name;
@@ -556,8 +613,8 @@ function LayoutInner() {
                     })}
                   </div>
 
-                  {/* Account & Admin Section */}
-                  <div className="pt-3 space-y-2">
+                  {/* Account, Wishlist, Order Tracking & Admin Section */}
+                  <div className="pt-3 space-y-1.5">
                     <Link 
                       to="/track-order" 
                       className="flex items-center justify-between px-3.5 py-2.5 text-xs font-bold text-neutral-800 bg-neutral-100/70 hover:bg-neutral-100 rounded-xl transition-colors" 
@@ -566,9 +623,24 @@ function LayoutInner() {
                         scrollToTop();
                       }}
                     >
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2.5">
                         <Truck size={16} className="text-neutral-700" />
                         <span>Track Order (অর্ডার ট্র্যাক)</span>
+                      </div>
+                      <ArrowRight size={14} className="text-neutral-400" />
+                    </Link>
+
+                    <Link 
+                      to="/cart" 
+                      className="flex items-center justify-between px-3.5 py-2.5 text-xs font-bold text-neutral-800 hover:bg-neutral-50 rounded-xl transition-colors" 
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        scrollToTop();
+                      }}
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <ShoppingBag size={16} className="text-neutral-600" />
+                        <span>Shopping Bag ({itemCount})</span>
                       </div>
                       <ArrowRight size={14} className="text-neutral-400" />
                     </Link>
@@ -579,7 +651,7 @@ function LayoutInner() {
                         className="flex items-center justify-between px-3.5 py-2.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors" 
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2.5">
                           <ShieldCheck size={16} className="text-amber-600" />
                           <span>{t('nav.admin')}</span>
                         </div>
@@ -592,8 +664,8 @@ function LayoutInner() {
                       className="flex items-center justify-between px-3.5 py-2.5 text-xs font-bold text-neutral-800 hover:bg-neutral-50 rounded-xl transition-colors" 
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
-                      <div className="flex items-center space-x-2">
-                        <User size={16} className="text-neutral-500" />
+                      <div className="flex items-center space-x-2.5">
+                        <User size={16} className="text-neutral-600" />
                         <span>{user ? t('nav.account') : t('nav.login')}</span>
                       </div>
                       <ArrowRight size={14} className="text-neutral-400" />
@@ -607,10 +679,11 @@ function LayoutInner() {
                   <p className="text-[11px]">Call: {config.helplineNumber || '01954710343'}</p>
                 </div>
               </motion.div>
-            </>
+            </div>
           )}
-        </AnimatePresence>
-      </header>
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Main Content with Smooth Page Transitions & Pull-to-Refresh */}
       <main className="flex-grow flex flex-col min-h-[85vh] relative">
@@ -643,7 +716,7 @@ function LayoutInner() {
       {!location.pathname.startsWith('/admin') && <PushNotificationPrompt />}
 
       {/* Floating Liquid Glass Mobile Bottom Navigation (Hidden on Checkout, Product Detail, and Admin pages) */}
-      {!location.pathname.startsWith('/checkout') && !location.pathname.startsWith('/product') && !location.pathname.startsWith('/admin') && typeof document !== 'undefined' && createPortal(
+      {!location.pathname.startsWith('/checkout') && !location.pathname.startsWith('/product') && !location.pathname.startsWith('/admin') && typeof document !== 'undefined' && document.body && createPortal(
         <nav 
           aria-label="Mobile Navigation"
           className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[990] pointer-events-auto"

@@ -30,13 +30,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   setLoading: (loading) => set({ loading }),
   logout: async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch (e) {
-      console.error("Logout error", e);
-    }
+    // Clear user state and cached local storage immediately
     localStorage.removeItem('rare_dreams_user');
     set({ user: null, loading: false });
+
+    try {
+      if (auth.currentUser) {
+        await firebaseSignOut(auth);
+      }
+    } catch (e) {
+      // Silently handle any browser IndexedDB closure or unmounting errors
+      console.warn("Notice on logout signout:", e);
+    }
   },
   updateUserProfile: async (data: Partial<User>) => {
     const currentUser = get().user;

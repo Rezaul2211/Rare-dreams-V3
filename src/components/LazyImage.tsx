@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import { clsx } from 'clsx';
 
 interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
@@ -7,16 +7,21 @@ interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   className?: string;
   containerClassName?: string;
   priority?: boolean;
+  blurDataURL?: string;
 }
 
-export function LazyImage({ 
+// Ultra-lightweight base64 SVG shimmer blur placeholder (< 200 bytes)
+const DEFAULT_BLUR_SVG = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 500'%3E%3Cfilter id='b' color-interpolation-filters='sRGB'%3E%3CfeGaussianBlur stdDeviation='18'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%23F1F3F5'/%3E%3Crect width='100%25' height='100%25' fill='%23E9ECEF' filter='url(%23b)' opacity='0.7'/%3E%3C/svg%3E";
+
+export const LazyImage = memo(({ 
   src, 
-  alt, 
+  alt = '', 
   className, 
   containerClassName, 
   priority = false,
+  blurDataURL = DEFAULT_BLUR_SVG,
   ...props 
-}: LazyImageProps) {
+}: LazyImageProps) => {
   const [isInView, setIsInView] = useState(priority);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -40,7 +45,7 @@ export function LazyImage({
           observer.disconnect();
         }
       },
-      { rootMargin: '250px 0px' }
+      { rootMargin: '300px 0px', threshold: 0.01 }
     );
 
     observer.observe(container);
@@ -61,40 +66,54 @@ export function LazyImage({
   return (
     <div 
       ref={containerRef}
-      className={clsx("relative overflow-hidden bg-neutral-100/90 flex-shrink-0", containerClassName)}
+      className={clsx(
+        "relative overflow-hidden bg-neutral-100 flex-shrink-0", 
+        containerClassName
+      )}
     >
-      {/* Soft Backdrop for Loading State */}
-      <div 
+      {/* 1. Base64 Blur-Up Preview Placeholder with soft shimmer effect */}
+      <img
+        src={blurDataURL}
+        alt=""
+        aria-hidden="true"
         className={clsx(
-          "absolute inset-0 bg-neutral-200 pointer-events-none transition-opacity duration-300 ease-out z-0",
-          isLoaded || hasError ? "opacity-0 pointer-events-none" : "opacity-100"
-        )} 
+          "absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ease-out z-0 filter blur-md scale-105",
+          isLoaded && !hasError ? "opacity-0" : "opacity-100"
+        )}
       />
 
-      {isInView ? (
+      {/* 2. Main High-Res Image with Blur-Up Transition */}
+      {isInView && src ? (
         <img
           ref={imgRef}
           src={src}
           alt={alt}
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
+          referrerPolicy="no-referrer"
           onLoad={() => setIsLoaded(true)}
           onError={() => setHasError(true)}
           className={clsx(
-            "w-full h-full object-cover relative z-10 transition-opacity duration-300 ease-in-out",
-            !isLoaded ? "opacity-0" : "opacity-100",
+            "w-full h-full object-cover relative z-10 transition-all duration-500 ease-out will-change-[filter,opacity,transform]",
+            !isLoaded 
+              ? "opacity-0 filter blur-lg scale-105" 
+              : "opacity-100 filter blur-0 scale-100",
             className
           )}
           {...props}
         />
       ) : null}
 
+      {/* 3. Error Fallback */}
       {hasError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 text-neutral-400 text-xs pointer-events-none z-20 font-medium">
+        <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 text-neutral-400 text-[10px] sm:text-xs pointer-events-none z-20 font-medium">
           Image unavailable
         </div>
       )}
     </div>
   );
-}
+});
+
+LazyImage.displayName = 'LazyImage';
+
 
