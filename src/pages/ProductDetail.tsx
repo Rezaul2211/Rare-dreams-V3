@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
@@ -123,22 +123,22 @@ export default function ProductDetail() {
   }, [id]);
 
   // 360 Rotation Mouse/Touch handlers
-  const handleTouchStart360 = (e: React.TouchEvent | React.MouseEvent) => {
+  const handleTouchStart360 = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     isDragging360.current = true;
     startX360.current = 'touches' in e ? e.touches[0].clientX : e.clientX;
-  };
+  }, []);
 
-  const handleTouchMove360 = (e: React.TouchEvent | React.MouseEvent) => {
+  const handleTouchMove360 = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     if (!isDragging360.current) return;
     const currentX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const delta = currentX - startX360.current;
     startX360.current = currentX;
     setRotationAngle((prev) => (prev + delta * 0.9) % 360);
-  };
+  }, []);
 
-  const handleTouchEnd360 = () => {
+  const handleTouchEnd360 = useCallback(() => {
     isDragging360.current = false;
-  };
+  }, []);
 
   // Extract real uploaded images only (No fake shirt variants)
   const displayImages = useMemo(() => {
@@ -187,16 +187,16 @@ export default function ProductDetail() {
     return list;
   }, [product]);
 
-  const handleColorChange = (colorName: string, index: number) => {
+  const handleColorChange = useCallback((colorName: string, index: number) => {
     setSelectedColor(colorName);
     // Automatic image switching if image exists for this variant
     if (displayImages.length > index) {
       setSelectedImageIndex(index);
       setIs360Mode(false);
     }
-  };
+  }, [displayImages.length]);
 
-  const handleAddToCart = (e?: React.MouseEvent<HTMLElement>) => {
+  const handleAddToCart = useCallback((e?: React.MouseEvent<HTMLElement>) => {
     if (!product) return;
     trackAddToCart({
       content_name: product.name,
@@ -219,9 +219,9 @@ export default function ProductDetail() {
         quantity,
       });
     }
-  };
+  }, [product, quantity, selectedSize, selectedColor, animateAddToCart, addItem]);
 
-  const handleBuyNow = () => {
+  const handleBuyNow = useCallback(() => {
     if (!product) return;
     trackAddToCart({
       content_name: product.name,
@@ -239,9 +239,9 @@ export default function ProductDetail() {
 
     setDirectCheckoutItem(directItem);
     navigate('/checkout');
-  };
+  }, [product, quantity, selectedSize, selectedColor, setDirectCheckoutItem, navigate]);
 
-  const handleWhatsAppOrder = () => {
+  const handleWhatsAppOrder = useCallback(() => {
     if (!product) return;
     const rawPhone = storeConfig?.whatsappNumber || storeConfig?.helplineNumber || '+8801712345678';
     const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
@@ -255,9 +255,9 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
 
     const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');
-  };
+  }, [product, storeConfig, selectedColor, selectedSize, quantity]);
 
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     if (!product) return;
     const shareData = {
       title: product.name,
@@ -274,7 +274,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
       navigator.clipboard.writeText(window.location.href);
       alert('প্রোডাক্টের লিংক কপি করা হয়েছে!');
     }
-  };
+  }, [product]);
 
   if (loading) {
     return <ProductDetailSkeleton />;
@@ -913,14 +913,14 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
           id="floating-product-action-bar"
           className="md:hidden fixed bottom-3 left-3 right-3 z-[999] pointer-events-auto"
         >
-          <div className="bg-white/20 backdrop-blur-xl border border-white/65 shadow-[0_12px_40px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.02),inset_0_1.5px_2.5px_rgba(255,255,255,0.95)] rounded-[20px] p-1.5 xs:p-2 flex items-center gap-1.5 xs:gap-2 max-w-lg mx-auto will-change-[backdrop-filter,transform]">
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)] rounded-[20px] p-1.5 xs:p-2 flex items-center gap-1.5 xs:gap-2 max-w-lg mx-auto will-change-[backdrop-filter,transform]">
             
             {/* Stepper with smooth crystal glass capsule styling */}
-            <div className="h-10 rounded-[14px] bg-white/45 backdrop-blur-md border border-white/60 flex items-center justify-between px-1.5 shrink-0 min-w-[76px] shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.9)]">
+            <div className="h-10 rounded-[14px] bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-between px-1.5 shrink-0 min-w-[76px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]">
               <button
                 type="button"
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/80 active:scale-90 transition-all cursor-pointer"
+                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/40 active:scale-90 transition-all cursor-pointer"
                 aria-label="Decrease quantity"
               >
                 −
@@ -929,7 +929,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               <button
                 type="button"
                 onClick={() => setQuantity(quantity + 1)}
-                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/80 active:scale-90 transition-all cursor-pointer"
+                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/40 active:scale-90 transition-all cursor-pointer"
                 aria-label="Increase quantity"
               >
                 +

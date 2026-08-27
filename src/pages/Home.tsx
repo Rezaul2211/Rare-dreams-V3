@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -405,7 +405,7 @@ interface ProductSectionSliderProps {
   loading: boolean;
 }
 
-function ProductSectionSlider({ title, link, products, loading }: ProductSectionSliderProps) {
+const ProductSectionSlider = React.memo(function ProductSectionSlider({ title, link, products, loading }: ProductSectionSliderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -414,7 +414,7 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
   const displayProducts = products.length > 0 ? products : [];
   const totalDots = Math.min(5, Math.max(2, Math.ceil(displayProducts.length / 2)));
 
-  const updateScrollState = () => {
+  const updateScrollState = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
     setCanScrollLeft(scrollLeft > 10);
@@ -426,7 +426,7 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
       const idx = Math.min(totalDots - 1, Math.round(progress * (totalDots - 1)));
       setActiveDot(idx);
     }
-  };
+  }, [totalDots]);
 
   useEffect(() => {
     updateScrollState();
@@ -448,9 +448,9 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
         if (timeoutId) clearTimeout(timeoutId);
       };
     }
-  }, [displayProducts.length, totalDots]);
+  }, [displayProducts.length, updateScrollState]);
 
-  const scroll = (direction: 'left' | 'right') => {
+  const scroll = useCallback((direction: 'left' | 'right') => {
     if (!scrollRef.current) return;
     const { clientWidth } = scrollRef.current;
     const scrollAmount = clientWidth * 0.75;
@@ -458,9 +458,9 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
       left: direction === 'left' ? -scrollAmount : scrollAmount,
       behavior: 'smooth'
     });
-  };
+  }, []);
 
-  const scrollToDot = (dotIndex: number) => {
+  const scrollToDot = useCallback((dotIndex: number) => {
     if (!scrollRef.current) return;
     const { scrollWidth, clientWidth } = scrollRef.current;
     const maxScroll = scrollWidth - clientWidth;
@@ -471,7 +471,7 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
         behavior: 'smooth'
       });
     }
-  };
+  }, [totalDots]);
 
   return (
     <section className="space-y-1.5 sm:space-y-2.5">
@@ -566,7 +566,7 @@ function ProductSectionSlider({ title, link, products, loading }: ProductSection
       </div>
     </section>
   );
-}
+});
 
 export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);

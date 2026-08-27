@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams, useLocation, Link, useNavigate } from 'react-router-dom';
 import { Product } from '../types';
 import { 
@@ -1208,12 +1208,12 @@ export default function Shop() {
     return filteredProducts.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredProducts, currentPage, itemsPerPage]);
 
-  const handlePageChange = (page: number) => {
+  const handlePageChange = useCallback((page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  };
+  }, [totalPages]);
 
   return (
     <div className="w-full min-h-screen bg-white text-neutral-900 pb-16">

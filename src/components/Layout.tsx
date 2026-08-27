@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -150,20 +150,20 @@ function LayoutInner() {
     fetchConfig();
   }, []);
 
-  const scrollToTop = () => {
+  const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-  };
+  }, []);
 
-  const handleMouseEnter = (name: string) => {
+  const handleMouseEnter = useCallback((name: string) => {
     if (dropdownTimeoutRef.current) clearTimeout(dropdownTimeoutRef.current);
     setActiveDropdown(name);
-  };
+  }, []);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     dropdownTimeoutRef.current = setTimeout(() => {
       setActiveDropdown(null);
     }, 150);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC] font-sans text-neutral-900 pb-16 md:pb-0">
@@ -648,7 +648,7 @@ function LayoutInner() {
           aria-label="Mobile Navigation"
           className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[990] pointer-events-auto"
         >
-          <div className="bg-white/18 backdrop-blur-xl border border-white/65 shadow-[0_12px_40px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.02),inset_0_1.5px_2.5px_rgba(255,255,255,0.95)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px] will-change-[backdrop-filter,transform]">
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px] will-change-[backdrop-filter,transform]">
             {/* 1. Home */}
             {(() => {
               const isActive = location.pathname === '/';

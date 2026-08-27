@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, ArrowRight, ShoppingBag, Sparkles, Loader2, Tag } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -34,13 +34,16 @@ export function HeaderSearch({
   const navigate = useNavigate();
   const { language, t } = useLanguageStore();
 
-  const handleClose = () => {
+  const { categories } = useCategoryStore();
+  const term = searchQuery.toLowerCase().trim();
+
+  const handleClose = useCallback(() => {
     setIsOpen(false);
     if (onCloseMobileModal) onCloseMobileModal();
     if (onSelect) onSelect();
-  };
+  }, [onCloseMobileModal, onSelect]);
 
-  const fetchProductsForSearch = async () => {
+  const fetchProductsForSearch = useCallback(async () => {
     if (hasFetched) return;
     setLoading(true);
     try {
@@ -54,7 +57,7 @@ export function HeaderSearch({
     } finally {
       setLoading(false);
     }
-  };
+  }, [hasFetched]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,7 +69,7 @@ export function HeaderSearch({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setSearchQuery(val);
     if (val.trim().length > 0) {
@@ -75,46 +78,51 @@ export function HeaderSearch({
     } else {
       setIsOpen(false);
     }
-  };
+  }, [fetchProductsForSearch]);
 
-  const handleFocus = () => {
+  const handleFocus = useCallback(() => {
     fetchProductsForSearch();
     if (searchQuery.trim().length > 0) {
       setIsOpen(true);
     }
-  };
+  }, [fetchProductsForSearch, searchQuery]);
 
-  const handleSearchSubmit = (e?: React.FormEvent) => {
+  const handleSearchSubmit = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
     handleClose();
     navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
-  };
+  }, [searchQuery, handleClose, navigate]);
 
-  const handleProductClick = (productId: string) => {
+  const handleProductClick = useCallback((productId: string) => {
     handleClose();
     setSearchQuery('');
     navigate(`/product/${productId}`);
-  };
+  }, [handleClose, navigate]);
 
-  const handleCategoryClick = (categoryName: string) => {
+  const handleCategoryClick = useCallback((categoryName: string) => {
     handleClose();
     setSearchQuery('');
     navigate(`/category/${encodeURIComponent(categoryName)}`);
-  };
+  }, [handleClose, navigate]);
 
-  const term = searchQuery.toLowerCase().trim();
-  const filteredProducts = term ? products.filter(p => {
-    const nameMatch = p.name?.toLowerCase().includes(term);
-    const catMatch = p.category?.toLowerCase().includes(term);
-    const subcatMatch = p.subcategory?.toLowerCase().includes(term);
-    const descMatch = p.description?.toLowerCase().includes(term);
-    return nameMatch || catMatch || subcatMatch || descMatch;
-  }) : [];
+  const filteredProducts = useMemo(() => {
+    if (!term) return [];
+    return products.filter(p => {
+      const nameMatch = p.name?.toLowerCase().includes(term);
+      const catMatch = p.category?.toLowerCase().includes(term);
+      const subcatMatch = p.subcategory?.toLowerCase().includes(term);
+      const descMatch = p.description?.toLowerCase().includes(term);
+      return nameMatch || catMatch || subcatMatch || descMatch;
+    });
+  }, [products, term]);
 
-  const { categories } = useCategoryStore();
-  const categoriesList = categories.map(c => c.title);
-  const matchedCategories = term ? categoriesList.filter(c => c.toLowerCase().includes(term)) : [];
+  const matchedCategories = useMemo(() => {
+    if (!term) return [];
+    return categories
+      .map(c => c.title)
+      .filter(c => c.toLowerCase().includes(term));
+  }, [categories, term]);
 
   return (
     <div ref={searchRef} className={`relative w-full ${className}`}>
@@ -197,7 +205,7 @@ export function HeaderSearch({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 right-0 top-full mt-2 bg-white rounded-3xl shadow-2xl border border-neutral-200/90 overflow-hidden z-50 text-left"
+            className="absolute left-0 right-0 top-full mt-2 bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.6)] border border-white/40 overflow-hidden z-50 text-left"
           >
             {loading ? (
               <div className="p-6 text-center text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-center space-x-2">

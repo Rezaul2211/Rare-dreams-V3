@@ -16,7 +16,7 @@ import { useCategoryStore } from '../store/useCategoryStore';
 import { useLanguageStore, translateCategory } from '../store/useLanguageStore';
 import Logo from './Logo';
 
-export default function Footer() {
+export const Footer = React.memo(function Footer() {
   const { config } = useStoreConfigStore();
   const { categories } = useCategoryStore();
   const { language, t } = useLanguageStore();
@@ -215,6 +215,8 @@ export default function Footer() {
 
     </>
   );
-}
+});
+
+export default Footer;
 
 
