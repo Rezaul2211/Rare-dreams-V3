@@ -60,9 +60,11 @@ export interface SteadfastServiceResult<T = any> {
  * Generates official Steadfast parcel live tracking link
  */
 export function getSteadfastTrackingUrl(trackingCode: string): string {
-  if (!trackingCode) return 'https://steadfast.com.bd';
-  const cleanCode = trackingCode.trim();
-  return `https://steadfast.com.bd/t/${cleanCode}`;
+  if (!trackingCode) return 'https://steadfast.com.bd/tracking';
+  // The /t/ endpoint is for hashed/time-limited links and throws an "expired" error for raw tracking codes.
+  // Currently, Steadfast does not support a direct public URL for raw tracking codes without a form submission,
+  // so we redirect to the tracking portal where the user can paste the code.
+  return `https://steadfast.com.bd/tracking`;
 }
 
 /**
