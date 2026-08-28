@@ -734,6 +734,7 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(12000),
       });
 
       const data: any = await sfRes.json();
@@ -757,8 +758,8 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
     } catch (err: any) {
       return res.status(500).json({
         success: false,
-        error: err?.message,
-        message: 'স্টেডফাস্ট সার্ভারে যোগাযোগ ত্রুটি। ইন্টারনেট বা এপিআই কানেকশন চেক করুন।',
+        error: err?.message || 'NETWORK_ERROR',
+        message: 'স্টেডফাস্ট সার্ভারে যোগাযোগ ত্রুটি। আপনার মার্চেন্ট এপিআই কি/সিক্রেট কি চেক করুন অথবা টেস্ট মোডে পরীক্ষা করুন।',
       });
     }
   }

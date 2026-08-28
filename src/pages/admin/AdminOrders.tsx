@@ -374,7 +374,7 @@ export default function AdminOrders() {
   }, []);
 
   // Submit Steadfast Courier Booking
-  const handleConfirmSteadfastBooking = async () => {
+  const handleConfirmSteadfastBooking = async (forceTestMode?: boolean) => {
     if (!bookingModalOrder) return;
 
     if (!config.steadfastApiKey || !config.steadfastSecretKey) {
@@ -402,6 +402,7 @@ export default function AdminOrders() {
     setBookingSuccess(null);
 
     try {
+      const isTest = forceTestMode !== undefined ? forceTestMode : config.steadfastTestMode;
       const payload = {
         invoice: bookingForm.invoice,
         recipient_name: bookingForm.recipientName.trim(),
@@ -414,7 +415,7 @@ export default function AdminOrders() {
       const res = await createSteadfastOrder(payload, {
         apiKey: config.steadfastApiKey,
         secretKey: config.steadfastSecretKey,
-        testMode: config.steadfastTestMode,
+        testMode: isTest,
       });
 
       if (!res.success || !res.data) {
@@ -888,9 +889,37 @@ export default function AdminOrders() {
             )}
 
             {bookingError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center space-x-2 text-xs font-bold text-rose-800">
-                <XCircle size={15} className="shrink-0 text-rose-600" />
-                <span>{bookingError}</span>
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs text-rose-900">
+                <div className="flex items-start space-x-2 font-bold text-rose-800">
+                  <XCircle size={16} className="shrink-0 text-rose-600 mt-0.5" />
+                  <span>{bookingError}</span>
+                </div>
+                <div className="pt-1 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateConfig({ steadfastTestMode: true });
+                      setBookingError(null);
+                      // Trigger booking in test mode
+                      setTimeout(() => {
+                        handleConfirmSteadfastBooking(true);
+                      }, 100);
+                    }}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                  >
+                    <FlaskConical size={12} />
+                    <span>🧪 টেস্ট মোডে বুক করুন (Safe Simulation)</span>
+                  </button>
+                  <a
+                    href="https://portal.steadfast.com.bd"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-neutral-800 hover:bg-black text-white rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <span>🌐 Steadfast পোর্টালে যান</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
               </div>
             )}
 
