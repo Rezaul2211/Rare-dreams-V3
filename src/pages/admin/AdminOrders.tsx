@@ -34,7 +34,8 @@ import {
   ExternalLink,
   Send,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  FlaskConical
 } from 'lucide-react';
 
 type OrderStatus = 'Pending' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
@@ -844,11 +845,22 @@ export default function AdminOrders() {
                 <Truck size={18} />
               </div>
               <div>
-                <h3 className="font-black text-sm uppercase tracking-wide">
-                  Steadfast Courier পার্সেল বুকিং
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-sm uppercase tracking-wide">
+                    Steadfast Courier পার্সেল বুকিং
+                  </h3>
+                  {config.steadfastTestMode ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <FlaskConical size={10} /> Test Mode
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live Mode
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-neutral-300">
-                  অর্ডার #{bookingModalOrder.id.slice(0, 8)}
+                  অর্ডার #{bookingModalOrder.id.slice(0, 8)} • {config.steadfastTestMode ? 'স্যান্ডবক্স সিমুলেশন' : 'সরাসরি আসল মার্চেন্ট বুকিং'}
                 </p>
               </div>
             </div>

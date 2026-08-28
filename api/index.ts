@@ -594,6 +594,237 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
     }
   }
 
-  // 5. Default fallback
+  // 7. Steadfast Courier API Routes (Bangladesh Logistics)
+  const STEADFAST_BASE_URL = 'https://api.steadfast.com.bd/api/v1';
+  const resolveSteadfastKeys = () => {
+    const apiKey = (body?.apiKey || req?.headers?.['x-steadfast-api-key'] || process.env.STEADFAST_API_KEY || '').toString().trim();
+    const secretKey = (body?.secretKey || req?.headers?.['x-steadfast-secret-key'] || process.env.STEADFAST_SECRET_KEY || '').toString().trim();
+    const isTestMode = body?.testMode === true || req?.headers?.['x-steadfast-test-mode'] === 'true';
+    return { apiKey, secretKey, isTestMode };
+  };
+
+  // 7a. Check Balance
+  if (url.includes('/api/courier/steadfast/check-balance')) {
+    const { apiKey, secretKey, isTestMode } = resolveSteadfastKeys();
+
+    if (!apiKey || !secretKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'MISSING_CREDENTIALS',
+        message: 'Steadfast API Key এবং Secret Key প্রয়োজন। এডমিন সেটিংসে কি বসিয়ে সেভ করুন।',
+      });
+    }
+
+    if (isTestMode) {
+      return res.status(200).json({
+        success: true,
+        status: 200,
+        balance: 0,
+        isTestMode: true,
+        message: 'টেস্ট মোড সক্রিয়: স্টেডফাস্ট স্যান্ডবক্স কানেকশন সফল (Demo Balance: ৳0)',
+        details: 'টেস্ট মোড অন থাকায় কোনো আসল রাইডার বা পার্সেল বুকিং ছাড়াই নিরাপদে টেস্ট করতে পারবেন।',
+      });
+    }
+
+    try {
+      const sfRes = await fetch(`${STEADFAST_BASE_URL}/get_balance`, {
+        method: 'GET',
+        headers: {
+          'Api-Key': apiKey,
+          'Secret-Key': secretKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data: any = await sfRes.json();
+      if (sfRes.ok && data.status === 200) {
+        return res.status(200).json({
+          success: true,
+          status: 200,
+          balance: data.current_balance,
+          isTestMode: false,
+          message: `লাইভ কানেকশন সফল! আপনার বর্তমান স্টেটফাস্ট ব্যালেন্স: ৳${Number(data.current_balance || 0).toLocaleString()}`,
+          details: 'আপনার আসল Steadfast একাউন্টের সাথে লাইভ সংযোগ রয়েছে।',
+        });
+      }
+
+      return res.status(sfRes.status || 400).json({
+        success: false,
+        error: data.message || 'INVALID_CREDENTIALS',
+        message: data.message || 'Steadfast ক্রেডেনশিয়াল সঠিক নয়। এপিআই কি ও সিক্রেট কি চেক করুন।',
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err?.message,
+        message: 'Steadfast সার্ভারে সংযোগ করা যায়নি।',
+      });
+    }
+  }
+
+  // 7b. Create Order / Parcel Booking
+  if (url.includes('/api/courier/steadfast/create-order')) {
+    const { apiKey, secretKey, isTestMode } = resolveSteadfastKeys();
+    const { invoice, recipient_name, recipient_phone, recipient_address, cod_amount, note } = body;
+
+    if (!apiKey || !secretKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'MISSING_CREDENTIALS',
+        message: 'Steadfast API Key & Secret Key আবশ্যক। এডমিন সেটিংস থেকে প্রদান করুন।',
+      });
+    }
+
+    if (!recipient_name || !recipient_phone || !recipient_address) {
+      return res.status(400).json({
+        success: false,
+        error: 'MISSING_REQUIRED_FIELDS',
+        message: 'গ্রাহকের নাম, ফোন এবং সম্পূর্ণ ঠিকানা আবশ্যক।',
+      });
+    }
+
+    const cleanPhone = (recipient_phone || '').replace(/[^0-9]/g, '').slice(-11);
+    if (!cleanPhone || cleanPhone.length < 11) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_PHONE',
+        message: 'গ্রাহকের সঠিক ১১ ডিজিটের ফোন নাম্বার দিন (যেমন: 017XXXXXXXX)।',
+      });
+    }
+
+    const payload = {
+      invoice: invoice || `RD-${Date.now()}`,
+      recipient_name: recipient_name.trim(),
+      recipient_phone: cleanPhone,
+      recipient_address: recipient_address.trim(),
+      cod_amount: Math.max(0, Math.round(Number(cod_amount || 0))),
+      note: note || 'Rare Dreams Luxury Fashion Parcel',
+    };
+
+    if (isTestMode) {
+      const fakeCid = Math.floor(1000000 + Math.random() * 9000000);
+      const fakeTracking = `SF-TEST-${Math.floor(10000000 + Math.random() * 90000000)}`;
+      const consignment = {
+        consignment_id: fakeCid,
+        invoice: payload.invoice,
+        tracking_code: fakeTracking,
+        recipient_name: payload.recipient_name,
+        recipient_phone: payload.recipient_phone,
+        recipient_address: payload.recipient_address,
+        cod_amount: payload.cod_amount,
+        status: 'in_review',
+        created_at: new Date().toISOString(),
+      };
+
+      return res.status(200).json({
+        success: true,
+        status: 200,
+        isTestMode: true,
+        consignment,
+        message: `(টেস্ট মোড) সফলভাবে সিমুলেটেড পার্সেল বুকিং হয়েছে! টেস্ট ট্র্যাকিং: ${consignment.tracking_code}`,
+      });
+    }
+
+    try {
+      const sfRes = await fetch(`${STEADFAST_BASE_URL}/create_order`, {
+        method: 'POST',
+        headers: {
+          'Api-Key': apiKey,
+          'Secret-Key': secretKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data: any = await sfRes.json();
+
+      if (sfRes.ok && data.status === 200 && data.consignment) {
+        return res.status(200).json({
+          success: true,
+          status: 200,
+          consignment: data.consignment,
+          message: `পার্সেল বুকিং সফল! ট্র্যাকিং আইডি: ${data.consignment.tracking_code}`,
+        });
+      }
+
+      const errorMsg = data.message || (data.errors ? JSON.stringify(data.errors) : 'বুকিং সম্পন্ন হয়নি');
+      return res.status(sfRes.status || 400).json({
+        success: false,
+        error: errorMsg,
+        message: `স্টেডফাস্ট বুকিং ব্যর্থ: ${errorMsg}`,
+        errors: data.errors,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err?.message,
+        message: 'স্টেডফাস্ট সার্ভারে যোগাযোগ ত্রুটি। ইন্টারনেট বা এপিআই কানেকশন চেক করুন।',
+      });
+    }
+  }
+
+  // 7c. Consignment Status
+  if (url.includes('/api/courier/steadfast/status')) {
+    const { apiKey, secretKey } = resolveSteadfastKeys();
+    const { trackingCode, consignmentId, invoice } = body;
+
+    if (!apiKey || !secretKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'MISSING_CREDENTIALS',
+        message: 'Steadfast API Key & Secret Key আবশ্যক।',
+      });
+    }
+
+    let endpoint = '';
+    if (trackingCode) {
+      endpoint = `${STEADFAST_BASE_URL}/status_by_trackingcode/${encodeURIComponent(trackingCode.trim())}`;
+    } else if (consignmentId) {
+      endpoint = `${STEADFAST_BASE_URL}/status_by_cid/${encodeURIComponent(consignmentId)}`;
+    } else if (invoice) {
+      endpoint = `${STEADFAST_BASE_URL}/status_by_invoice/${encodeURIComponent(invoice)}`;
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'MISSING_TRACKING_IDENTIFIER',
+        message: 'ট্র্যাকিং কোড বা ইনভয়েস আইডি দিন।',
+      });
+    }
+
+    try {
+      const sfRes = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Api-Key': apiKey,
+          'Secret-Key': secretKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data: any = await sfRes.json();
+      if (sfRes.ok && (data.status === 200 || data.delivery_status)) {
+        return res.status(200).json({
+          success: true,
+          status: 200,
+          delivery_status: data.delivery_status || data.status || 'in_review',
+          message: 'Status fetched',
+        });
+      }
+
+      return res.status(sfRes.status || 400).json({
+        success: false,
+        error: data.message || 'Status not found',
+        message: data.message || 'পার্সেলের স্ট্যাটাস পাওয়া যায়নি।',
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err?.message,
+        message: 'সার্ভার যোগাযোগে ত্রুটি।',
+      });
+    }
+  }
+
+  // 8. Default fallback
   return res.status(200).json({ status: "ok", message: "Rare Dreams Vercel API Gateway Active" });
 }
