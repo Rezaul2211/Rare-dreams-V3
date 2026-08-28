@@ -402,7 +402,7 @@ export default function AdminOrders() {
     setBookingSuccess(null);
 
     try {
-      const isTest = forceTestMode !== undefined ? forceTestMode : config.steadfastTestMode;
+      const isTest = false; // Forced false as per user request to remove test mode
       const payload = {
         invoice: bookingForm.invoice,
         recipient_name: bookingForm.recipientName.trim(),
@@ -846,22 +846,11 @@ export default function AdminOrders() {
                 <Truck size={18} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-black text-sm uppercase tracking-wide">
-                    Steadfast Courier পার্সেল বুকিং
-                  </h3>
-                  {config.steadfastTestMode ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      <FlaskConical size={10} /> Test Mode
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live Mode
-                    </span>
-                  )}
-                </div>
+                <h3 className="font-black text-sm uppercase tracking-wide">
+                  Steadfast Courier পার্সেল বুকিং
+                </h3>
                 <p className="text-[11px] text-neutral-300">
-                  অর্ডার #{bookingModalOrder.id.slice(0, 8)} • {config.steadfastTestMode ? 'স্যান্ডবক্স সিমুলেশন' : 'সরাসরি আসল মার্চেন্ট বুকিং'}
+                  অর্ডার #{bookingModalOrder.id.slice(0, 8)} • সরাসরি আসল মার্চেন্ট বুকিং
                 </p>
               </div>
             </div>
@@ -895,21 +884,6 @@ export default function AdminOrders() {
                   <span>{bookingError}</span>
                 </div>
                 <div className="pt-1 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateConfig({ steadfastTestMode: true });
-                      setBookingError(null);
-                      // Trigger booking in test mode
-                      setTimeout(() => {
-                        handleConfirmSteadfastBooking(true);
-                      }, 100);
-                    }}
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
-                  >
-                    <FlaskConical size={12} />
-                    <span>🧪 টেস্ট মোডে বুক করুন (Safe Simulation)</span>
-                  </button>
                   <a
                     href="https://portal.steadfast.com.bd"
                     target="_blank"
@@ -1031,7 +1005,7 @@ export default function AdminOrders() {
 
             <button
               type="button"
-              onClick={handleConfirmSteadfastBooking}
+              onClick={() => handleConfirmSteadfastBooking()}
               disabled={bookingLoading || !isKeysConfigured}
               className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
             >
