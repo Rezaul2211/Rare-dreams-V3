@@ -482,7 +482,6 @@ export default function AdminOrders() {
       const res = await getSteadfastStatus(order.courierTrackingCode, {
         apiKey: config.steadfastApiKey,
         secretKey: config.steadfastSecretKey,
-        testMode: config.steadfastTestMode,
       });
 
       if (res.success && res.data?.delivery_status) {

@@ -105,7 +105,6 @@ export function formatSteadfastStatus(status?: string): { labelBn: string; label
 export async function checkSteadfastBalance(credentials?: {
   apiKey?: string;
   secretKey?: string;
-  testMode?: boolean;
 }): Promise<SteadfastServiceResult<{ current_balance: number; isTestMode?: boolean }>> {
   try {
     const response = await fetch('/api/courier/steadfast/check-balance', {
@@ -114,7 +113,6 @@ export async function checkSteadfastBalance(credentials?: {
       body: JSON.stringify({
         apiKey: credentials?.apiKey,
         secretKey: credentials?.secretKey,
-        testMode: credentials?.testMode,
       }),
     });
 
@@ -152,7 +150,7 @@ export async function checkSteadfastBalance(credentials?: {
  */
 export async function createSteadfastOrder(
   payload: SteadfastCreateOrderPayload,
-  credentials?: { apiKey?: string; secretKey?: string; testMode?: boolean }
+  credentials?: { apiKey?: string; secretKey?: string }
 ): Promise<SteadfastServiceResult<SteadfastConsignment>> {
   try {
     // Sanitize phone number (remove spaces, symbols; ensure standard 11 digits format)
@@ -189,7 +187,6 @@ export async function createSteadfastOrder(
       body: JSON.stringify({
         apiKey: credentials?.apiKey,
         secretKey: credentials?.secretKey,
-        testMode: credentials?.testMode,
         invoice: payload.invoice,
         recipient_name: payload.recipient_name.trim(),
         recipient_phone: cleanPhone,
@@ -228,7 +225,7 @@ export async function createSteadfastOrder(
  */
 export async function getSteadfastStatus(
   trackingCode: string,
-  credentials?: { apiKey?: string; secretKey?: string; testMode?: boolean }
+  credentials?: { apiKey?: string; secretKey?: string }
 ): Promise<SteadfastServiceResult<{ delivery_status: string }>> {
   try {
     if (!trackingCode) {
@@ -241,7 +238,6 @@ export async function getSteadfastStatus(
       body: JSON.stringify({
         apiKey: credentials?.apiKey,
         secretKey: credentials?.secretKey,
-        testMode: credentials?.testMode,
         trackingCode: trackingCode.trim(),
       }),
     });

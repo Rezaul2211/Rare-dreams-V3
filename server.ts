@@ -863,7 +863,7 @@ app.post("/api/price-alerts/track-price-changes", async (req, res) => {
 // -------------------------------------------------------------
 // Steadfast Courier API Routes (Bangladesh Logistics Integration)
 // -------------------------------------------------------------
-const STEADFAST_BASE_URL = 'https://api.steadfast.com.bd/api/v1';
+const STEADFAST_BASE_URL = 'https://portal.packzy.com/api/v1';
 
 function resolveSteadfastKeys(req: express.Request) {
   const apiKey = (req.body?.apiKey || req.headers['x-steadfast-api-key'] || process.env.STEADFAST_API_KEY || '').toString().trim();
@@ -890,28 +890,6 @@ app.post("/api/courier/steadfast/check-balance", async (req, res) => {
       success: false,
       error: 'MISSING_CREDENTIALS',
       message: 'Steadfast API Key এবং Secret Key প্রয়োজন। এডমিন সেটিংসে কি বসিয়ে সেভ করুন।',
-    });
-  }
-
-  // If explicit Test/Sandbox Mode is enabled
-  if (isTestMode) {
-    const latency = Date.now() - startTime;
-    addSystemLog({
-      level: 'info',
-      module: 'COURIER',
-      message: 'Steadfast balance check performed in Test/Sandbox Mode',
-      endpoint: '/api/courier/steadfast/check-balance',
-      statusCode: 200,
-      latencyMs: latency,
-    });
-
-    return res.json({
-      success: true,
-      status: 200,
-      balance: 0,
-      isTestMode: true,
-      message: 'টেস্ট মোড সক্রিয়: স্টেডফাস্ট স্যান্ডবক্স কানেকশন সফল (Demo Balance: ৳0)',
-      details: 'টেস্ট মোড অন থাকায় কোনো আসল রাইডার বা পার্সেল বুকিং ছাড়াই নিরাপদে টেস্ট করতে পারবেন।',
     });
   }
 
@@ -1035,41 +1013,6 @@ app.post("/api/courier/steadfast/create-order", async (req, res) => {
     note: note || 'Rare Dreams Luxury Fashion Parcel',
   };
 
-  // If Test Mode is ON, create safe mock consignment
-  if (isTestMode) {
-    const fakeCid = Math.floor(1000000 + Math.random() * 9000000);
-    const fakeTracking = `SF-TEST-${Math.floor(10000000 + Math.random() * 90000000)}`;
-    const consignment = {
-      consignment_id: fakeCid,
-      invoice: payload.invoice,
-      tracking_code: fakeTracking,
-      recipient_name: payload.recipient_name,
-      recipient_phone: payload.recipient_phone,
-      recipient_address: payload.recipient_address,
-      cod_amount: payload.cod_amount,
-      status: 'in_review',
-      created_at: new Date().toISOString(),
-    };
-
-    addSystemLog({
-      level: 'info',
-      module: 'COURIER',
-      message: `[TEST MODE] Mock parcel created for invoice ${payload.invoice}. CID: ${consignment.consignment_id}, Tracking: ${consignment.tracking_code}`,
-      endpoint: '/api/courier/steadfast/create-order',
-      statusCode: 200,
-      latencyMs: Date.now() - startTime,
-      details: { consignment, isTestMode: true },
-    });
-
-    return res.json({
-      success: true,
-      status: 200,
-      isTestMode: true,
-      consignment,
-      message: `(টেস্ট মোড) সফলভাবে সিমুলেটেড পার্সেল বুকিং হয়েছে! টেস্ট ট্র্যাকিং: ${consignment.tracking_code}`,
-    });
-  }
-
   try {
     let response: any;
     try {
@@ -1082,36 +1025,21 @@ app.post("/api/courier/steadfast/create-order", async (req, res) => {
         },
         body: JSON.stringify(payload),
       });
-    } catch {
-      const fakeCid = Math.floor(1000000 + Math.random() * 9000000);
-      const fakeTracking = `SF${Math.floor(10000000 + Math.random() * 90000000)}`;
-      const consignment = {
-        consignment_id: fakeCid,
-        invoice: payload.invoice,
-        tracking_code: fakeTracking,
-        recipient_name: payload.recipient_name,
-        recipient_phone: payload.recipient_phone,
-        recipient_address: payload.recipient_address,
-        cod_amount: payload.cod_amount,
-        status: 'in_review',
-        created_at: new Date().toISOString(),
-      };
-
+    } catch (err: any) {
       addSystemLog({
-        level: 'success',
+        level: 'error',
         module: 'COURIER',
-        message: `Steadfast parcel booked for invoice ${payload.invoice}. CID: ${consignment.consignment_id}, Tracking: ${consignment.tracking_code}`,
+        message: 'Failed to connect to Steadfast API to create order',
         endpoint: '/api/courier/steadfast/create-order',
-        statusCode: 200,
+        statusCode: 500,
         latencyMs: Date.now() - startTime,
-        details: { consignment },
+        details: err?.message,
       });
 
-      return res.json({
-        success: true,
-        status: 200,
-        consignment,
-        message: `পার্সেল বুকিং সফল! ট্র্যাকিং আইডি: ${consignment.tracking_code}`,
+      return res.status(500).json({
+        success: false,
+        error: 'NETWORK_ERROR',
+        message: 'Steadfast সার্ভারে সংযোগ করা যায়নি।',
       });
     }
 

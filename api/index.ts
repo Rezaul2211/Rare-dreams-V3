@@ -595,7 +595,7 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
   }
 
   // 7. Steadfast Courier API Routes (Bangladesh Logistics)
-  const STEADFAST_BASE_URL = 'https://api.steadfast.com.bd/api/v1';
+  const STEADFAST_BASE_URL = 'https://portal.packzy.com/api/v1';
   const resolveSteadfastKeys = () => {
     const apiKey = (body?.apiKey || req?.headers?.['x-steadfast-api-key'] || process.env.STEADFAST_API_KEY || '').toString().trim();
     const secretKey = (body?.secretKey || req?.headers?.['x-steadfast-secret-key'] || process.env.STEADFAST_SECRET_KEY || '').toString().trim();
@@ -612,17 +612,6 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
         success: false,
         error: 'MISSING_CREDENTIALS',
         message: 'Steadfast API Key এবং Secret Key প্রয়োজন। এডমিন সেটিংসে কি বসিয়ে সেভ করুন।',
-      });
-    }
-
-    if (isTestMode) {
-      return res.status(200).json({
-        success: true,
-        status: 200,
-        balance: 0,
-        isTestMode: true,
-        message: 'টেস্ট মোড সক্রিয়: স্টেডফাস্ট স্যান্ডবক্স কানেকশন সফল (Demo Balance: ৳0)',
-        details: 'টেস্ট মোড অন থাকায় কোনো আসল রাইডার বা পার্সেল বুকিং ছাড়াই নিরাপদে টেস্ট করতে পারবেন।',
       });
     }
 
@@ -701,30 +690,6 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
       note: note || 'Rare Dreams Luxury Fashion Parcel',
     };
 
-    if (isTestMode) {
-      const fakeCid = Math.floor(1000000 + Math.random() * 9000000);
-      const fakeTracking = `SF-TEST-${Math.floor(10000000 + Math.random() * 90000000)}`;
-      const consignment = {
-        consignment_id: fakeCid,
-        invoice: payload.invoice,
-        tracking_code: fakeTracking,
-        recipient_name: payload.recipient_name,
-        recipient_phone: payload.recipient_phone,
-        recipient_address: payload.recipient_address,
-        cod_amount: payload.cod_amount,
-        status: 'in_review',
-        created_at: new Date().toISOString(),
-      };
-
-      return res.status(200).json({
-        success: true,
-        status: 200,
-        isTestMode: true,
-        consignment,
-        message: `(টেস্ট মোড) সফলভাবে সিমুলেটেড পার্সেল বুকিং হয়েছে! টেস্ট ট্র্যাকিং: ${consignment.tracking_code}`,
-      });
-    }
-
     try {
       const sfRes = await fetch(`${STEADFAST_BASE_URL}/create_order`, {
         method: 'POST',
@@ -759,7 +724,7 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
       return res.status(500).json({
         success: false,
         error: err?.message || 'NETWORK_ERROR',
-        message: 'স্টেডফাস্ট সার্ভারে যোগাযোগ ত্রুটি। আপনার মার্চেন্ট এপিআই কি/সিক্রেট কি চেক করুন অথবা টেস্ট মোডে পরীক্ষা করুন।',
+        message: 'স্টেডফাস্ট সার্ভারে যোগাযোগ ত্রুটি। আপনার মার্চেন্ট এপিআই কি/সিক্রেট কি চেক করুন।',
       });
     }
   }

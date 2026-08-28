@@ -148,7 +148,6 @@ export default function AdminSystem() {
   const { config, updateConfig } = useStoreConfigStore();
   const [steadfastApiKey, setSteadfastApiKey] = useState(config.steadfastApiKey || '');
   const [steadfastSecretKey, setSteadfastSecretKey] = useState(config.steadfastSecretKey || '');
-  const [steadfastTestMode, setSteadfastTestMode] = useState(Boolean(config.steadfastTestMode));
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [savingCourier, setSavingCourier] = useState(false);
   const [checkingBalance, setCheckingBalance] = useState(false);
@@ -159,8 +158,7 @@ export default function AdminSystem() {
   useEffect(() => {
     if (config.steadfastApiKey) setSteadfastApiKey(config.steadfastApiKey);
     if (config.steadfastSecretKey) setSteadfastSecretKey(config.steadfastSecretKey);
-    setSteadfastTestMode(Boolean(config.steadfastTestMode));
-  }, [config.steadfastApiKey, config.steadfastSecretKey, config.steadfastTestMode]);
+  }, [config.steadfastApiKey, config.steadfastSecretKey]);
 
   // Role Management State
   const [email, setEmail] = useState('');
@@ -265,10 +263,9 @@ export default function AdminSystem() {
   }, [fetchStats]);
 
   // Check Steadfast Balance & Connection
-  const handleCheckSteadfastBalance = useCallback(async (customApiKey?: string, customSecretKey?: string, customTestMode?: boolean) => {
+  const handleCheckSteadfastBalance = useCallback(async (customApiKey?: string, customSecretKey?: string) => {
     const keyToUse = (customApiKey !== undefined ? customApiKey : steadfastApiKey).trim();
     const secretToUse = (customSecretKey !== undefined ? customSecretKey : steadfastSecretKey).trim();
-    const testModeToUse = customTestMode !== undefined ? customTestMode : steadfastTestMode;
 
     if (!keyToUse || !secretToUse) {
       setCourierStatusMsg({
@@ -284,15 +281,14 @@ export default function AdminSystem() {
     try {
       const res = await checkSteadfastBalance({ 
         apiKey: keyToUse, 
-        secretKey: secretToUse,
-        testMode: testModeToUse
+        secretKey: secretToUse
       });
       if (res.success && res.data) {
         setMerchantBalance(Number(res.data.current_balance || 0));
         setCourierStatusMsg({
           type: 'success',
           text: res.message || `কানেকশন ১০০% সক্রিয়! আপনার বর্তমান স্টেটফাস্ট একাউন্ট ব্যালেন্স: ৳${Number(res.data.current_balance || 0).toLocaleString()}`,
-          details: res.details || (testModeToUse ? '⚠️ বর্তমানে টেস্ট/স্যান্ডবক্স মোড সক্রিয় রয়েছে। কোনো আসল পার্সেল বুক হবে না।' : 'এখন আপনার সকল অর্ডার থেকে ১-ক্লিকে সরাসরি আসল পার্সেল বুকিং হবে।')
+          details: res.details || 'এখন আপনার সকল অর্ডার থেকে ১-ক্লিকে সরাসরি আসল পার্সেল বুকিং হবে।'
         });
       } else {
         setCourierStatusMsg({
@@ -309,25 +305,7 @@ export default function AdminSystem() {
     } finally {
       setCheckingBalance(false);
     }
-  }, [steadfastApiKey, steadfastSecretKey, steadfastTestMode]);
-
-  // Quick Toggle Test Mode
-  const handleToggleTestMode = async () => {
-    const newMode = !steadfastTestMode;
-    setSteadfastTestMode(newMode);
-    try {
-      await updateConfig({
-        steadfastTestMode: newMode
-      });
-      setCourierStatusMsg({
-        type: 'success',
-        text: newMode ? '🧪 টেস্ট / স্যান্ডবক্স মোড সক্রিয় করা হয়েছে!' : '🚀 লাইভ প্রোডাকশন মোড সক্রিয় করা হয়েছে!',
-        details: newMode ? 'এখন ডেমো অর্ডারে ১-ক্লিকে টেস্ট ট্র্যাকিং কোড দিয়ে টেস্ট করতে পারবেন, কোনো আসল পার্সেল বুকিং হবে না।' : 'এখন সব অর্ডার থেকে সরাসরি আপনার আসল Steadfast Merchant একাউন্টে পার্সেল বুকিং হবে।'
-      });
-    } catch (err: any) {
-      console.error(err);
-    }
-  };
+  }, [steadfastApiKey, steadfastSecretKey]);
 
   // Save Steadfast Keys
   const handleSaveCourierSettings = async (e?: React.FormEvent) => {
@@ -339,7 +317,6 @@ export default function AdminSystem() {
       await updateConfig({
         steadfastApiKey: steadfastApiKey.trim(),
         steadfastSecretKey: steadfastSecretKey.trim(),
-        steadfastTestMode: steadfastTestMode,
       });
 
       setCourierStatusMsg({
@@ -349,7 +326,7 @@ export default function AdminSystem() {
 
       // Immediately test connection and fetch live balance
       if (steadfastApiKey.trim() && steadfastSecretKey.trim()) {
-        await handleCheckSteadfastBalance(steadfastApiKey.trim(), steadfastSecretKey.trim(), steadfastTestMode);
+        await handleCheckSteadfastBalance(steadfastApiKey.trim(), steadfastSecretKey.trim());
       }
     } catch (err: any) {
       console.error(err);
@@ -365,9 +342,9 @@ export default function AdminSystem() {
   // Initial balance check on mount if keys exist
   useEffect(() => {
     if (config.steadfastApiKey && config.steadfastSecretKey) {
-      handleCheckSteadfastBalance(config.steadfastApiKey, config.steadfastSecretKey, config.steadfastTestMode);
+      handleCheckSteadfastBalance(config.steadfastApiKey, config.steadfastSecretKey);
     }
-  }, [config.steadfastApiKey, config.steadfastSecretKey, config.steadfastTestMode, handleCheckSteadfastBalance]);
+  }, [config.steadfastApiKey, config.steadfastSecretKey, handleCheckSteadfastBalance]);
 
   // 1-Click Assign Role
   const handleAssignRole = async (e: React.FormEvent) => {
@@ -605,17 +582,10 @@ export default function AdminSystem() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {steadfastTestMode ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      <FlaskConical size={11} className="text-amber-400" />
-                      Sandbox / Test Mode Active
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Live Production API Active
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Live Production API Active
+                  </span>
                   <span className="text-[10px] text-neutral-400">• Official Steadfast Logistics</span>
                 </div>
 
@@ -623,10 +593,7 @@ export default function AdminSystem() {
                   <span>Steadfast Courier & Merchant Control</span>
                 </h2>
                 <p className="text-xs text-neutral-300">
-                  {steadfastTestMode 
-                    ? '🧪 টেস্ট মোডে আসল পার্সেল বুকিং হবে না। আপনি নিরাপদে ডেমো বুকিং এবং ট্র্যাকিং সিস্টেম যাচাই করতে পারেন।'
-                    : '🚀 লাইভ প্রোডাকশন মোডে প্রতিটি বুকিং সরাসরি আপনার আসল Steadfast মার্চেন্ট পোর্টালে যুক্ত হবে।'
-                  }
+                  🚀 লাইভ প্রোডাকশন মোডে প্রতিটি বুকিং সরাসরি আপনার আসল Steadfast মার্চেন্ট পোর্টালে যুক্ত হবে।
                 </p>
               </div>
 
@@ -691,18 +658,16 @@ export default function AdminSystem() {
               <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl">
                 <div className="flex items-center justify-between text-neutral-400 mb-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-300">Operating Mode</span>
-                  <Sliders size={15} className={steadfastTestMode ? "text-amber-400" : "text-emerald-400"} />
+                  <Sliders size={15} className="text-emerald-400" />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`inline-block w-2.5 h-2.5 rounded-full ${
-                    steadfastTestMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
-                  }`}></span>
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
                   <span className="text-sm font-bold text-white">
-                    {steadfastTestMode ? 'Sandbox / Test Mode' : 'Live Production'}
+                    Live Production
                   </span>
                 </div>
                 <p className="text-[10px] text-neutral-400 mt-1">
-                  {steadfastTestMode ? 'নিরাপদ ডেমো বুকিং চালু' : 'আসল পার্সেল বুকিং চালু'}
+                  আসল পার্সেল বুকিং চালু
                 </p>
               </div>
 
@@ -749,79 +714,6 @@ export default function AdminSystem() {
             </div>
           )}
 
-          {/* Test Mode Switch Card */}
-          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-neutral-200 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <FlaskConical size={18} className={steadfastTestMode ? "text-amber-600" : "text-neutral-500"} />
-                  <h3 className="text-sm font-black uppercase text-neutral-900">
-                    Steadfast Test Mode / স্যান্ডবক্স টেস্ট মোড
-                  </h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                    steadfastTestMode 
-                      ? 'bg-amber-100 text-amber-800 border border-amber-200' 
-                      : 'bg-neutral-100 text-neutral-600 border border-neutral-200'
-                  }`}>
-                    {steadfastTestMode ? 'Test Mode Enabled' : 'Disabled (Live Mode)'}
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-600 max-w-2xl">
-                  {steadfastTestMode
-                    ? 'স্যান্ডবক্স টেস্ট মোড চালু রয়েছে। আপনি যেকোনো অর্ডারে বুকিং টেস্ট করতে পারবেন, কোনো আসল পার্সেল পিকআপ হবে না বা খরচ কাটবে না।'
-                    : 'টেস্ট মোড বন্ধ রয়েছে। এখন অর্ডারে বুকিং দিলে সরাসরি আপনার Steadfast একাউন্টে আসল বুকিং যাবে এবং রাইডার পার্সেল সংগ্রহ করবে।'}
-                </p>
-              </div>
-
-              {/* Toggle Switch */}
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-xs font-bold text-neutral-700">
-                  {steadfastTestMode ? 'টেস্ট মোড চালু' : 'লাইভ মোড চালু'}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleToggleTestMode}
-                  className={`w-14 h-8 rounded-full transition-colors relative cursor-pointer p-1 ${
-                    steadfastTestMode ? 'bg-amber-500' : 'bg-neutral-300'
-                  }`}
-                  title={steadfastTestMode ? 'টেস্ট মোড বন্ধ করে লাইভ করুন' : 'টেস্ট মোড চালু করুন'}
-                >
-                  <div
-                    className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform ${
-                      steadfastTestMode ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {/* Test vs Live Comparison Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-neutral-100 text-xs">
-              <div className={`p-3 rounded-xl border ${
-                steadfastTestMode ? 'bg-amber-50/60 border-amber-200' : 'bg-neutral-50 border-neutral-200 opacity-60'
-              }`}>
-                <div className="flex items-center gap-1.5 font-bold text-amber-900 mb-1">
-                  <FlaskConical size={14} className="text-amber-600" />
-                  <span>Test Mode (পরীক্ষামূলক)</span>
-                </div>
-                <p className="text-[11px] text-neutral-600">
-                  সিস্টেমে <span className="font-mono font-bold text-amber-800">SF-TEST-XXXX</span> ডেমো ট্র্যাকিং কোড তৈরি হয়। আসল মার্চেন্ট পোর্টালে কোনো বুকিং হয় না।
-                </p>
-              </div>
-
-              <div className={`p-3 rounded-xl border ${
-                !steadfastTestMode ? 'bg-emerald-50/60 border-emerald-200' : 'bg-neutral-50 border-neutral-200 opacity-60'
-              }`}>
-                <div className="flex items-center gap-1.5 font-bold text-emerald-900 mb-1">
-                  <CheckCircle size={14} className="text-emerald-600" />
-                  <span>Live Mode (অরিজিনাল প্রোডাকশন)</span>
-                </div>
-                <p className="text-[11px] text-neutral-600">
-                  সরাসরি অফিসিয়াল <span className="font-bold text-emerald-800">portal.steadfast.com.bd</span> এ আসল Consignment তৈরি হয় এবং রিয়েল ট্র্যাকিং কোড জেনারেট হয়।
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* API Keys Configuration Box */}
           <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-neutral-200 shadow-xs space-y-4">
