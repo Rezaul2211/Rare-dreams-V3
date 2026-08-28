@@ -39,6 +39,7 @@ const ProductForm = lazyWithRetry(() => import('./pages/admin/ProductForm'));
 const AdminOrders = lazyWithRetry(() => import('./pages/admin/AdminOrders'));
 const AdminCustomers = lazyWithRetry(() => import('./pages/admin/AdminCustomers'));
 const AdminSettings = lazyWithRetry(() => import('./pages/admin/AdminSettings'));
+const AdminReports = lazyWithRetry(() => import('./pages/admin/AdminReports'));
 const AdminPushNotifications = lazyWithRetry(() => import('./pages/admin/AdminPushNotifications'));
 const AdminSystem = lazyWithRetry(() => import('./pages/admin/AdminSystem'));
 
@@ -139,6 +140,7 @@ export default function App() {
               <Route path="products/new" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
               <Route path="products/edit/:id" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
               <Route path="orders" element={<AdminOrders />} />
+              <Route path="reports" element={<AdminReports />} />
               <Route path="notifications" element={<AdminPushNotifications />} />
               <Route path="customers" element={<AdminCustomers />} />
               <Route path="settings" element={<AdminSettings />} />

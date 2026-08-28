@@ -23,6 +23,69 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+// Predefined subcategories matching the desktop and mobile navigation menus
+export const SUBCATEGORIES_BY_CATEGORY: Record<string, string[]> = {
+  Men: [
+    'Premium Panjabi & Kurta',
+    'Casual & Formal Shirts',
+    'Polo & Graphic T-Shirts',
+    'Trousers & Chinos',
+    'Blazers & Outerwear',
+    'Footwear & Loafers',
+    'Panjabi',
+    'Casual Shirts',
+    'Formal Shirts',
+    'T-Shirts',
+    'Pants & Jeans',
+    'Polo Shirt',
+    'Kabli Set'
+  ],
+  Women: [
+    'Dresses & Gowns',
+    'Sarees & Traditional',
+    'Kurtis & Salwar Sets',
+    'Abayas & Hijabs',
+    'Tops & T-Shirts',
+    'Footwear & Heels',
+    'Handbags & Clutches',
+    'Three Piece',
+    'Lehenga & Festive',
+    'Salwar Kameez',
+    'Gown',
+    'Saree'
+  ],
+  Kids: [
+    'Boys Clothing',
+    'Girls Frocks & Dresses',
+    'Baby & Toddler Wear',
+    'Traditional Festive Wear',
+    'Kids Footwear',
+    'Boys Panjabi',
+    'Girls Frock',
+    'Kids T-Shirt',
+    'Baby Romper'
+  ],
+  Accessories: [
+    'Luxury Watches',
+    'Bags & Wallets',
+    'Belts & Sunglasses',
+    'Jewelry & Fragrances',
+    'Caps & Hats',
+    'Perfume & Attar',
+    'Wallet'
+  ],
+  Brands: [
+    'Premium Luxury',
+    'Casual Signature',
+    'Designer Edition'
+  ],
+  Sale: [
+    'Flash Clearance',
+    'Special Discount',
+    'Seasonal Sale'
+  ]
+};
+
 // Strips undefined fields to prevent Firestore serialization errors
 function cleanFirestoreObject<T extends Record<string, any>>(obj: T): T {
   const result: any = {};
@@ -1189,7 +1252,15 @@ export default function ProductForm() {
               <select
                 name="category"
                 value={formData.category || (categories[0]?.title || '')}
-                onChange={handleChange}
+                onChange={(e) => {
+                  const newCat = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    category: newCat,
+                    // keep subcategory if relevant or reset if not matching
+                    subcategory: prev.subcategory
+                  }));
+                }}
                 className="w-full border border-neutral-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-black outline-none font-bold bg-white"
               >
                 {(categories || []).map((c) => (
@@ -1203,17 +1274,78 @@ export default function ProductForm() {
               </select>
             </div>
 
-            {/* Subcategory */}
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-neutral-700 mb-1">সাব-ক্যাটাগরি / ট্যাগ</label>
-              <input
-                type="text"
-                name="subcategory"
+            {/* Interactive Subcategory Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs sm:text-sm font-medium text-neutral-700">
+                  সাব-ক্যাটাগরি নির্বাচন *
+                </label>
+                {formData.subcategory && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, subcategory: '' }))}
+                    className="text-[11px] text-red-500 hover:underline font-semibold cursor-pointer"
+                  >
+                    রিসেট
+                  </button>
+                )}
+              </div>
+
+              {/* Subcategory Select Dropdown */}
+              <select
                 value={formData.subcategory || ''}
-                onChange={handleChange}
-                placeholder="যেমন: Casual Shirt, Formal, Panjabi"
-                className="w-full border border-neutral-300 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-black"
-              />
+                onChange={(e) => setFormData(prev => ({ ...prev, subcategory: e.target.value }))}
+                className="w-full border border-neutral-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-black outline-none bg-white font-medium text-neutral-800"
+              >
+                <option value="">-- সাব-ক্যাটাগরি ড্রপডাউন থেকে বাছুন --</option>
+                {(SUBCATEGORIES_BY_CATEGORY[formData.category || 'Men'] || []).map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
+                ))}
+              </select>
+
+              {/* Quick Select Chips from Navigation */}
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-neutral-500 block">
+                  কুইক সিলেক্ট (মেনু সাব-ক্যাটাগরি):
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-neutral-50 rounded-xl border border-neutral-200/80">
+                  {(SUBCATEGORIES_BY_CATEGORY[formData.category || 'Men'] || []).map((sub) => {
+                    const isSelected = formData.subcategory === sub;
+                    return (
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, subcategory: sub }))}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-neutral-900 text-white border-neutral-900 shadow-xs'
+                            : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                        }`}
+                      >
+                        <span>{sub}</span>
+                        {isSelected && <CheckCircle2 size={12} className="text-emerald-400" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Subcategory Text Field */}
+              <div>
+                <label className="block text-[11px] font-semibold text-neutral-500 mb-1">
+                  অথবা নিজের মতো কাস্টম সাব-ক্যাটাগরি লিখুন:
+                </label>
+                <input
+                  type="text"
+                  name="subcategory"
+                  value={formData.subcategory || ''}
+                  onChange={handleChange}
+                  placeholder="যেমন: Casual Shirt, Formal, Panjabi, Saree"
+                  className="w-full border border-neutral-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-black bg-white"
+                />
+              </div>
             </div>
 
             {/* Publication Status */}

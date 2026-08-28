@@ -34,13 +34,13 @@ export const auth = authInstance;
 
 const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
 
-// Initialize Firestore with memory cache and force long-polling to prevent WebSocket connection failures in sandbox/iframe environments
+// Initialize Firestore with auto-detect long-polling and resilient cache
 let firestoreDb: any;
 try {
   firestoreDb = initializeFirestore(
     app,
     {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
       localCache: memoryLocalCache()
     },
     databaseId
@@ -60,13 +60,27 @@ export const storage = getStorage(app);
 // Connection test helper per Firebase integration guidelines
 export async function testFirestoreConnection() {
   try {
-    await getDocFromServer(doc(db, 'settings', 'storeConfig'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firestore client is in offline mode or backend unreachable.");
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error: any) {
+    if (error?.code === 'unavailable' || (error instanceof Error && (error.message.includes('the client is offline') || error.message.includes('unavailable')))) {
+      // Normal offline or initial handshake condition - Firestore operates in resilient offline mode
+    } else {
+      console.warn("Firestore connection check:", error?.message || error);
     }
   }
 }
-testFirestoreConnection();
+
+// Safely execute non-blocking connection check after window load/idle
+if (typeof window !== 'undefined') {
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(() => {
+      testFirestoreConnection();
+    });
+  } else {
+    setTimeout(() => {
+      testFirestoreConnection();
+    }, 1000);
+  }
+}
 
 

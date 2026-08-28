@@ -53,8 +53,6 @@ export default function AdminDashboard() {
   const [allOrdersList, setAllOrdersList] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [allProductsList, setAllProductsList] = useState<any[]>([]);
-  const [showReportsModal, setShowReportsModal] = useState(false);
-  const [reportTimeframe, setReportTimeframe] = useState<'all' | '7days' | '30days'>('all');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -187,7 +185,7 @@ export default function AdminDashboard() {
       title: 'Reports',
       subtitle: 'সেলস ও রেভিনিউ রিপোর্ট',
       icon: BarChart3,
-      onClick: () => setShowReportsModal(true),
+      link: '/admin/reports',
       color: 'bg-[#EDE9FE] text-[#6D28D9] hover:border-indigo-300',
       badge: 'Analytics'
     },
@@ -263,14 +261,13 @@ export default function AdminDashboard() {
             </h3>
             <p className="text-[11px] sm:text-xs text-neutral-500">আপনার শপের প্রয়োজনীয় সব ম্যানেজমেন্ট অপশন নিচে সাজানো রয়েছে</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowReportsModal(true)}
+          <Link
+            to="/admin/reports"
             className="self-start sm:self-auto shrink-0 text-xs font-bold text-[#7C3AED] hover:text-[#6D28D9] flex items-center gap-1 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-xl transition-colors cursor-pointer border border-purple-200/60"
           >
             <BarChart3 size={13} />
             <span>ভিউ রিপোর্ট</span>
-          </button>
+          </Link>
         </div>
 
         {/* 8-Card Responsive Grid for Quick Actions */}
@@ -278,36 +275,6 @@ export default function AdminDashboard() {
           {quickActions.map((action) => {
             const Icon = action.icon;
             
-            if (action.onClick) {
-              return (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={action.onClick}
-                  className="w-full min-w-0 bg-white p-3 sm:p-4 rounded-2xl border border-neutral-200/80 shadow-2xs hover:shadow-md transition-all text-left group cursor-pointer flex flex-col justify-between relative overflow-hidden"
-                >
-                  <div className="flex items-start justify-between w-full mb-2 sm:mb-3 gap-1">
-                    <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl ${action.color} flex items-center justify-center transition-transform group-hover:scale-105 shrink-0`}>
-                      <Icon size={18} className="sm:w-5 sm:h-5" />
-                    </div>
-                    {action.badge && (
-                      <span className="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200/60 shrink-0 max-w-[75px] truncate">
-                        {action.badge}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0 w-full">
-                    <h4 className="text-xs sm:text-sm font-bold text-neutral-900 group-hover:text-black transition-colors truncate">
-                      {action.title}
-                    </h4>
-                    <p className="text-[10px] sm:text-[11px] text-neutral-500 truncate mt-0.5">
-                      {action.subtitle}
-                    </p>
-                  </div>
-                </button>
-              );
-            }
-
             return (
               <Link
                 key={action.id}
@@ -500,14 +467,13 @@ export default function AdminDashboard() {
               <h3 className="text-xs sm:text-sm font-bold text-neutral-900">Sales Overview</h3>
               <p className="text-[11px] text-neutral-400">চলতি সপ্তাহের বিক্রয় গ্রাফ</p>
             </div>
-            <button 
-              type="button"
-              onClick={() => setShowReportsModal(true)}
+            <Link 
+              to="/admin/reports"
               className="text-[11px] font-medium text-neutral-600 bg-neutral-100/80 px-2.5 py-1 rounded-lg flex items-center space-x-1 hover:bg-neutral-200 transition-colors cursor-pointer"
             >
               <span>Full Analytics</span>
               <ArrowRight size={12} />
-            </button>
+            </Link>
           </div>
 
           <div className="pt-2 my-auto">
@@ -634,108 +600,6 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
-
-      {/* 6. COMPREHENSIVE SALES & FINANCIAL REPORTS MODAL */}
-      {showReportsModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-neutral-200 font-sans p-5 sm:p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <BarChart3 size={20} />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-neutral-900">Sales & Business Reports</h3>
-                  <p className="text-xs text-neutral-500">দোকানের সর্বমোট আয় ও পারফরম্যান্স এনালাইসিস</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowReportsModal(false)}
-                className="p-2 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Metrics Overview Cards in Reports */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="bg-purple-50/60 p-3.5 rounded-2xl border border-purple-100">
-                <p className="text-[11px] font-bold text-purple-700 uppercase">Gross Revenue</p>
-                <p className="text-lg font-black text-purple-950 mt-0.5">৳ {stats.totalSales.toLocaleString()}</p>
-                <p className="text-[10px] text-purple-600 mt-0.5">সর্বমোট বিক্রয় মূল্য</p>
-              </div>
-
-              <div className="bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-100">
-                <p className="text-[11px] font-bold text-emerald-700 uppercase">Delivered Sales</p>
-                <p className="text-lg font-black text-emerald-950 mt-0.5">৳ {deliveredRevenue.toLocaleString()}</p>
-                <p className="text-[10px] text-emerald-600 mt-0.5">{statusCounts.delivered} টি সফল ডেলিভারি</p>
-              </div>
-
-              <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-100 col-span-2 sm:col-span-1">
-                <p className="text-[11px] font-bold text-amber-700 uppercase">Average Order (AOV)</p>
-                <p className="text-lg font-black text-amber-950 mt-0.5">৳ {averageOrderValue.toLocaleString()}</p>
-                <p className="text-[10px] text-amber-600 mt-0.5">গড় অর্ডার সাইজ</p>
-              </div>
-            </div>
-
-            {/* Order Status Table */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider">অর্ডার স্ট্যাটাস রিপোর্ট</h4>
-              <div className="bg-neutral-50 rounded-2xl p-3 space-y-2 border border-neutral-200/80 text-xs">
-                <div className="flex items-center justify-between py-1 border-b border-neutral-200/60">
-                  <span className="flex items-center gap-1.5 text-amber-700 font-semibold">
-                    <Clock size={14} /> Pending Review
-                  </span>
-                  <span className="font-bold text-neutral-900">{statusCounts.pending} টি ({stats.totalOrders > 0 ? Math.round((statusCounts.pending/stats.totalOrders)*100) : 0}%)</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-neutral-200/60">
-                  <span className="flex items-center gap-1.5 text-blue-700 font-semibold">
-                    <PackageCheck size={14} /> Processing
-                  </span>
-                  <span className="font-bold text-neutral-900">{statusCounts.processing} টি ({stats.totalOrders > 0 ? Math.round((statusCounts.processing/stats.totalOrders)*100) : 0}%)</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-neutral-200/60">
-                  <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
-                    <Truck size={14} /> Shipped
-                  </span>
-                  <span className="font-bold text-neutral-900">{statusCounts.shipped} টি ({stats.totalOrders > 0 ? Math.round((statusCounts.shipped/stats.totalOrders)*100) : 0}%)</span>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <span className="flex items-center gap-1.5 text-purple-700 font-semibold">
-                    <CheckCircle2 size={14} /> Delivered
-                  </span>
-                  <span className="font-bold text-neutral-900">{statusCounts.delivered} টি ({stats.totalOrders > 0 ? Math.round((statusCounts.delivered/stats.totalOrders)*100) : 0}%)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions Footer */}
-            <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Printer size={14} />
-                <span>রিপোর্ট প্রিন্ট করুন</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowReportsModal(false);
-                  navigate('/admin/orders');
-                }}
-                className="px-4 py-2 bg-neutral-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <span>অর্ডার ম্যানেজারে যান</span>
-                <ArrowRight size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

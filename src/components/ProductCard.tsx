@@ -24,8 +24,8 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
 
   return (
     <div className="group flex flex-col w-full select-none">
-      {/* 1. Unified iOS Style Rounded Card */}
-      <div className="relative w-full rounded-[22px] sm:rounded-[26px] overflow-hidden bg-[#F2F2F6] shadow-[0_4px_16px_rgba(0,0,0,0.03)] border border-black/[0.02] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-300 flex flex-col">
+      {/* 1. Unified iOS Style Rounded Card with Enhanced Crisp Border */}
+      <div className="relative w-full rounded-[22px] sm:rounded-[26px] overflow-hidden bg-[#F2F2F6] shadow-[0_4px_16px_rgba(0,0,0,0.03)] border-[1.5px] border-neutral-200/90 group-hover:border-neutral-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-300 flex flex-col">
         
         {/* Top Image Container with Fixed 4/5 Aspect Ratio */}
         <Link to={`/product/${product.id}`} className="block relative w-full aspect-[4/5] overflow-hidden bg-[#F2F2F6]">

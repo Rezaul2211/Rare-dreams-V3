@@ -11,7 +11,8 @@ import {
   Users, 
   Image, 
   Bell, 
-  Settings
+  Settings,
+  BarChart3
 } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 
@@ -44,6 +45,7 @@ export default function AdminLayout() {
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Products', path: '/admin/products', icon: Package },
     { name: 'Orders', path: '/admin/orders', icon: ShoppingCart },
+    { name: 'Reports', path: '/admin/reports', icon: BarChart3 },
     { name: 'Push Alerts', path: '/admin/notifications', icon: Bell },
     { name: 'Customers', path: '/admin/customers', icon: Users },
     { name: 'Banners & Style', path: '/admin/settings', icon: Image },
