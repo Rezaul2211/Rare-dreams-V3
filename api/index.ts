@@ -625,7 +625,13 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
         },
       });
 
-      const data: any = await sfRes.json();
+      const rawText = await sfRes.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        data = { message: rawText || 'Steadfast সার্ভার থেকে সঠিক রেসপন্স পাওয়া যায়নি (JSON Parse Error)' };
+      }
       if (sfRes.ok && data.status === 200) {
         return res.status(200).json({
           success: true,
@@ -688,6 +694,9 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
       recipient_address: recipient_address.trim(),
       cod_amount: Math.max(0, Math.round(Number(cod_amount || 0))),
       note: note || 'Rare Dreams Luxury Fashion Parcel',
+      item_description: note || 'Clothing/Fashion Item',
+      total_lot: 1,
+      delivery_type: 0
     };
 
     try {
@@ -701,7 +710,13 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
         body: JSON.stringify(payload),
       });
 
-      const data: any = await sfRes.json();
+      const rawText = await sfRes.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        data = { message: rawText || 'Steadfast সার্ভার থেকে সঠিক রেসপন্স পাওয়া যায়নি (JSON Parse Error)' };
+      }
 
       if (sfRes.ok && data.status === 200 && data.consignment) {
         return res.status(200).json({

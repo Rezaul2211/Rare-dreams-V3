@@ -926,7 +926,13 @@ app.post("/api/courier/steadfast/check-balance", async (req, res) => {
       });
     }
 
-    const data: any = await response.json();
+    const rawText = await response.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      data = { message: rawText || 'Steadfast সার্ভার থেকে সঠিক রেসপন্স পাওয়া যায়নি (JSON Parse Error)' };
+    }
     const latency = Date.now() - startTime;
 
     if (response.ok && data.status === 200) {
@@ -1011,6 +1017,9 @@ app.post("/api/courier/steadfast/create-order", async (req, res) => {
     recipient_address: recipient_address.trim(),
     cod_amount: Math.max(0, Math.round(Number(cod_amount || 0))),
     note: note || 'Rare Dreams Luxury Fashion Parcel',
+    item_description: note || 'Clothing/Fashion Item',
+    total_lot: 1,
+    delivery_type: 0
   };
 
   try {
@@ -1043,7 +1052,13 @@ app.post("/api/courier/steadfast/create-order", async (req, res) => {
       });
     }
 
-    const data: any = await response.json();
+    const rawText = await response.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      data = { message: rawText || 'Steadfast সার্ভার থেকে সঠিক রেসপন্স পাওয়া যায়নি (JSON Parse Error)' };
+    }
     const latency = Date.now() - startTime;
 
     if (response.ok && data.status === 200 && data.consignment) {
