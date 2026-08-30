@@ -189,12 +189,44 @@ export default function ProductDetail() {
 
   const handleColorChange = useCallback((colorName: string, index: number) => {
     setSelectedColor(colorName);
-    // Automatic image switching if image exists for this variant
+    setIs360Mode(false);
+
+    // 1. Check if an explicit image URL is mapped for this color
+    if (product?.colorImageMap && product.colorImageMap[colorName]) {
+      const targetUrl = product.colorImageMap[colorName];
+      const foundIdx = displayImages.findIndex(img => img === targetUrl);
+      if (foundIdx !== -1) {
+        setSelectedImageIndex(foundIdx);
+        return;
+      }
+    }
+
+    // 2. Automatic fallback image switching if image index exists
     if (displayImages.length > index) {
       setSelectedImageIndex(index);
-      setIs360Mode(false);
     }
-  }, [displayImages.length]);
+  }, [displayImages, product]);
+
+  const handleSelectImage = useCallback((idx: number) => {
+    setSelectedImageIndex(idx);
+    setIs360Mode(false);
+    const selectedImgUrl = displayImages[idx];
+    if (!selectedImgUrl || !product) return;
+
+    // Check if any color is mapped to this exact image
+    if (product.colorImageMap) {
+      const match = Object.entries(product.colorImageMap).find(([_, url]) => url === selectedImgUrl);
+      if (match && match[0]) {
+        setSelectedColor(match[0]);
+        return;
+      }
+    }
+
+    // Fallback: If colors list matches image index
+    if (product.colorOptions && product.colorOptions[idx]) {
+      setSelectedColor(product.colorOptions[idx]);
+    }
+  }, [displayImages, product]);
 
   const handleAddToCart = useCallback((e?: React.MouseEvent<HTMLElement>) => {
     if (!product) return;
@@ -203,6 +235,8 @@ export default function ProductDetail() {
       content_ids: [product.id],
       value: product.price * quantity,
     });
+
+    const chosenImage = activeImage || displayImages[selectedImageIndex] || product.image;
     
     if (e) {
       animateAddToCart(product, e, {
@@ -216,10 +250,11 @@ export default function ProductDetail() {
         cartItemId: crypto.randomUUID(),
         selectedSize: selectedSize || undefined,
         selectedColor: selectedColor || undefined,
+        selectedColorImage: chosenImage,
         quantity,
       });
     }
-  }, [product, quantity, selectedSize, selectedColor, animateAddToCart, addItem]);
+  }, [product, quantity, selectedSize, selectedColor, activeImage, displayImages, selectedImageIndex, animateAddToCart, addItem]);
 
   const handleBuyNow = useCallback(() => {
     if (!product) return;
@@ -229,17 +264,20 @@ export default function ProductDetail() {
       value: product.price * quantity,
     });
 
+    const chosenImage = activeImage || displayImages[selectedImageIndex] || product.image;
+
     const directItem = {
       ...product,
       cartItemId: `direct-${product.id}-${selectedSize || 'default'}-${selectedColor || 'default'}`,
       selectedSize: selectedSize || undefined,
       selectedColor: selectedColor || undefined,
+      selectedColorImage: chosenImage,
       quantity,
     };
 
     setDirectCheckoutItem(directItem);
     navigate('/checkout');
-  }, [product, quantity, selectedSize, selectedColor, setDirectCheckoutItem, navigate]);
+  }, [product, quantity, selectedSize, selectedColor, activeImage, displayImages, selectedImageIndex, setDirectCheckoutItem, navigate]);
 
   const handleWhatsAppOrder = useCallback(() => {
     if (!product) return;
@@ -362,10 +400,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               {displayImages.map((img, idx) => (
                 <button
                   key={idx}
-                  onClick={() => {
-                    setSelectedImageIndex(idx);
-                    setIs360Mode(false);
-                  }}
+                  onClick={() => handleSelectImage(idx)}
                   className={clsx(
                     "w-10 h-10 sm:w-12 sm:h-12 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0",
                     selectedImageIndex === idx && !is360Mode

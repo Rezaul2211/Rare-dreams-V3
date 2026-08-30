@@ -30,10 +30,10 @@ export const DEFAULT_CATEGORIES: CategoryItem[] = [
     image: 'https://images.unsplash.com/photo-1519457431-44ccd64a579b?q=80&w=800&auto=format&fit=crop'
   },
   {
-    id: 'accessories',
-    title: 'Accessories',
-    link: '/category/Accessories',
-    image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?q=80&w=800&auto=format&fit=crop'
+    id: 'footwear',
+    title: 'Footwear',
+    link: '/category/Footwear',
+    image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=800&auto=format&fit=crop'
   }
 ];
 
@@ -42,7 +42,7 @@ export function normalizeCategoryTitle(title: string): string {
   if (lower.includes('women')) return 'Women';
   if (lower.includes('men')) return 'Men';
   if (lower.includes('baby') || lower.includes('kid')) return 'Kids';
-  if (lower.includes('access') || lower.includes('foot') || lower.includes('shoe')) return 'Accessories';
+  if (lower.includes('foot') || lower.includes('shoe') || lower.includes('access')) return 'Footwear';
   return title;
 }
 
@@ -52,7 +52,7 @@ export function sortCategoriesByStandardOrder(list: CategoryItem[]): CategoryIte
     if (norm === 'Men') return 0;
     if (norm === 'Women') return 1;
     if (norm === 'Kids') return 2;
-    if (norm === 'Accessories') return 3;
+    if (norm === 'Footwear') return 3;
     return 4;
   };
 

@@ -43,7 +43,7 @@ export function getProductRatingInfo(product: Partial<Product> | null | undefine
 /**
  * Reusable category matching logic across all views.
  */
-export function matchesCategoryGroup(category: string | undefined | null, group: 'men' | 'women' | 'kids' | 'accessories' | 'all'): boolean {
+export function matchesCategoryGroup(category: string | undefined | null, group: 'men' | 'women' | 'kids' | 'footwear' | 'accessories' | 'all'): boolean {
   if (!category) return group === 'all';
   const c = category.toLowerCase().trim();
 
@@ -54,8 +54,9 @@ export function matchesCategoryGroup(category: string | undefined | null, group:
       return c.includes('women');
     case 'kids':
       return c.includes('kid') || c.includes('boy') || c.includes('girl') || c.includes('baby') || c.includes('child');
+    case 'footwear':
     case 'accessories':
-      return c.includes('access') || c.includes('watch') || c.includes('bag') || c.includes('belt') || c.includes('sunglass') || c.includes('wallet') || c.includes('jewelry');
+      return c.includes('foot') || c.includes('shoe') || c.includes('sandal') || c.includes('boot') || c.includes('loafer') || c.includes('access') || c.includes('watch') || c.includes('bag') || c.includes('belt') || c.includes('sunglass') || c.includes('wallet') || c.includes('jewelry');
     case 'all':
     default:
       return true;

@@ -24,6 +24,7 @@ export interface Product {
   stockQuantity: number;
   sizeOptions?: string[];
   colorOptions?: string[];
+  colorImageMap?: Record<string, string>; // Maps color name to exact image URL (e.g. { 'Black': 'https://...', 'Blue': 'https://...' })
   brand?: string;
   material?: string; // Fabric / ফ্যাব্রিক
   fit?: string; // Fit / ফিট
@@ -46,6 +47,7 @@ export interface CartItem extends Product {
   cartItemId: string;
   selectedSize?: string;
   selectedColor?: string;
+  selectedColorImage?: string;
   quantity: number;
 }
 

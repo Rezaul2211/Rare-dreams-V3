@@ -80,7 +80,7 @@ export const CompactProductCard: React.FC<CompactProductCardProps> = React.memo(
       {/* Product Details - comfortable compact height */}
       <div className="p-1.5 sm:p-2.5 flex flex-col flex-grow">
         <Link to={`/product/${product.id}`} className="block">
-          <h3 className="text-[11px] sm:text-xs font-bold text-neutral-900 line-clamp-1 group-hover:text-amber-800 transition-colors leading-tight mb-0.5">
+          <h3 className="text-[11px] sm:text-xs font-black text-neutral-900 line-clamp-1 group-hover:text-[#5B46E8] transition-colors leading-tight mb-0.5 tracking-tight">
             {product.name}
           </h3>
         </Link>

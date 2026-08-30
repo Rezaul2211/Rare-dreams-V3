@@ -88,16 +88,16 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
 
         {/* Bottom Meta Container (Compact with zero excess empty whitespace) */}
         <div className="px-2.5 sm:px-3 pt-1.5 pb-2 sm:pb-2.5 flex flex-col justify-end min-w-0 bg-[#F2F2F6]">
-          {/* Product Name (Soft Grey Text in White Mist Aesthetic, Fixed 1-Line Truncate) */}
+          {/* Product Name (Bold, Highlighted & Crisp for optimal visibility) */}
           <Link to={`/product/${product.id}`} className="block w-full group/title">
-            <h3 className="text-[12px] sm:text-[13px] font-normal text-neutral-500 group-hover/title:text-neutral-950 truncate transition-colors leading-tight">
+            <h3 className="text-[12.5px] sm:text-[13.5px] font-bold text-neutral-900 group-hover/title:text-black truncate transition-colors leading-tight tracking-tight">
               {product.name}
             </h3>
           </Link>
 
           {/* Price (Prominent Bold Dark Text, perfectly positioned) */}
           <div className="flex items-baseline gap-1.5 mt-0.5 min-w-0">
-            <span className="font-bold text-[13.5px] sm:text-[15px] text-neutral-950 tracking-tight leading-tight">
+            <span className="font-extrabold text-[13.5px] sm:text-[15px] text-neutral-950 tracking-tight leading-tight">
               {formatPrice(product.price)}
             </span>
             {product.comparePrice && product.comparePrice > product.price ? (

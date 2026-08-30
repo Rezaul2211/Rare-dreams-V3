@@ -4,6 +4,7 @@ import { doc, setDoc, getDoc, updateDoc, collection, serverTimestamp, getDocs, q
 import { db } from '../../lib/firebase';
 import { Product, ProductSpecification } from '../../types';
 import { useCategoryStore } from '../../store/useCategoryStore';
+import { useSubcategoryStore } from '../../store/useSubcategoryStore';
 import { 
   ArrowLeft, 
   Save, 
@@ -20,71 +21,10 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Palette,
+  FolderPlus
 } from 'lucide-react';
-
-// Predefined subcategories matching the desktop and mobile navigation menus
-export const SUBCATEGORIES_BY_CATEGORY: Record<string, string[]> = {
-  Men: [
-    'Premium Panjabi & Kurta',
-    'Casual & Formal Shirts',
-    'Polo & Graphic T-Shirts',
-    'Trousers & Chinos',
-    'Blazers & Outerwear',
-    'Footwear & Loafers',
-    'Panjabi',
-    'Casual Shirts',
-    'Formal Shirts',
-    'T-Shirts',
-    'Pants & Jeans',
-    'Polo Shirt',
-    'Kabli Set'
-  ],
-  Women: [
-    'Dresses & Gowns',
-    'Sarees & Traditional',
-    'Kurtis & Salwar Sets',
-    'Abayas & Hijabs',
-    'Tops & T-Shirts',
-    'Footwear & Heels',
-    'Handbags & Clutches',
-    'Three Piece',
-    'Lehenga & Festive',
-    'Salwar Kameez',
-    'Gown',
-    'Saree'
-  ],
-  Kids: [
-    'Boys Clothing',
-    'Girls Frocks & Dresses',
-    'Baby & Toddler Wear',
-    'Traditional Festive Wear',
-    'Kids Footwear',
-    'Boys Panjabi',
-    'Girls Frock',
-    'Kids T-Shirt',
-    'Baby Romper'
-  ],
-  Accessories: [
-    'Luxury Watches',
-    'Bags & Wallets',
-    'Belts & Sunglasses',
-    'Jewelry & Fragrances',
-    'Caps & Hats',
-    'Perfume & Attar',
-    'Wallet'
-  ],
-  Brands: [
-    'Premium Luxury',
-    'Casual Signature',
-    'Designer Edition'
-  ],
-  Sale: [
-    'Flash Clearance',
-    'Special Discount',
-    'Seasonal Sale'
-  ]
-};
 
 // Strips undefined fields to prevent Firestore serialization errors
 function cleanFirestoreObject<T extends Record<string, any>>(obj: T): T {
@@ -105,12 +45,23 @@ export default function ProductForm() {
   const navigate = useNavigate();
   const isEditing = !!id;
   const { categories } = useCategoryStore();
+  const { 
+    subcategoriesByCategory, 
+    fetchSubcategories, 
+    addSubcategory, 
+    removeSubcategory, 
+    getSubcategories 
+  } = useSubcategoryStore();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEditing);
   const [initialProductPrice, setInitialProductPrice] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const [newSubcategoryInput, setNewSubcategoryInput] = useState('');
+  const [colorImageMap, setColorImageMap] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
@@ -144,6 +95,11 @@ export default function ProductForm() {
   const [customSpecLabel, setCustomSpecLabel] = useState('');
   const [customSpecValue, setCustomSpecValue] = useState('');
 
+  // Initialize subcategories from store
+  useEffect(() => {
+    fetchSubcategories();
+  }, [fetchSubcategories]);
+
   useEffect(() => {
     const fetchProduct = async () => {
       if (!id) return;
@@ -159,6 +115,9 @@ export default function ProductForm() {
             colorOptions: pData.colorOptions || [],
             specifications: pData.specifications || []
           });
+          if (pData.colorImageMap) {
+            setColorImageMap(pData.colorImageMap);
+          }
           setInitialProductPrice(Number(pData.price || 0));
         }
       } catch (error) {
@@ -477,11 +436,27 @@ export default function ProductForm() {
       calcDiscountPct = Math.round(((Number(formData.comparePrice) - Number(formData.price)) / Number(formData.comparePrice)) * 100);
     }
 
+    // Build synchronized colorImageMap
+    const finalColorImageMap: Record<string, string> = { ...colorImageMap };
+    const imgs = formData.images || [];
+    const cols = formData.colorOptions || [];
+    cols.forEach((col, cIdx) => {
+      if (!finalColorImageMap[col] && imgs[cIdx]) {
+        finalColorImageMap[col] = imgs[cIdx];
+      }
+    });
+
+    const chosenCat = formData.category || 'Men';
+    const chosenSub = (formData.subcategory || '').trim();
+    if (chosenSub) {
+      addSubcategory(chosenCat, chosenSub);
+    }
+
     const rawPayload = {
       ...formData,
       name: formData.name?.trim() || 'Untitled Product',
-      category: formData.category || 'Men',
-      subcategory: formData.subcategory || '',
+      category: chosenCat,
+      subcategory: chosenSub,
       price: Number(formData.price || 0),
       comparePrice: formData.comparePrice ? Number(formData.comparePrice) : 0,
       discount: formData.discount ? Number(formData.discount) : (calcDiscountPct > 0 ? calcDiscountPct : 0),
@@ -489,6 +464,7 @@ export default function ProductForm() {
       stockQuantity: Number(formData.stockQuantity !== undefined ? formData.stockQuantity : 25),
       sizeOptions: formData.sizeOptions || [],
       colorOptions: formData.colorOptions || [],
+      colorImageMap: finalColorImageMap,
       material: formData.material || '',
       fit: formData.fit || '',
       sleeve: formData.sleeve || '',
@@ -764,6 +740,55 @@ export default function ProductForm() {
                             className="w-full h-full object-cover" 
                             loading="lazy"
                           />
+                          {/* Color Badge if mapped */}
+                          {(() => {
+                            const mappedColor = Object.entries(colorImageMap).find(([_, u]) => u === img)?.[0] || 
+                              ((formData.colorOptions && formData.colorOptions[idx] && !Object.values(colorImageMap).includes(img)) ? formData.colorOptions[idx] : null);
+                            if (mappedColor) {
+                              return (
+                                <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs border border-white/20">
+                                  <Palette size={10} className="text-amber-400" />
+                                  <span>{mappedColor}</span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+
+                        {/* Color Selector for Image */}
+                        <div className="px-2 py-1.5 bg-neutral-50 border-t border-neutral-100 flex items-center justify-between gap-1.5">
+                          <label className="text-[10px] font-bold text-neutral-600 shrink-0 flex items-center gap-1">
+                            <Palette size={11} className="text-[#5B46E8]" />
+                            <span>রং (Color):</span>
+                          </label>
+                          <select
+                            value={
+                              Object.entries(colorImageMap).find(([_, u]) => u === img)?.[0] || 
+                              (formData.colorOptions && formData.colorOptions[idx] ? formData.colorOptions[idx] : '') ||
+                              ''
+                            }
+                            onChange={(e) => {
+                              const selectedColor = e.target.value;
+                              setColorImageMap(prev => {
+                                const next = { ...prev };
+                                // remove any existing mapping for this image
+                                Object.keys(next).forEach(k => {
+                                  if (next[k] === img) delete next[k];
+                                });
+                                if (selectedColor) {
+                                  next[selectedColor] = img;
+                                }
+                                return next;
+                              });
+                            }}
+                            className="text-[11px] font-bold bg-white border border-neutral-200 rounded-lg px-2 py-1 outline-none text-neutral-800 flex-1 max-w-[155px] cursor-pointer"
+                          >
+                            <option value="">-- সাধারণ / অল --</option>
+                            {(formData.colorOptions || []).map(col => (
+                              <option key={col} value={col}>🎨 {col}</option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* Bottom Actions Bar (Mobile-Friendly & Always Visible) */}
@@ -1291,61 +1316,145 @@ export default function ProductForm() {
                 )}
               </div>
 
-              {/* Subcategory Select Dropdown */}
-              <select
-                value={formData.subcategory || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, subcategory: e.target.value }))}
-                className="w-full border border-neutral-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-black outline-none bg-white font-medium text-neutral-800"
-              >
-                <option value="">-- সাব-ক্যাটাগরি ড্রপডাউন থেকে বাছুন --</option>
-                {(SUBCATEGORIES_BY_CATEGORY[formData.category || 'Men'] || []).map((sub) => (
-                  <option key={sub} value={sub}>
-                    {sub}
-                  </option>
-                ))}
-              </select>
-
-              {/* Quick Select Chips from Navigation */}
-              <div className="space-y-1">
-                <span className="text-[11px] font-semibold text-neutral-500 block">
-                  কুইক সিলেক্ট (মেনু সাব-ক্যাটাগরি):
-                </span>
-                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-neutral-50 rounded-xl border border-neutral-200/80">
-                  {(SUBCATEGORIES_BY_CATEGORY[formData.category || 'Men'] || []).map((sub) => {
-                    const isSelected = formData.subcategory === sub;
-                    return (
-                      <button
-                        key={sub}
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, subcategory: sub }))}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-                          isSelected
-                            ? 'bg-neutral-900 text-white border-neutral-900 shadow-xs'
-                            : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
-                        }`}
+              {/* Dynamic Subcategory Selector */}
+              {(() => {
+                const currentCategory = formData.category || 'Men';
+                const dynamicList = getSubcategories(currentCategory);
+                return (
+                  <div className="space-y-3">
+                    {/* Subcategory Select Dropdown */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-neutral-500 mb-1">
+                        সংরক্ষিত সাব-ক্যাটাগরি তালিকা থেকে সিলেক্ট করুন:
+                      </label>
+                      <select
+                        value={formData.subcategory || ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, subcategory: e.target.value }))}
+                        className="w-full border border-neutral-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-black outline-none bg-white font-medium text-neutral-800"
                       >
-                        <span>{sub}</span>
-                        {isSelected && <CheckCircle2 size={12} className="text-emerald-400" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                        <option value="">-- সাব-ক্যাটাগরি বাছুন --</option>
+                        {dynamicList.map((sub) => (
+                          <option key={sub} value={sub}>
+                            {sub}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-              {/* Custom Subcategory Text Field */}
-              <div>
-                <label className="block text-[11px] font-semibold text-neutral-500 mb-1">
-                  অথবা নিজের মতো কাস্টম সাব-ক্যাটাগরি লিখুন:
-                </label>
-                <input
-                  type="text"
-                  name="subcategory"
-                  value={formData.subcategory || ''}
-                  onChange={handleChange}
-                  placeholder="যেমন: Casual Shirt, Formal, Panjabi, Saree"
-                  className="w-full border border-neutral-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-black bg-white"
-                />
-              </div>
+                    {/* Saved Subcategories Chips with Delete Support */}
+                    {dynamicList.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold text-neutral-600 block">
+                          উপলব্ধ সাব-ক্যাটাগরিসমূহ ({currentCategory}):
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 p-2 bg-neutral-50 rounded-xl border border-neutral-200">
+                          {dynamicList.map((sub) => {
+                            const isSelected = formData.subcategory === sub;
+                            return (
+                              <div
+                                key={sub}
+                                className={`group text-[11px] pl-2.5 pr-1.5 py-1 rounded-lg border font-semibold transition-all flex items-center gap-1.5 ${
+                                  isSelected
+                                    ? 'bg-neutral-900 text-white border-neutral-900 shadow-xs'
+                                    : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-400'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData(prev => ({ ...prev, subcategory: sub }))}
+                                  className="cursor-pointer flex items-center gap-1"
+                                >
+                                  <span>{sub}</span>
+                                  {isSelected && <CheckCircle2 size={12} className="text-emerald-400" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm(`"${sub}" সাব-ক্যাটাগরি মুছে ফেলতে চান?`)) {
+                                      await removeSubcategory(currentCategory, sub);
+                                      if (formData.subcategory === sub) {
+                                        setFormData(prev => ({ ...prev, subcategory: '' }));
+                                      }
+                                    }
+                                  }}
+                                  title="মুছুন"
+                                  className={`p-0.5 rounded hover:bg-red-500 hover:text-white transition-colors cursor-pointer ${
+                                    isSelected ? 'text-neutral-400' : 'text-neutral-400 hover:text-white'
+                                  }`}
+                                >
+                                  <X size={11} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Create New Subcategory Box */}
+                    <div className="p-3 bg-purple-50/50 border border-purple-100 rounded-xl space-y-2">
+                      <label className="block text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                        <FolderPlus size={13} className="text-[#5B46E8]" />
+                        <span>নতুন সাব-ক্যাটাগরি তৈরি করুন (Create Subcategory):</span>
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          placeholder="যেমন: টি-শার্ট, ট্রাউজার, পাঞ্জাবি..."
+                          value={newSubcategoryInput}
+                          onChange={(e) => setNewSubcategoryInput(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (newSubcategoryInput.trim()) {
+                                const clean = newSubcategoryInput.trim();
+                                await addSubcategory(currentCategory, clean);
+                                setFormData(prev => ({ ...prev, subcategory: clean }));
+                                setNewSubcategoryInput('');
+                              }
+                            }
+                          }}
+                          className="flex-1 min-w-0 border border-neutral-300 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-2 focus:ring-[#5B46E8]"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (newSubcategoryInput.trim()) {
+                              const clean = newSubcategoryInput.trim();
+                              await addSubcategory(currentCategory, clean);
+                              setFormData(prev => ({ ...prev, subcategory: clean }));
+                              setNewSubcategoryInput('');
+                            }
+                          }}
+                          className="bg-[#5B46E8] hover:bg-[#4F39F6] text-white px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1"
+                        >
+                          <Plus size={12} />
+                          <span>যুক্ত করুন</span>
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-neutral-500">
+                        * নতুন সাব-ক্যাটাগরি বানালে এটি স্থায়ীভাবে সংরক্ষিত হবে এবং ড্রপডাউনে পাওয়া যাবে।
+                      </p>
+                    </div>
+
+                    {/* Active selected subcategory display */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-neutral-600 mb-1">
+                        বর্তমান নির্বাচিত সাব-ক্যাটাগরি:
+                      </label>
+                      <input
+                        type="text"
+                        name="subcategory"
+                        value={formData.subcategory || ''}
+                        onChange={handleChange}
+                        placeholder="বা এখানে সরাসরি লিখুন..."
+                        className="w-full border border-neutral-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-black bg-white font-medium"
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Publication Status */}

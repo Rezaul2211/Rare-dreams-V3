@@ -84,14 +84,14 @@ const DESKTOP_NAV_ITEMS: NavCategoryConfig[] = [
     ]
   },
   {
-    name: 'Accessories',
-    path: '/category/Accessories',
+    name: 'Footwear',
+    path: '/category/Footwear',
     subcategories: [
-      { title: 'All Accessories', link: '/category/Accessories' },
-      { title: 'Luxury Watches', link: '/shop?category=Accessories&sub=watches', isHot: true },
-      { title: 'Bags & Wallets', link: '/shop?category=Accessories&sub=bags' },
-      { title: 'Belts & Sunglasses', link: '/shop?category=Accessories&sub=belts' },
-      { title: 'Jewelry & Fragrances', link: '/shop?category=Accessories&sub=jewelry' },
+      { title: 'All Footwear', link: '/category/Footwear' },
+      { title: 'Sneakers & Sports', link: '/shop?category=Footwear&sub=sneakers', isHot: true },
+      { title: 'Formal Shoes & Loafers', link: '/shop?category=Footwear&sub=formal' },
+      { title: 'Casual & Sandal', link: '/shop?category=Footwear&sub=sandals' },
+      { title: 'Boots & Slippers', link: '/shop?category=Footwear&sub=boots' },
     ]
   },
   {

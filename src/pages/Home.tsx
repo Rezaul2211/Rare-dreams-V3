@@ -666,12 +666,12 @@ export default function Home() {
     return matched.length > 0 ? matched : KIDS_SHOWCASE;
   }, [allProducts]);
 
-  const accessoriesProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'accessories'));
+  const footwearProducts = React.useMemo(() => {
+    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'footwear'));
     return matched.length > 0 ? matched : ACCESSORIES_SHOWCASE;
   }, [allProducts]);
 
-  // 4 Main Categories (Men, Women, Kids, Accessories)
+  // 4 Main Categories (Men, Women, Kids, Footwear)
   const displayCategories = React.useMemo(() => {
     if (storeCategories && storeCategories.length > 0) {
       return storeCategories.slice(0, 4);
@@ -680,7 +680,7 @@ export default function Home() {
       { id: '1', title: 'Men', link: '/category/Men', image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=400&q=60&auto=format&fit=crop' },
       { id: '2', title: 'Women', link: '/category/Women', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&q=60&auto=format&fit=crop' },
       { id: '3', title: 'Kids', link: '/category/Kids', image: 'https://images.unsplash.com/photo-1519457431-44ccd64a579b?q=80&w=400&q=60&auto=format&fit=crop' },
-      { id: '4', title: 'Accessories', link: '/category/Accessories', image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?q=80&w=400&q=60&auto=format&fit=crop' },
+      { id: '4', title: 'Footwear', link: '/category/Footwear', image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=400&q=60&auto=format&fit=crop' },
     ];
   }, [storeCategories]);
 
@@ -689,7 +689,7 @@ export default function Home() {
       <SEO 
         title="Rare Dreams | Luxury Fashion & Designer Apparel"
         description="Elevate your everyday style with timeless looks and premium quality luxury fashion."
-        keywords="Rare Dreams, luxury fashion, men clothing, women dresses, kids, designer accessories"
+        keywords="Rare Dreams, luxury fashion, men clothing, women dresses, kids, designer footwear"
       />
 
       <main className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 pt-1.5 sm:pt-3 space-y-4 sm:space-y-6">
@@ -839,11 +839,11 @@ export default function Home() {
           loading={loading}
         />
 
-        {/* Accessories Slider */}
+        {/* Footwear Slider */}
         <ProductSectionSlider
-          title="Accessories"
-          link="/category/Accessories"
-          products={accessoriesProducts}
+          title="Footwear"
+          link="/category/Footwear"
+          products={footwearProducts}
           loading={loading}
         />
 

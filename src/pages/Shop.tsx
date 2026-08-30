@@ -25,6 +25,7 @@ import { useWishlistStore } from '../store/useWishlistStore';
 import SEO from '../components/SEO';
 import { usePublishedProducts } from '../hooks/usePublishedProducts';
 import { calculateDiscount, matchesCategoryGroup } from '../utils/productUtils';
+import { useSubcategoryStore } from '../store/useSubcategoryStore';
 
 // Category & Dynamic Collection Definitions matching user blueprint screenshot exactly
 interface CollectionMeta {
@@ -1075,6 +1076,33 @@ export default function Shop() {
     return list;
   }, [dbProducts, collectionKey, currentMeta]);
 
+  const { getSubcategories } = useSubcategoryStore();
+
+  const visibleSubcategories = useMemo(() => {
+    const subSet = new Set<string>();
+    subSet.add('All');
+
+    // Add dynamic subcategories from store if this is a known category
+    const catName = collectionKey === 'men' ? 'Men' : collectionKey === 'women' ? 'Women' : collectionKey === 'kids' ? 'Kids' : collectionKey === 'accessories' || collectionKey === 'footwear' ? 'Footwear' : '';
+    if (catName) {
+      getSubcategories(catName).forEach(s => subSet.add(s));
+    }
+
+    // Add subcategories from actual products in catalog
+    allCategoryProducts.forEach(p => {
+      if (p.subcategory?.trim()) {
+        subSet.add(p.subcategory.trim());
+      }
+    });
+
+    // Fallback to meta subcategories if still just 'All'
+    if (subSet.size <= 1 && currentMeta.subcategories) {
+      currentMeta.subcategories.forEach(s => subSet.add(s));
+    }
+
+    return Array.from(subSet);
+  }, [collectionKey, getSubcategories, allCategoryProducts, currentMeta]);
+
   // Extract all available brands dynamically
   const availableBrands = useMemo(() => {
     const brandsSet = new Set<string>();
@@ -1282,9 +1310,9 @@ export default function Shop() {
         </section>
 
         {/* 3. SUB-CATEGORY FILTER PILLS ROW (Compact & Clean initial screen fit) */}
-        {currentMeta.subcategories && (
+        {visibleSubcategories && visibleSubcategories.length > 1 && (
           <section className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-3.5 px-3.5 sm:mx-0 sm:px-0">
-            {currentMeta.subcategories.map((subcat) => {
+            {visibleSubcategories.map((subcat) => {
               const isActive = activeSubcat === subcat;
               return (
                 <button

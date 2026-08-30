@@ -150,7 +150,7 @@ export async function checkSteadfastBalance(credentials?: {
  */
 export async function createSteadfastOrder(
   payload: SteadfastCreateOrderPayload,
-  credentials?: { apiKey?: string; secretKey?: string }
+  credentials?: { apiKey?: string; secretKey?: string; testMode?: boolean }
 ): Promise<SteadfastServiceResult<SteadfastConsignment>> {
   try {
     // Sanitize phone number (remove spaces, symbols; ensure standard 11 digits format)
