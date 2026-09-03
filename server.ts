@@ -856,7 +856,7 @@ app.get("/api/push/vapid-key", (req, res) => {
 // Register or refresh Web Push subscription endpoint
 app.post("/api/push/subscribe", async (req, res) => {
   try {
-    const { token, role, userId, subscription } = req.body;
+    const { token, role, userId, email, userEmail, subscription } = req.body;
     if (!token) return res.status(400).json({ error: "Token is required" });
 
     const db = getFirestore();
@@ -864,6 +864,8 @@ app.post("/api/push/subscribe", async (req, res) => {
       token,
       role: role || "customer",
       userId: userId || "anonymous",
+      email: email || userEmail || "",
+      userEmail: email || userEmail || "",
       subscription: subscription || null,
       updatedAt: new Date()
     }, { merge: true });

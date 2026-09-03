@@ -1,6 +1,6 @@
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { fetchClientNetworkInfo, parseUserAgent } from '../utils/deviceParser';
 import { playNewOrderSound, playOfferNotificationSound } from '../utils/audioAlert';
 
@@ -90,7 +90,7 @@ export function showSystemNotification(title: string, options?: NotificationOpti
 /**
  * Request Notification Permission and register Service Worker token + WebPush subscription
  */
-export async function requestPushNotificationPermission(userId?: string, userPhone?: string, role?: string): Promise<string | null> {
+export async function requestPushNotificationPermission(userId?: string, userPhone?: string, role?: string, userEmail?: string): Promise<string | null> {
   try {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       console.warn("This browser does not support desktop notifications.");
@@ -101,6 +101,25 @@ export async function requestPushNotificationPermission(userId?: string, userPho
     if (permission !== 'granted') {
       console.info("Notification permission was not granted:", permission);
       return null;
+    }
+
+    // Auto-detect admin role if currentUser or URL or storage matches
+    let effectiveRole = role || 'customer';
+    let effectiveEmail = userEmail || auth.currentUser?.email || '';
+    let effectiveUserId = userId || auth.currentUser?.uid || 'anonymous';
+
+    try {
+      const storedUser = localStorage.getItem('rare_dreams_user');
+      if (storedUser) {
+        const u = JSON.parse(storedUser);
+        if (u.role === 'admin' || u.role === 'seller') effectiveRole = u.role;
+        if (u.email) effectiveEmail = u.email;
+        if (u.uid || u.id) effectiveUserId = u.uid || u.id;
+      }
+    } catch {}
+
+    if (effectiveEmail.toLowerCase().includes('karim') || effectiveEmail.toLowerCase().includes('admin') || window.location.pathname.startsWith('/admin')) {
+      effectiveRole = 'admin';
     }
 
     // Register service worker if supported
@@ -180,9 +199,11 @@ export async function requestPushNotificationPermission(userId?: string, userPho
       const tokenDocRef = doc(db, 'fcm_tokens', currentToken);
       await setDoc(tokenDocRef, {
         token: currentToken,
-        userId: userId || 'anonymous',
+        userId: effectiveUserId,
+        userEmail: effectiveEmail,
+        email: effectiveEmail,
         userPhone: userPhone || '',
-        role: role || 'customer',
+        role: effectiveRole,
         subscription: subscriptionJSON,
         deviceInfo: navigator.userAgent,
         browser: parsedDevice.browser,
@@ -206,8 +227,9 @@ export async function requestPushNotificationPermission(userId?: string, userPho
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token: currentToken,
-          role: role || 'customer',
-          userId: userId || 'anonymous',
+          role: effectiveRole,
+          userId: effectiveUserId,
+          email: effectiveEmail,
           subscription: subscriptionJSON
         })
       }).catch(() => {});

@@ -61,7 +61,7 @@ export const AdminNotificationListener: React.FC = () => {
 
     // Ensure Push notification token is registered with role: 'admin' for background push alerts
     if (typeof window !== 'undefined' && 'Notification' in window) {
-      requestPushNotificationPermission(user?.id, user?.phone, 'admin').catch(() => {});
+      requestPushNotificationPermission(user?.uid || user?.id, user?.phoneNumber || user?.phone, 'admin', user?.email).catch(() => {});
     }
 
     // Direct Real-Time Listener on 'orders' Collection

@@ -6,7 +6,7 @@ import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useStoreConfigStore } from '../store/useStoreConfigStore';
 import { trackPurchase } from '../lib/pixel';
-import { requestPushNotificationPermission } from '../lib/pushNotifications';
+import { requestPushNotificationPermission, notifyAdminsOfNewOrder } from '../lib/pushNotifications';
 import { 
   ChevronLeft, 
   Copy, 
@@ -154,6 +154,16 @@ export default function PaymentGateway() {
         ...orderData,
         createdAt: serverTimestamp(),
       });
+
+      // Dispatch instant push notification alert to admins
+      notifyAdminsOfNewOrder({
+        id: orderId,
+        customerName: formData.name.trim(),
+        phone: cleanPhone,
+        total: total,
+        district: formData.district,
+        itemsCount: sanitizedProducts.reduce((acc, item) => acc + item.quantity, 0),
+      }).catch((e) => console.warn('Admin notification dispatch error in PaymentGateway:', e));
 
       setOrderProgressStep(3);
       await new Promise(r => setTimeout(r, 700));
