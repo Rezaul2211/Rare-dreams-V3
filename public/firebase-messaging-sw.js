@@ -1,5 +1,13 @@
 // Firebase Web Push Notification Service Worker (FCM)
-// Works in the background even when Chrome / browser tab is closed
+// Works in the background even when Chrome / browser tab / app is completely closed
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
@@ -24,14 +32,16 @@ try {
     console.log('[firebase-messaging-sw.js] Received background message: ', payload);
     const notificationTitle = payload.notification?.title || payload.data?.title || 'Rare Dreams Notification';
     const notificationOptions = {
-      body: payload.notification?.body || payload.data?.body || 'আপনার নতুন নোটিফিকেশন এসেছে!',
+      body: payload.notification?.body || payload.data?.body || payload.data?.message || 'আপনার নতুন নোটিফিকেশন এসেছে!',
       icon: payload.notification?.icon || payload.data?.icon || '/pwa-192x192.png',
       badge: '/favicon-32x32.png',
       data: {
-        url: payload.data?.url || payload.notification?.click_action || '/admin/orders'
+        url: payload.data?.url || payload.notification?.click_action || '/admin/orders',
+        orderId: payload.data?.orderId || ''
       },
-      vibrate: [250, 100, 250, 100, 250],
-      tag: payload.data?.tag || payload.data?.orderId || 'rare_dreams_notification',
+      vibrate: [350, 120, 350, 120, 350],
+      requireInteraction: true,
+      tag: payload.data?.tag || payload.data?.orderId || 'rare_dreams_' + Date.now(),
       renotify: true
     };
 
@@ -46,16 +56,17 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       const data = event.data.json();
-      const title = data.title || data.notification?.title || '🛍️ নতুন অর্ডার - Rare Dreams';
+      const title = data.title || data.notification?.title || data.data?.title || '🛍️ নতুন অর্ডার - Rare Dreams';
       const options = {
-        body: data.body || data.notification?.body || 'একটি নতুন অর্ডার এসেছে!',
+        body: data.body || data.notification?.body || data.data?.body || data.data?.message || 'একটি নতুন অর্ডার এসেছে!',
         icon: data.icon || data.notification?.icon || '/pwa-192x192.png',
         badge: '/favicon-32x32.png',
         data: { 
-          url: data.url || data.data?.url || (data.targetRole === 'admin' ? '/admin/orders' : '/account') 
+          url: data.url || data.data?.url || (data.targetRole === 'admin' ? '/admin/orders' : '/shop') 
         },
-        vibrate: [300, 100, 300, 100, 300],
-        tag: data.tag || 'rare_dreams_push_' + Date.now(),
+        vibrate: [350, 120, 350, 120, 350],
+        requireInteraction: true,
+        tag: data.tag || data.data?.tag || ('rare_dreams_push_' + Date.now()),
         renotify: true
       };
       event.waitUntil(self.registration.showNotification(title, options));
@@ -65,6 +76,7 @@ self.addEventListener('push', (event) => {
           body: event.data.text(),
           icon: '/pwa-192x192.png',
           badge: '/favicon-32x32.png',
+          vibrate: [300, 100, 300],
           data: { url: '/admin/orders' }
         })
       );
@@ -81,7 +93,9 @@ self.addEventListener('notificationclick', (event) => {
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(urlToOpen);
+          if ('navigate' in client) {
+            client.navigate(urlToOpen);
+          }
           return client.focus();
         }
       }

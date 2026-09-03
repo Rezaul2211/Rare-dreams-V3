@@ -221,6 +221,23 @@ export default function AdminPushNotifications() {
         createdAt: serverTimestamp()
       });
 
+      // 3. Dispatch native FCM Background Multicast Push to all mobile/offline devices
+      fetch('/api/notifications/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          body: message.trim(),
+          target: targetAudience,
+          url: targetUrl.trim() || '/shop'
+        })
+      }).then(async (res) => {
+        const data = await res.json().catch(() => null);
+        console.log('Broadcast FCM dispatch result:', data);
+      }).catch((err) => {
+        console.warn('Broadcast FCM endpoint note:', err);
+      });
+
       // Play chime sound
       playOfferNotificationSound();
 

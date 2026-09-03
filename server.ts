@@ -886,6 +886,8 @@ app.post("/api/notifications/push-admin-order", async (req, res) => {
           body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}\nঅর্ডার #${(orderId || '').slice(-6).toUpperCase()}`,
         },
         data: {
+          title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
+          body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
           url: '/admin/orders',
           orderId: String(orderId || ''),
           customerName: String(customerName || ''),
@@ -896,19 +898,35 @@ app.post("/api/notifications/push-admin-order", async (req, res) => {
         },
         webpush: {
           headers: {
-            Urgency: "high"
+            Urgency: "high",
+            TTL: "86400"
           },
           notification: {
             title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
             body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
             icon: '/pwa-192x192.png',
             badge: '/favicon-32x32.png',
-            vibrate: [300, 100, 300, 100, 300],
+            vibrate: [350, 120, 350, 120, 350],
             requireInteraction: true,
-            tag: 'order_' + String(orderId || Date.now())
+            tag: 'order_' + String(orderId || Date.now()),
+            data: {
+              url: '/admin/orders',
+              orderId: String(orderId || '')
+            }
           },
           fcmOptions: {
             link: '/admin/orders'
+          }
+        },
+        android: {
+          priority: "high" as const,
+          notification: {
+            title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
+            body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
+            sound: "default",
+            defaultVibrateTimings: true,
+            defaultSound: true,
+            tag: 'order_' + String(orderId || Date.now())
           }
         }
       };
@@ -982,21 +1000,42 @@ app.post("/api/notifications/broadcast", async (req, res) => {
         imageUrl: imageUrl || undefined
       },
       data: {
+        title: String(title),
+        body: String(body),
         url: url || '/shop',
-        targetRole: target || 'all'
+        targetRole: target || 'all',
+        tag: 'campaign_' + Date.now()
       },
       webpush: {
-        headers: { Urgency: "high" },
+        headers: { 
+          Urgency: "high",
+          TTL: "86400"
+        },
         notification: {
           title: title,
           body: body,
           icon: imageUrl || '/pwa-192x192.png',
           badge: '/favicon-32x32.png',
-          vibrate: [250, 100, 250],
-          tag: 'campaign_' + Date.now()
+          vibrate: [300, 100, 300],
+          requireInteraction: true,
+          tag: 'campaign_' + Date.now(),
+          data: {
+            url: url || '/shop'
+          }
         },
         fcmOptions: {
           link: url || '/shop'
+        }
+      },
+      android: {
+        priority: "high" as const,
+        notification: {
+          title: title,
+          body: body,
+          sound: "default",
+          defaultVibrateTimings: true,
+          defaultSound: true,
+          tag: 'campaign_' + Date.now()
         }
       }
     };

@@ -3,19 +3,18 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Clean up any previously registered Service Workers safely in supported contexts
-try {
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
-    navigator.serviceWorker.getRegistrations?.().then((registrations) => {
-      if (Array.isArray(registrations)) {
-        for (const registration of registrations) {
-          registration.unregister().catch(() => {});
-        }
-      }
-    }).catch(() => {});
-  }
-} catch {
-  // Ignored in sandboxed iframes or environments where service workers are restricted
+// Register Firebase Web Push / Background Service Worker persistently
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/firebase-messaging-sw.js', { scope: '/' })
+      .then((reg) => {
+        console.log('[SW] Firebase messaging ServiceWorker active:', reg.scope);
+      })
+      .catch((err) => {
+        console.info('[SW] ServiceWorker registration info:', err);
+      });
+  });
 }
 
 // Global safety catchers for cross-origin or unhandled iframe exceptions
