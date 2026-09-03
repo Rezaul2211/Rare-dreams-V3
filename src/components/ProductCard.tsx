@@ -34,11 +34,11 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
               <LazyImage
                 src={product.images[0]}
                 alt={product.name}
-                className="w-full h-full object-cover object-top mix-blend-multiply group-hover:scale-104 transition-transform duration-500 ease-out"
+                className="w-full h-full object-cover object-top group-hover:scale-103 transition-transform duration-300 ease-out"
                 containerClassName="w-full h-full"
               />
-              {/* Soft Smoky White Mist / Fog Gradient melting seamlessly into card bottom */}
-              <div className="absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-[#F2F2F6] via-[#F2F2F6]/90 via-[#F2F2F6]/40 to-transparent pointer-events-none" />
+              {/* Soft Smoky Mist Gradient */}
+              <div className="absolute inset-x-0 bottom-0 h-[40%] bg-gradient-to-t from-[#F2F2F6] via-[#F2F2F6]/80 to-transparent pointer-events-none" />
             </>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-neutral-400 text-xs font-medium">
@@ -46,36 +46,36 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
             </div>
           )}
 
-          {/* Floating Micro Capsule Badge (Over Smoky Mist at Bottom-Left of Image with Liquid Glass) */}
+          {/* Floating Micro Capsule Badge (High Performance Crisp Styling) */}
           {discountPct && discountPct > 0 ? (
             <div className="absolute bottom-2 left-2.5 z-10 pointer-events-none">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-neutral-950 text-[9.5px] sm:text-[10px] font-black shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/20 tracking-tight leading-none">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-neutral-950 text-[9.5px] sm:text-[10px] font-black shadow-xs border border-neutral-200/80 tracking-tight leading-none">
                 -{discountPct}%
               </span>
             </div>
           ) : (product.isNew || product.daily_drop) ? (
             <div className="absolute bottom-2 left-2.5 z-10 pointer-events-none">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-neutral-900 text-[9.5px] sm:text-[10px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/20 tracking-tight leading-none">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-neutral-900 text-[9.5px] sm:text-[10px] font-bold shadow-xs border border-neutral-200/80 tracking-tight leading-none">
                 New in
               </span>
             </div>
           ) : (product.rating && product.rating >= 4.7) ? (
             <div className="absolute bottom-2 left-2.5 z-10 pointer-events-none">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-neutral-900 text-[9.5px] sm:text-[10px] font-bold shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/20 tracking-tight leading-none">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/95 text-neutral-900 text-[9.5px] sm:text-[10px] font-bold shadow-xs border border-neutral-200/80 tracking-tight leading-none">
                 Best Seller
               </span>
             </div>
           ) : null}
 
-          {/* Top-Right Floating Circular Wishlist Heart with Liquid Glass */}
+          {/* Top-Right Floating Circular Wishlist Heart */}
           <button 
             type="button"
             onClick={handleWishlistClick}
             aria-label={favorited ? "Remove from Wishlist" : "Add to Wishlist"}
             className={`absolute top-2.5 right-2.5 z-20 w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
               favorited 
-                ? 'bg-white/80 backdrop-blur-md text-red-500 shadow-[0_4px_12px_rgba(239,68,68,0.25),inset_0_1px_1px_rgba(255,255,255,0.6)] border border-white/40 scale-105' 
-                : 'bg-white/10 hover:bg-white/20 backdrop-blur-md text-neutral-800 hover:text-red-500 shadow-[0_2px_8px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/20 active:scale-90'
+                ? 'bg-white text-red-500 shadow-xs border border-red-200 scale-105' 
+                : 'bg-white/90 hover:bg-white text-neutral-800 hover:text-red-500 shadow-xs border border-neutral-200/80 active:scale-90'
             }`}
           >
             <Heart 

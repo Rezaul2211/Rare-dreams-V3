@@ -43,30 +43,30 @@ export const CompactProductCard: React.FC<CompactProductCardProps> = React.memo(
           )}
         </Link>
 
-        {/* Discount Badge with Liquid Glass */}
+        {/* Discount Badge */}
         {product.stockQuantity === 0 ? (
-          <div className="absolute top-1 left-1 z-10 bg-neutral-900/80 backdrop-blur-md text-white text-[7px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-xs border border-white/20">
+          <div className="absolute top-1 left-1 z-10 bg-neutral-900 text-white text-[7px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-xs">
             {t('product.out_of_stock')}
           </div>
         ) : discountPct && discountPct > 0 ? (
-          <div className="absolute top-1 left-1 z-10 bg-white/10 backdrop-blur-md text-neutral-950 text-[7.5px] sm:text-[8.5px] font-black px-1.5 py-0.5 rounded-md shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/20 tracking-tight">
+          <div className="absolute top-1 left-1 z-10 bg-white/95 text-neutral-950 text-[7.5px] sm:text-[8.5px] font-black px-1.5 py-0.5 rounded-md shadow-xs border border-neutral-200/80 tracking-tight">
             -{discountPct}%
           </div>
         ) : product.isFlashSale ? (
-          <div className="absolute top-1 left-1 z-10 bg-white/10 backdrop-blur-md text-neutral-950 text-[7.5px] sm:text-[8.5px] font-black px-1.5 py-0.5 rounded-md shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/20">
+          <div className="absolute top-1 left-1 z-10 bg-white/95 text-neutral-950 text-[7.5px] sm:text-[8.5px] font-black px-1.5 py-0.5 rounded-md shadow-xs border border-neutral-200/80">
             ⚡ Sale
           </div>
         ) : null}
 
-        {/* Heart Wishlist Overlay Button with Liquid Glass */}
+        {/* Heart Wishlist Overlay Button */}
         <button 
           type="button"
           onClick={handleWishlistClick}
           aria-label={favorited ? "Remove from Wishlist" : "Add to Wishlist"}
           className={`absolute top-1 right-1 z-20 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
             favorited 
-              ? 'bg-white/80 backdrop-blur-md text-red-500 shadow-xs scale-105 border border-white/40' 
-              : 'bg-white/10 hover:bg-white/20 backdrop-blur-md text-neutral-800 hover:text-red-500 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/20'
+              ? 'bg-white text-red-500 shadow-xs scale-105 border border-red-200' 
+              : 'bg-white/90 hover:bg-white text-neutral-800 hover:text-red-500 shadow-xs border border-neutral-200/80'
           }`}
         >
           <Heart 

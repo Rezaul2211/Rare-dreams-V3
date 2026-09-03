@@ -722,9 +722,9 @@ export default function Home() {
 
                 {/* Banner Editorial Content */}
                 <div className="absolute inset-0 flex flex-col justify-center px-4 sm:px-10 md:px-14 z-20 max-w-[65%] xs:max-w-[60%] sm:max-w-[55%] md:max-w-[50%]">
-                  {/* Top Liquid Glass Box Badge (Lightly Rounded Rectangle) */}
+                  {/* Top Crisp Badge */}
                   <div className="mb-1.5 sm:mb-2.5">
-                    <span className="inline-flex items-center px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-md sm:rounded-lg bg-white/40 backdrop-blur-xl text-neutral-900 text-[8.5px] xs:text-[9.5px] sm:text-xs font-bold shadow-[0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_2px_rgba(255,255,255,0.95)] border border-white/75 tracking-wide uppercase">
+                    <span className="inline-flex items-center px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-md sm:rounded-lg bg-white/95 text-neutral-900 text-[8.5px] xs:text-[9.5px] sm:text-xs font-bold shadow-xs border border-neutral-200/80 tracking-wide uppercase">
                       {slide.tag || 'New in'}
                     </span>
                   </div>

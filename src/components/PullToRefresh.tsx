@@ -248,21 +248,10 @@ export default function PullToRefresh({ children, onRefresh }: PullToRefreshProp
         )}
       </AnimatePresence>
 
-      {/* Children Content */}
-      <motion.div
-        animate={{
-          y: isRefreshing ? 8 : Math.min(18, pullDistance * 0.16),
-        }}
-        transition={{
-          type: 'spring',
-          damping: 26,
-          stiffness: 300,
-          mass: 0.7,
-        }}
-        className="w-full flex-grow flex flex-col"
-      >
+      {/* Children Content without layout-thrashing motion wrappers */}
+      <div className="w-full flex-grow flex flex-col">
         {children}
-      </motion.div>
+      </div>
     </div>
   );
 }

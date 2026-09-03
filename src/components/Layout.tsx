@@ -132,30 +132,39 @@ function LayoutInner() {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // Smart Scroll Header: Auto-hide when scrolling down, reveal when scrolling up or at top
+  // Smart Scroll Header: Throttled with RAF, only triggers state update on actual change
   useEffect(() => {
+    let ticking = false;
+
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
+      if (ticking) return;
 
-      // Keep header visible if mobile search is open or mobile drawer is open
-      if (isMobileMenuOpen || isMobileSearchExpanded) {
-        setIsHeaderVisible(true);
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        const currentScrollY = window.scrollY;
+
+        // Keep header visible if mobile search is open or mobile drawer is open
+        if (isMobileMenuOpen || isMobileSearchExpanded) {
+          setIsHeaderVisible(true);
+          lastScrollY.current = currentScrollY;
+          ticking = false;
+          return;
+        }
+
+        // Always show when near the very top of page
+        if (currentScrollY <= 30) {
+          setIsHeaderVisible((prev) => (prev ? prev : true));
+        } else if (currentScrollY > lastScrollY.current + 12) {
+          // Scrolling down -> smoothly hide header
+          setIsHeaderVisible((prev) => (!prev ? prev : false));
+        } else if (currentScrollY < lastScrollY.current - 12) {
+          // Scrolling up -> smoothly reveal header
+          setIsHeaderVisible((prev) => (prev ? prev : true));
+        }
+
         lastScrollY.current = currentScrollY;
-        return;
-      }
-
-      // Always show when near the very top of page
-      if (currentScrollY <= 25) {
-        setIsHeaderVisible(true);
-      } else if (currentScrollY > lastScrollY.current + 8) {
-        // Scrolling down -> smoothly hide header
-        setIsHeaderVisible(false);
-      } else if (currentScrollY < lastScrollY.current - 8) {
-        // Scrolling up -> smoothly reveal header
-        setIsHeaderVisible(true);
-      }
-
-      lastScrollY.current = currentScrollY;
+        ticking = false;
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -203,9 +212,9 @@ function LayoutInner() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC] font-sans text-neutral-900 pb-16 md:pb-0">
       {/* ========================================================= */}
-      {/* HEADER: SMART STICKY WITH LIQUID GLASS & AUTO-HIDE ON SCROLL */}
+      {/* HEADER: SMART STICKY WITH HIGH PERFORMANCE LIGHTWEIGHT STYLING */}
       {/* ========================================================= */}
-      <header className={`sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.03),inset_0_-1px_0_rgba(255,255,255,0.6)] transition-transform duration-300 ease-out will-change-transform ${
+      <header className={`sticky top-0 z-40 bg-white/95 border-b border-neutral-200/80 shadow-2xs transition-transform duration-300 ease-out ${
         isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
       }`}>
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
@@ -715,13 +724,13 @@ function LayoutInner() {
       {/* Background Push Notification Opt-in Prompt */}
       {!location.pathname.startsWith('/admin') && <PushNotificationPrompt />}
 
-      {/* Floating Liquid Glass Mobile Bottom Navigation (Hidden on Checkout, Product Detail, and Admin pages) */}
+      {/* Floating Lightweight Mobile Bottom Navigation (Hidden on Checkout, Product Detail, and Admin pages) */}
       {!location.pathname.startsWith('/checkout') && !location.pathname.startsWith('/product') && !location.pathname.startsWith('/admin') && typeof document !== 'undefined' && document.body && createPortal(
         <nav 
           aria-label="Mobile Navigation"
           className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[990] pointer-events-auto"
         >
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)] rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px] will-change-[backdrop-filter,transform]">
+          <div className="bg-white/95 border border-neutral-200/90 shadow-lg rounded-[26px] p-1.5 flex items-center gap-2 xs:gap-3 justify-around min-w-[260px]">
             {/* 1. Home */}
             {(() => {
               const isActive = location.pathname === '/';
@@ -735,7 +744,7 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-sm z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}
@@ -762,7 +771,7 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-sm z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}
@@ -790,7 +799,7 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-sm z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}
@@ -824,7 +833,7 @@ function LayoutInner() {
                   {isActive && (
                     <motion.div 
                       layoutId="mobileNavActivePill" 
-                      className="absolute inset-0 bg-[#18181A]/90 backdrop-blur-md rounded-[16px] shadow-[0_2px_10px_rgba(0,0,0,0.22)] z-0"
+                      className="absolute inset-0 bg-[#18181A] rounded-[16px] shadow-sm z-0"
                       transition={{ type: "spring", stiffness: 420, damping: 32 }}
                     />
                   )}

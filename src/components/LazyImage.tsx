@@ -71,18 +71,16 @@ export const LazyImage = memo(({
         containerClassName
       )}
     >
-      {/* 1. Base64 Blur-Up Preview Placeholder with soft shimmer effect */}
-      <img
-        src={blurDataURL}
-        alt=""
+      {/* 1. Lightweight Preview Placeholder */}
+      <div
         aria-hidden="true"
         className={clsx(
-          "absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ease-out z-0 filter blur-md scale-105",
+          "absolute inset-0 w-full h-full bg-neutral-200/80 pointer-events-none transition-opacity duration-300 z-0",
           isLoaded && !hasError ? "opacity-0" : "opacity-100"
         )}
       />
 
-      {/* 2. Main High-Res Image with Blur-Up Transition */}
+      {/* 2. Main High-Res Image with Ultra-Smooth Hardware-Accelerated Fade-in */}
       {isInView && src ? (
         <img
           ref={imgRef}
@@ -94,10 +92,10 @@ export const LazyImage = memo(({
           onLoad={() => setIsLoaded(true)}
           onError={() => setHasError(true)}
           className={clsx(
-            "w-full h-full object-cover relative z-10 transition-all duration-500 ease-out will-change-[filter,opacity,transform]",
+            "w-full h-full object-cover relative z-10 transition-opacity duration-300 ease-out",
             !isLoaded 
-              ? "opacity-0 filter blur-lg scale-105" 
-              : "opacity-100 filter blur-0 scale-100",
+              ? "opacity-0" 
+              : "opacity-100",
             className
           )}
           {...props}
