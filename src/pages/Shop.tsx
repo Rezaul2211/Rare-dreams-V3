@@ -1692,7 +1692,7 @@ export default function Shop() {
         )}
 
         {/* 5. 2-COLUMN PRODUCT GRID (Mobile / Responsive) matching screenshot */}
-        {loading ? (
+        {loading && displayedProducts.length === 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3.5">
             {[...Array(6)].map((_, i) => (
               <ProductSkeleton key={i} index={i} />

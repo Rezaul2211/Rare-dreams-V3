@@ -519,7 +519,7 @@ const ProductSectionSlider = React.memo(function ProductSectionSlider({ title, l
         </div>
       </div>
 
-      {loading ? (
+      {loading && displayProducts.length === 0 ? (
         <div className="flex gap-2.5 sm:gap-4 overflow-hidden">
           {[...Array(2)].map((_, i) => (
             <div key={i} className="w-[calc((100%-10px)/2)] sm:w-[calc((100%-42px)/4)] shrink-0">
