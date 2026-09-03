@@ -34,23 +34,41 @@ import { ProductReviews } from '../components/ProductReviews';
 import SEO from '../components/SEO';
 import { calculateDiscount, formatPrice } from '../utils/productUtils';
 import { getColorSwatch } from '../utils/colorUtils';
-import { usePublishedProducts } from '../hooks/usePublishedProducts';
+import { usePublishedProducts, getCachedProductById } from '../hooks/usePublishedProducts';
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { language } = useLanguageStore();
   const { config: storeConfig } = useStoreConfigStore();
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // Instant cache lookup for immediate 0ms product rendering
+  const initialCachedProduct = useMemo(() => id ? getCachedProductById(id) : null, [id]);
+  const [product, setProduct] = useState<Product | null>(() => initialCachedProduct);
+  const [loading, setLoading] = useState<boolean>(() => !initialCachedProduct);
   
   // Real Authentic Reviews Summary (No fake 128 / 4.8)
-  const [reviewSummary, setReviewSummary] = useState({ avgRating: 0, totalCount: 0 });
+  const [reviewSummary, setReviewSummary] = useState(() => ({
+    avgRating: initialCachedProduct?.rating || 0,
+    totalCount: initialCachedProduct?.reviewsCount || 0
+  }));
   
   // Showcase state
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedSize, setSelectedSize] = useState<string>('');
-  const [selectedColor, setSelectedColor] = useState<string>('');
+  const [selectedSize, setSelectedSize] = useState<string>(() => {
+    if (!initialCachedProduct) return '';
+    const availSizes = (initialCachedProduct.sizeOptions && initialCachedProduct.sizeOptions.length > 0) 
+      ? initialCachedProduct.sizeOptions 
+      : ((initialCachedProduct as any).sizes && Array.isArray((initialCachedProduct as any).sizes) && (initialCachedProduct as any).sizes.length > 0 ? (initialCachedProduct as any).sizes : []);
+    return availSizes[0] || '';
+  });
+  const [selectedColor, setSelectedColor] = useState<string>(() => {
+    if (!initialCachedProduct) return '';
+    const availColors = (initialCachedProduct.colorOptions && initialCachedProduct.colorOptions.length > 0) 
+      ? initialCachedProduct.colorOptions 
+      : ((initialCachedProduct as any).colors && Array.isArray((initialCachedProduct as any).colors) && (initialCachedProduct as any).colors.length > 0 ? (initialCachedProduct as any).colors : []);
+    return availColors[0] || '';
+  });
   const [quantity, setQuantity] = useState(1);
   const [is360Mode, setIs360Mode] = useState(false);
   const [rotationAngle, setRotationAngle] = useState(0);
@@ -75,13 +93,33 @@ export default function ProductDetail() {
   }, [id, allPublishedProducts]);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchProduct = async () => {
       if (!id) return;
-      setLoading(true);
+      
+      // If we don't have product cached, show skeleton
+      const cached = getCachedProductById(id);
+      if (cached) {
+        setProduct(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
       try {
         const docRef = doc(db, 'products', id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        
+        // Fetch with a 6-second timeout race
+        const getDocPromise = getDoc(docRef);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Product fetch timeout')), 6000);
+        });
+
+        const docSnap: any = await Promise.race([getDocPromise, timeoutPromise]);
+        
+        if (!isMounted) return;
+
+        if (docSnap && docSnap.exists()) {
           const data = { id: docSnap.id, ...docSnap.data() } as Product;
           setProduct(data);
           setSelectedImageIndex(0);
@@ -95,13 +133,20 @@ export default function ProductDetail() {
             });
           }
 
-          if (data.sizeOptions && data.sizeOptions.length > 0) {
-            setSelectedSize(data.sizeOptions[0]);
+          const availSizes = (data.sizeOptions && data.sizeOptions.length > 0) 
+            ? data.sizeOptions 
+            : ((data as any).sizes && Array.isArray((data as any).sizes) && (data as any).sizes.length > 0 ? (data as any).sizes : []);
+          if (availSizes.length > 0) {
+            setSelectedSize(availSizes[0]);
           } else {
             setSelectedSize('');
           }
-          if (data.colorOptions && data.colorOptions.length > 0) {
-            setSelectedColor(data.colorOptions[0]);
+
+          const availColors = (data.colorOptions && data.colorOptions.length > 0) 
+            ? data.colorOptions 
+            : ((data as any).colors && Array.isArray((data as any).colors) && (data as any).colors.length > 0 ? (data as any).colors : []);
+          if (availColors.length > 0) {
+            setSelectedColor(availColors[0]);
           } else {
             setSelectedColor('');
           }
@@ -114,12 +159,19 @@ export default function ProductDetail() {
           });
         }
       } catch (error) {
-        console.error("Error fetching product", error);
+        console.warn("[RareDreams ProductDetail] Error/Timeout fetching product:", error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
+
     fetchProduct();
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   // 360 Rotation Mouse/Touch handlers
@@ -228,6 +280,41 @@ export default function ProductDetail() {
     }
   }, [displayImages, product]);
 
+  const handleNextImage = useCallback(() => {
+    if (displayImages.length <= 1) return;
+    const nextIdx = (selectedImageIndex + 1) % displayImages.length;
+    handleSelectImage(nextIdx);
+  }, [displayImages.length, selectedImageIndex, handleSelectImage]);
+
+  const handlePrevImage = useCallback(() => {
+    if (displayImages.length <= 1) return;
+    const prevIdx = (selectedImageIndex - 1 + displayImages.length) % displayImages.length;
+    handleSelectImage(prevIdx);
+  }, [displayImages.length, selectedImageIndex, handleSelectImage]);
+
+  const galleryTouchStartX = useRef(0);
+  const handleTouchStartGallery = (e: React.TouchEvent) => {
+    if (is360Mode) {
+      handleTouchStart360(e);
+      return;
+    }
+    galleryTouchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEndGallery = (e: React.TouchEvent) => {
+    if (is360Mode) {
+      handleTouchEnd360();
+      return;
+    }
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = galleryTouchStartX.current - touchEndX;
+    if (diff > 45) {
+      handleNextImage();
+    } else if (diff < -45) {
+      handlePrevImage();
+    }
+  };
+
   const handleAddToCart = useCallback((e?: React.MouseEvent<HTMLElement>) => {
     if (!product) return;
     trackAddToCart({
@@ -314,6 +401,18 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
     }
   }, [product]);
 
+  const sizes = useMemo(() => {
+    if (product?.sizeOptions && product.sizeOptions.length > 0) return product.sizeOptions;
+    if ((product as any)?.sizes && Array.isArray((product as any).sizes) && (product as any).sizes.length > 0) return (product as any).sizes;
+    return [];
+  }, [product]);
+
+  const colors = useMemo(() => {
+    if (product?.colorOptions && product.colorOptions.length > 0) return product.colorOptions;
+    if ((product as any)?.colors && Array.isArray((product as any).colors) && (product as any).colors.length > 0) return (product as any).colors;
+    return [];
+  }, [product]);
+
   if (loading) {
     return <ProductDetailSkeleton />;
   }
@@ -331,9 +430,6 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
       </div>
     );
   }
-
-  const sizes = product.sizeOptions && product.sizeOptions.length > 0 ? product.sizeOptions : [];
-  const colors = product.colorOptions && product.colorOptions.length > 0 ? product.colorOptions : [];
 
   return (
     <div className="min-h-screen bg-[#F6F5FC] sm:bg-[#ECE9F8] text-neutral-900 pb-28 md:pb-12 font-sans">
@@ -365,44 +461,46 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             <button
               onClick={() => navigate(-1)}
               aria-label="Back"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center text-neutral-800 active:scale-90 transition-transform cursor-pointer"
+              className="w-9 h-9 rounded-full bg-white/95 backdrop-blur-md shadow-2xs border border-purple-100 flex items-center justify-center text-neutral-700 hover:text-black active:scale-90 transition-all cursor-pointer"
             >
-              <ChevronLeft size={19} strokeWidth={2.4} />
+              <ChevronLeft size={20} />
             </button>
 
-            {/* Right Buttons: Share & Wishlist */}
             <div className="flex items-center gap-2">
+              {/* Share */}
               <button
                 onClick={handleShare}
                 aria-label="Share"
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center text-neutral-700 active:scale-90 transition-transform cursor-pointer"
+                className="w-9 h-9 rounded-full bg-white/95 backdrop-blur-md shadow-2xs border border-purple-100 flex items-center justify-center text-neutral-700 hover:text-black active:scale-90 transition-all cursor-pointer"
               >
-                <Share2 size={16} strokeWidth={2.2} />
+                <Share2 size={17} />
               </button>
-
+              {/* Favorite */}
               <button
-                onClick={() => toggleWishlist(product.id)}
+                onClick={() => product && toggleWishlist(product.id)}
                 aria-label="Wishlist"
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_14px_rgba(0,0,0,0.06)] border border-neutral-100 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
+                className={clsx(
+                  "w-9 h-9 rounded-full backdrop-blur-md shadow-2xs border flex items-center justify-center active:scale-90 transition-all cursor-pointer",
+                  favorited
+                    ? "bg-rose-50 border-rose-200 text-rose-500"
+                    : "bg-white/95 border-purple-100 text-neutral-700 hover:text-black"
+                )}
               >
-                <Heart
-                  size={18}
-                  className={favorited ? "text-[#5B46E8] fill-[#5B46E8]" : "text-[#5B46E8]"}
-                  strokeWidth={2.2}
-                />
+                <Heart size={17} className={favorited ? "fill-rose-500" : ""} />
               </button>
             </div>
           </div>
 
           {/* Vertical Thumbnail Column (Left Side) - Stacked vertically */}
           {displayImages.length > 1 && (
-            <div className="absolute top-14 left-3 z-20 flex flex-col gap-1.5 max-h-[210px] sm:max-h-[270px] overflow-y-auto hide-scrollbar py-1">
+            <div className="absolute top-14 left-3 z-20 flex flex-col gap-1.5 max-h-[220px] sm:max-h-[280px] overflow-y-auto no-scrollbar py-1">
               {displayImages.map((img, idx) => (
                 <button
                   key={idx}
+                  type="button"
                   onClick={() => handleSelectImage(idx)}
                   className={clsx(
-                    "w-10 h-10 sm:w-12 sm:h-12 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0",
+                    "w-11 h-11 sm:w-13 sm:h-13 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0",
                     selectedImageIndex === idx && !is360Mode
                       ? "border-2 border-[#5B46E8] ring-2 ring-purple-200 scale-105"
                       : "border border-neutral-200/90 opacity-80 hover:opacity-100"
@@ -410,8 +508,9 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                 >
                   <img
                     src={img}
-                    alt={`Thumbnail ${idx}`}
+                    alt={`Thumbnail ${idx + 1}`}
                     className="w-full h-full object-cover rounded-lg"
+                    loading="lazy"
                   />
                 </button>
               ))}
@@ -420,7 +519,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
 
           {/* 3D FLOATING PRODUCT PODIUM & STAGE */}
           <div 
-            className="relative w-full h-[260px] sm:h-[340px] flex items-center justify-center px-4 touch-pan-y"
+            className="relative w-full h-[280px] sm:h-[350px] flex items-center justify-center px-4 touch-pan-y"
             onTouchStart={is360Mode ? handleTouchStart360 : undefined}
             onTouchMove={is360Mode ? handleTouchMove360 : undefined}
             onTouchEnd={is360Mode ? handleTouchEnd360 : undefined}
@@ -429,12 +528,12 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             onMouseUp={is360Mode ? handleTouchEnd360 : undefined}
           >
             {/* Ambient Studio Lighting Glow */}
-            <div className="absolute w-60 h-60 sm:w-72 sm:h-72 rounded-full bg-radial from-purple-300/35 via-blue-200/20 to-transparent blur-2xl pointer-events-none" />
+            <div className="absolute w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-radial from-purple-300/35 via-blue-200/20 to-transparent blur-2xl pointer-events-none" />
 
             {/* Glowing 3D Podium Base */}
-            <div className="absolute bottom-2.5 w-[210px] sm:w-[280px] h-[52px] sm:h-[62px] flex items-center justify-center pointer-events-none">
+            <div className="absolute bottom-2 w-[230px] sm:w-[300px] h-[54px] sm:h-[66px] flex items-center justify-center pointer-events-none">
               {/* Soft Drop Shadow under podium */}
-              <div className="absolute -bottom-2 w-[180px] sm:w-[230px] h-5 bg-purple-950/15 rounded-[100%] blur-md" />
+              <div className="absolute -bottom-2 w-[200px] sm:w-[250px] h-5 bg-purple-950/15 rounded-[100%] blur-md" />
               
               {/* Podium 3D Ellipse Body */}
               <div className="relative w-full h-full rounded-[100%] bg-gradient-to-b from-white via-[#F8F7FF] to-[#E2DEFA] shadow-[0_10px_24px_rgba(91,70,232,0.18)] border-2 border-white flex items-center justify-center">
@@ -445,26 +544,27 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               </div>
             </div>
 
-            {/* Floating Product Image */}
+            {/* Floating Product Image - Sized & Centered over Podium */}
             <motion.div
               animate={is360Mode ? {
                 rotateY: rotationAngle,
               } : {
-                y: [0, -5, 0],
+                y: [0, -6, 0],
               }}
               transition={is360Mode ? { duration: 0 } : {
                 duration: 4.2,
                 repeat: Infinity,
                 ease: "easeInOut",
               }}
-              className="relative z-10 w-[200px] sm:w-[260px] h-[210px] sm:h-[270px] flex items-center justify-center"
+              className="relative z-10 w-[230px] sm:w-[290px] h-[230px] sm:h-[280px] flex items-center justify-center p-1"
               style={{ perspective: 1000 }}
             >
               {activeImage ? (
                 <img
                   src={activeImage}
                   alt={product.name}
-                  className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_10px_18px_rgba(30,27,75,0.16)] rounded-xl select-none pointer-events-none"
+                  className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_12px_22px_rgba(30,27,75,0.16)] rounded-xl select-none pointer-events-none"
+                  loading="eager"
                 />
               ) : (
                 <div className="w-32 h-32 bg-purple-100 rounded-2xl flex items-center justify-center text-neutral-400 font-medium text-xs">
@@ -473,8 +573,9 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               )}
             </motion.div>
 
-            {/* 360 Interactive View Pill Button (Always visible on stage) */}
+            {/* 360 Interactive View Pill Button */}
             <button
+              type="button"
               onClick={() => {
                 setIs360Mode(!is360Mode);
                 setRotationAngle(0);
@@ -482,7 +583,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               className={clsx(
                 "absolute bottom-2.5 right-3.5 z-20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-black shadow-md active:scale-95 transition-all cursor-pointer",
                 is360Mode
-                  ? "bg-[#5B46E8] text-white ring-2 ring-purple-300"
+                  ? "bg-[#5B46E8] text-white ring-2 ring-purple-300 shadow-purple-500/20"
                   : "bg-white/95 text-neutral-800 border border-purple-100 hover:border-[#5B46E8]/40"
               )}
             >

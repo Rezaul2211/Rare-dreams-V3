@@ -10,6 +10,7 @@ import { useFlyToCart } from '../context/FlyToCartContext';
 import { useLanguageStore } from '../store/useLanguageStore';
 import { usePriceAlertStore } from '../store/usePriceAlertStore';
 import { Order, AddressItem, PaymentMethodItem, Product } from '../types';
+import { fetchPublishedProducts } from '../hooks/usePublishedProducts';
 import { 
   User as UserIcon, 
   MapPin, 
@@ -150,9 +151,14 @@ export default function Account() {
           setOrders(ordersData);
         }
 
-        const productsSnapshot = await getDocs(collection(db, 'products'));
-        if (!productsSnapshot.empty) {
-          setTotalProductCount(productsSnapshot.docs.length);
+        // Use fast cached product list rather than unconstrained full collection scan
+        try {
+          const prods = await fetchPublishedProducts();
+          if (prods && prods.length > 0) {
+            setTotalProductCount(prods.length);
+          }
+        } catch {
+          // Non-critical background stat
         }
       } catch (err) {
         console.error("Error fetching background stats:", err);

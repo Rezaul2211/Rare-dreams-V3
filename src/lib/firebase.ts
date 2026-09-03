@@ -10,9 +10,11 @@ import {
 import { 
   getFirestore, 
   initializeFirestore, 
+  persistentLocalCache,
+  persistentMultipleTabManager,
   memoryLocalCache,
   doc,
-  getDocFromServer
+  getDoc
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -34,53 +36,42 @@ export const auth = authInstance;
 
 const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
 
-// Initialize Firestore with force long-polling and memory cache for highest network reliability
+// Initialize Firestore with persistent IndexedDB multi-tab cache and auto-detect long polling
 let firestoreDb: any;
 try {
   firestoreDb = initializeFirestore(
     app,
     {
-      experimentalForceLongPolling: true,
-      localCache: memoryLocalCache()
+      experimentalAutoDetectLongPolling: true,
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
     },
     databaseId
   );
-} catch {
+} catch (err1) {
   try {
-    firestoreDb = getFirestore(app, databaseId);
-  } catch (e) {
-    console.warn("Firestore initialization fallback:", e);
-    firestoreDb = getFirestore(app);
+    // Fallback if IndexedDB multi-tab is restricted (e.g. private browsing or existing instance)
+    firestoreDb = initializeFirestore(
+      app,
+      {
+        experimentalAutoDetectLongPolling: true,
+        localCache: memoryLocalCache()
+      },
+      databaseId
+    );
+  } catch (err2) {
+    try {
+      firestoreDb = getFirestore(app, databaseId);
+    } catch (err3) {
+      console.warn("Firestore initialization fallback:", err3);
+      firestoreDb = getFirestore(app);
+    }
   }
 }
 
 export const db = firestoreDb;
 export const storage = getStorage(app);
 
-// Connection test helper per Firebase integration guidelines
-export async function testFirestoreConnection() {
-  try {
-    // Graceful background verification
-    const testDoc = doc(db, 'settings', 'general');
-    await getDocFromServer(testDoc).catch(() => {
-      // Gracefully handle initial offline / cold-start state without unhandled error
-    });
-  } catch {
-    // Non-blocking offline tolerance
-  }
-}
-
-// Safely execute non-blocking connection check after window load/idle
-if (typeof window !== 'undefined') {
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(() => {
-      testFirestoreConnection();
-    });
-  } else {
-    setTimeout(() => {
-      testFirestoreConnection();
-    }, 2000);
-  }
-}
 
 
