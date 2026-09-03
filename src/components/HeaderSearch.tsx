@@ -61,7 +61,8 @@ export function HeaderSearch({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+      const target = event.target;
+      if (searchRef.current && target instanceof Node && !searchRef.current.contains(target)) {
         setIsOpen(false);
       }
     };

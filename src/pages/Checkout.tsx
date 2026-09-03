@@ -644,20 +644,14 @@ export default function Checkout() {
               />
             </div>
 
-            {/* Field 5: Searchable District & Thana Selector Side-by-Side with Instant Live Search */}
-            <div className="space-y-1 pt-1">
-              <label className="text-xs font-bold text-neutral-700 flex items-center justify-between">
-                <span>জেলা ও থানা / উপজেলা নির্বাচন করুন *</span>
-                <span className="text-[10px] text-neutral-400 font-normal">ক্লিক করে সার্চ করুন</span>
-              </label>
-              <SearchableLocationPicker
-                selectedDistrict={formData.district}
-                selectedThana={formData.thana}
-                onDistrictChange={handleDistrictChange}
-                onThanaChange={handleThanaChange}
-                error={errorMessage}
-              />
-            </div>
+            {/* Field 5: Searchable District & Thana Selector Side-by-Side */}
+            <SearchableLocationPicker
+              selectedDistrict={formData.district}
+              selectedThana={formData.thana}
+              onDistrictChange={handleDistrictChange}
+              onThanaChange={handleThanaChange}
+              error={errorMessage}
+            />
 
             {/* Field 6: Order Notes (Optional) */}
             <div>
