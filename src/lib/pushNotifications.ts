@@ -180,6 +180,26 @@ export async function notifyAdminsOfNewOrder(orderData: {
     });
 
     console.log('Order notification dispatched to Firestore for order:', orderData.id);
+
+    // 2. Dispatch background FCM push notification to Admin phones / devices even when app is closed
+    fetch('/api/notifications/push-admin-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: orderData.id,
+        customerName: orderData.customerName,
+        phone: orderData.phone,
+        total: orderData.total,
+        district: orderData.district || '',
+        itemsCount: orderData.itemsCount || 1,
+        url: '/admin/orders'
+      })
+    }).then(async (res) => {
+      const data = await res.json().catch(() => null);
+      console.log('Admin background push response:', data);
+    }).catch((err) => {
+      console.warn('Backend admin push notification trigger note:', err);
+    });
   } catch (e) {
     console.warn('Could not dispatch new order notification to Firestore:', e);
   }

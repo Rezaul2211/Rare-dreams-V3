@@ -697,21 +697,9 @@ function LayoutInner() {
       {/* Main Content with Smooth Page Transitions & Pull-to-Refresh */}
       <main className="flex-grow flex flex-col min-h-[85vh] relative">
         <PullToRefresh>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 12, filter: 'blur(3px)' }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
-              transition={{ 
-                duration: 0.36, 
-                ease: [0.16, 1, 0.3, 1] 
-              }}
-              className="flex-grow flex flex-col w-full min-h-[85vh]"
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <div key={location.pathname} className="flex-grow flex flex-col w-full min-h-[85vh]">
+            <Outlet />
+          </div>
         </PullToRefresh>
       </main>
 

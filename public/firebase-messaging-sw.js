@@ -4,14 +4,14 @@
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-// Config will be populated at runtime or default fallback
+// Active Firebase project configuration for Rare Dreams
 const firebaseConfig = {
-  apiKey: "AIzaSyDummyKeyForWorker",
-  authDomain: "ai-studio-52c30446-74a2-476d-a811-4a823b07db28.firebaseapp.com",
-  projectId: "ai-studio-52c30446-74a2-476d-a811-4a823b07db28",
-  storageBucket: "ai-studio-52c30446-74a2-476d-a811-4a823b07db28.appspot.com",
-  messagingSenderId: "385106484967",
-  appId: "1:385106484967:web:c6e5e0324869c9eb18a24c"
+  apiKey: "AIzaSyC7ED5GJQyE1Q5ZH4A-pnMMzpq3KCoNCLg",
+  authDomain: "lofty-theme-0nn32.firebaseapp.com",
+  projectId: "lofty-theme-0nn32",
+  storageBucket: "lofty-theme-0nn32.firebasestorage.app",
+  messagingSenderId: "438820802878",
+  appId: "1:438820802878:web:e53af076a1800d3c229c6f"
 };
 
 try {
@@ -22,42 +22,50 @@ try {
 
   messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message: ', payload);
-    const notificationTitle = payload.notification?.title || payload.data?.title || 'Rare Dreams Order Update';
+    const notificationTitle = payload.notification?.title || payload.data?.title || 'Rare Dreams Notification';
     const notificationOptions = {
-      body: payload.notification?.body || payload.data?.body || 'আপনার অর্ডারের নতুন আপডেট এসেছে!',
-      icon: payload.notification?.icon || payload.data?.icon || '/icon-192.png',
-      badge: '/badge-72.png',
+      body: payload.notification?.body || payload.data?.body || 'আপনার নতুন নোটিফিকেশন এসেছে!',
+      icon: payload.notification?.icon || payload.data?.icon || '/pwa-192x192.png',
+      badge: '/favicon-32x32.png',
       data: {
-        url: payload.data?.url || payload.notification?.click_action || '/account'
+        url: payload.data?.url || payload.notification?.click_action || '/admin/orders'
       },
-      vibrate: [200, 100, 200]
+      vibrate: [250, 100, 250, 100, 250],
+      tag: payload.data?.tag || payload.data?.orderId || 'rare_dreams_notification',
+      renotify: true
     };
 
     self.registration.showNotification(notificationTitle, notificationOptions);
   });
 } catch (e) {
-  console.warn("FCM Service worker setup:", e);
+  console.warn("FCM Service worker setup note:", e);
 }
 
-// Fallback native push listener
+// Fallback native web push listener
 self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       const data = event.data.json();
-      const title = data.title || 'Rare Dreams';
+      const title = data.title || data.notification?.title || '🛍️ নতুন অর্ডার - Rare Dreams';
       const options = {
-        body: data.body || 'আপনার অর্ডার আপডেট হয়েছে!',
-        icon: data.icon || '/icon-192.png',
-        badge: '/badge-72.png',
-        data: { url: data.url || '/account' },
-        vibrate: [200, 100, 200]
+        body: data.body || data.notification?.body || 'একটি নতুন অর্ডার এসেছে!',
+        icon: data.icon || data.notification?.icon || '/pwa-192x192.png',
+        badge: '/favicon-32x32.png',
+        data: { 
+          url: data.url || data.data?.url || (data.targetRole === 'admin' ? '/admin/orders' : '/account') 
+        },
+        vibrate: [300, 100, 300, 100, 300],
+        tag: data.tag || 'rare_dreams_push_' + Date.now(),
+        renotify: true
       };
       event.waitUntil(self.registration.showNotification(title, options));
     } catch {
       event.waitUntil(
         self.registration.showNotification('Rare Dreams Update', {
           body: event.data.text(),
-          icon: '/icon-192.png'
+          icon: '/pwa-192x192.png',
+          badge: '/favicon-32x32.png',
+          data: { url: '/admin/orders' }
         })
       );
     }
@@ -66,7 +74,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const urlToOpen = event.notification.data?.url || '/';
+  const urlToOpen = event.notification.data?.url || '/admin/orders';
   
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {

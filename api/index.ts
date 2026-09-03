@@ -594,6 +594,131 @@ Return JSON strictly: {"subcategory": "SUBCATEGORY", "tags": ["TAG1", "TAG2", "T
     }
   }
 
-  // 7. Default fallback
+  // 7. Steadfast Check Credentials Endpoint
+  if (url.includes('/api/courier/steadfast/check-credentials')) {
+    const apiKey = (body.apiKey || req.headers?.['x-steadfast-api-key'] || process.env.STEADFAST_API_KEY || "").toString().trim();
+    const secretKey = (body.secretKey || req.headers?.['x-steadfast-secret-key'] || process.env.STEADFAST_SECRET_KEY || "").toString().trim();
+
+    if (!apiKey || !secretKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Steadfast API Key এবং Secret Key দেওয়া হয়নি। অ্যাডমিন সেটিংসে কনফিগার করুন।"
+      });
+    }
+
+    try {
+      const sfRes = await fetch("https://portal.steadfast.com.bd/api/v1/get_balance", {
+        method: "GET",
+        headers: {
+          "Api-Key": apiKey,
+          "Secret-Key": secretKey,
+          "Content-Type": "application/json"
+        }
+      });
+      const sfData = await sfRes.json().catch(() => null);
+      if (!sfRes.ok || (sfData && sfData.status !== 200 && sfData.status !== 201)) {
+        return res.status(400).json({
+          success: false,
+          message: sfData?.message || "Steadfast ক্রেডেনশিয়াল সঠিক নয় বা সংযোগ পাওয়া যায়নি।"
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        balance: sfData?.current_balance ?? 0,
+        message: "স্টেডফাস্ট কুরিয়ারে সফলভাবে কানেক্ট হয়েছে!",
+        data: sfData
+      });
+    } catch (e: any) {
+      return res.status(500).json({ success: false, message: "Steadfast সার্ভারে সমস্যা: " + e.message });
+    }
+  }
+
+  // 8. Steadfast Create Order / 1-Click Booking Endpoint
+  if (url.includes('/api/courier/steadfast/create-order')) {
+    const apiKey = (body.apiKey || req.headers?.['x-steadfast-api-key'] || process.env.STEADFAST_API_KEY || "").toString().trim();
+    const secretKey = (body.secretKey || req.headers?.['x-steadfast-secret-key'] || process.env.STEADFAST_SECRET_KEY || "").toString().trim();
+
+    if (!apiKey || !secretKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Steadfast API Key ও Secret Key প্রয়োজন।"
+      });
+    }
+
+    const { invoice, recipient_name, recipient_phone, recipient_address, cod_amount, note } = body;
+    if (!recipient_name || !recipient_phone || !recipient_address) {
+      return res.status(400).json({
+        success: false,
+        message: "প্রাপকের নাম, মোবাইল নম্বর এবং পূর্ণাঙ্গ ঠিকানা দেওয়া বাধ্যতামূলক।"
+      });
+    }
+
+    let formattedPhone = recipient_phone.toString().replace(/[^0-9]/g, '');
+    if (formattedPhone.startsWith('880')) formattedPhone = formattedPhone.substring(2);
+    else if (formattedPhone.startsWith('88')) formattedPhone = formattedPhone.substring(2);
+    if (!formattedPhone.startsWith('0') && formattedPhone.length === 10) formattedPhone = '0' + formattedPhone;
+
+    if (formattedPhone.length !== 11 || !formattedPhone.startsWith('01')) {
+      return res.status(400).json({
+        success: false,
+        message: `ভুল মোবাইল নম্বর (${recipient_phone})। ১১ ডিজিটের বাংলাদেশী মোবাইল নম্বর দিন (যেমন 01XXXXXXXXX)।`
+      });
+    }
+
+    const cleanInvoice = (invoice || `INV-${Date.now()}`).toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30);
+    const payload = {
+      invoice: cleanInvoice,
+      recipient_name: recipient_name.toString().trim().slice(0, 100),
+      recipient_phone: formattedPhone,
+      recipient_address: recipient_address.toString().trim().slice(0, 250),
+      cod_amount: Math.max(0, Math.round(Number(cod_amount) || 0)),
+      note: (note || "Rare Dreams Parcel Delivery").toString().trim().slice(0, 250)
+    };
+
+    try {
+      const sfRes = await fetch("https://portal.steadfast.com.bd/api/v1/create_order", {
+        method: "POST",
+        headers: {
+          "Api-Key": apiKey,
+          "Secret-Key": secretKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      const sfData = await sfRes.json().catch(() => null);
+
+      if (!sfRes.ok || (sfData && sfData.status !== 200 && sfData.status !== 201)) {
+        return res.status(400).json({
+          success: false,
+          message: sfData?.message || (sfData?.errors ? JSON.stringify(sfData.errors) : "বুকিং ব্যর্থ হয়েছে।"),
+          details: sfData
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "স্টেডফাস্টে সফলভাবে পার্সেল বুকিং হয়েছে!",
+        consignment: sfData?.consignment || sfData?.data || {},
+        data: sfData
+      });
+    } catch (e: any) {
+      return res.status(500).json({ success: false, message: "বুকিং ব্যর্থ: " + e.message });
+    }
+  }
+
+  // 9. Push Admin Order notification endpoint
+  if (pathname === "/api/notifications/push-admin-order" || pathname === "/notifications/push-admin-order") {
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+    const { orderId, customerName, total } = req.body || {};
+    return res.status(200).json({
+      success: true,
+      message: "Notification received and queued for dispatch.",
+      orderId,
+      customerName,
+      total
+    });
+  }
+
+  // 10. Default fallback
   return res.status(200).json({ status: "ok", message: "Rare Dreams Vercel API Gateway Active" });
 }

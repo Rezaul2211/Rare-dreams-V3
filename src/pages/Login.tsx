@@ -22,9 +22,7 @@ import {
   ArrowLeft, 
   Eye, 
   EyeOff, 
-  ArrowRight,
-  ShieldCheck,
-  Check
+  ArrowRight
 } from 'lucide-react';
 
 interface LoginProps {
@@ -51,7 +49,7 @@ export default function Login({ initialTab }: LoginProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
-  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(true);
   
   // UI state
   const [showPassword, setShowPassword] = useState(false);
@@ -62,12 +60,12 @@ export default function Login({ initialTab }: LoginProps) {
 
   // Sync mode with route changes
   useEffect(() => {
-    if (location.pathname === '/register' || location.pathname === '/signup') {
+    if (location.pathname === '/register' || location.pathname === '/signup' || initialTab === 'register') {
       setIsLogin(false);
-    } else if (location.pathname === '/login') {
+    } else if (location.pathname === '/login' || initialTab === 'login') {
       setIsLogin(true);
     }
-  }, [location.pathname]);
+  }, [location.pathname, initialTab]);
 
   // Destination redirect resolver
   const getDestinationUrl = (userRole?: string) => {
@@ -268,7 +266,7 @@ export default function Login({ initialTab }: LoginProps) {
         return;
       }
       if (!agreeTerms) {
-        setError('Please agree to the Terms of Service and Privacy Policy to create an account.');
+        setError('Please agree to the Terms of Service and Privacy Policy.');
         return;
       }
     }
@@ -604,7 +602,7 @@ export default function Login({ initialTab }: LoginProps) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-slate-50/70 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 sm:py-3 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-medium placeholder:text-slate-400"
-                    placeholder="Email address"
+                    placeholder="name@example.com"
                   />
                 </div>
               </div>

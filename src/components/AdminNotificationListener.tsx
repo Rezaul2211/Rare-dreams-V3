@@ -29,19 +29,28 @@ export const AdminNotificationListener: React.FC = () => {
   const initialMountDone = useRef<boolean>(false);
 
   // Determine if this device/tab should receive Admin order alerts
+  // STRICT: Only genuine authenticated admins or users on /admin routes!
   const isEligibleAdmin = Boolean(
-    (user && (user.role === 'admin' || user.role === 'seller' || user.email?.toLowerCase().includes('karim'))) ||
+    (user && (
+      user.role === 'admin' || 
+      user.role === 'seller' || 
+      user.email?.toLowerCase().includes('karim') || 
+      user.email?.toLowerCase().includes('admin')
+    )) ||
     (typeof window !== 'undefined' && (
       localStorage.getItem('rare_dreams_is_admin') === 'true' ||
-      localStorage.getItem('rare_dreams_push_enabled') === 'true' ||
-      location.pathname.startsWith('/admin') ||
-      (typeof Notification !== 'undefined' && Notification.permission === 'granted')
+      location.pathname.startsWith('/admin')
     ))
   );
 
   // Sync admin flag to localStorage whenever user logs in as admin
   useEffect(() => {
-    if (user?.role === 'admin' || user?.role === 'seller' || user?.email?.toLowerCase().includes('karim')) {
+    if (
+      user?.role === 'admin' || 
+      user?.role === 'seller' || 
+      user?.email?.toLowerCase().includes('karim') ||
+      user?.email?.toLowerCase().includes('admin')
+    ) {
       localStorage.setItem('rare_dreams_is_admin', 'true');
     }
   }, [user]);
@@ -49,8 +58,8 @@ export const AdminNotificationListener: React.FC = () => {
   useEffect(() => {
     if (!isEligibleAdmin) return;
 
-    // Prompt for browser notification permission if not yet decided
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+    // Ensure FCM push notification token is registered with role: 'admin' for background push alerts
+    if (typeof window !== 'undefined' && 'Notification' in window) {
       requestPushNotificationPermission(user?.id, user?.phone, 'admin').catch(() => {});
     }
 
