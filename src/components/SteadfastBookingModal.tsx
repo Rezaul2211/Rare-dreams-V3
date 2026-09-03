@@ -10,7 +10,8 @@ import {
   MapPin, 
   CreditCard, 
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -67,7 +68,7 @@ export function SteadfastBookingModal({
       if (order.district) parts.push(`জেলা: ${order.district}`);
       setRecipientAddress(parts.join(', ') || order.address || '');
 
-      // COD calculation: if already paid (bKash/Nagad), COD is 0, else total
+      // COD calculation: if already paid, COD is 0, else total
       const isCod = order.paymentMethod === 'cod' || order.paymentStatus !== 'paid';
       setCodAmount(isCod ? Math.round(order.total || 0) : 0);
 
@@ -178,34 +179,37 @@ export function SteadfastBookingModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-neutral-200 animate-in fade-in zoom-in-95 duration-200 my-auto">
-        
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs">
+      <div 
+        className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-neutral-200 flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
-        <div className="bg-gradient-to-r from-[#FF6A00] to-[#EE0979] text-white p-4 sm:p-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#FF6A00] to-[#EE0979] text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+            <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner shrink-0">
               <Truck size={22} />
             </div>
             <div>
               <h3 className="font-black text-base sm:text-lg leading-tight flex items-center gap-1.5">
                 <span>Steadfast কুরিয়ারে পার্সেল বুকিং</span>
               </h3>
-              <p className="text-white/80 text-[11px] font-medium mt-0.5">
-                অর্ডার #{order.id.slice(0, 8)} • ১-ক্লিক পিকআপ ও কাস্টমার ডেলিভারি
+              <p className="text-white/90 text-[11px] font-medium mt-0.5">
+                অর্ডার #{order.id.slice(0, 8).toUpperCase()} • ১-ক্লিক পিকআপ ও কাস্টমার ডেলিভারি
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Modal Content */}
-        <div className="p-4 sm:p-6 space-y-4 text-xs font-sans max-h-[75vh] overflow-y-auto">
+        {/* Modal Body with smooth internal scroll */}
+        <div className="p-4 sm:p-5 space-y-3.5 text-xs font-sans overflow-y-auto flex-1">
           
           {/* Success State */}
           {successData ? (
@@ -242,15 +246,14 @@ export function SteadfastBookingModal({
                   href={`https://steadfast.com.bd/t/${successData.trackingCode}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
                 >
                   <span>লাইভ ট্র্যাকিং দেখুন</span>
                   <ExternalLink size={13} />
                 </a>
                 <button
-                  type="button"
                   onClick={onClose}
-                  className="px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl font-bold transition-colors cursor-pointer"
+                  className="px-4 py-2.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 rounded-xl font-bold transition-all cursor-pointer"
                 >
                   বন্ধ করুন
                 </button>
@@ -258,163 +261,152 @@ export function SteadfastBookingModal({
             </div>
           ) : (
             <>
-              {/* API Key Status Notice */}
-              {(!storeConfig.steadfastApiKey || !storeConfig.steadfastSecretKey) && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-2xl flex items-start gap-2.5">
-                  <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-[11px] leading-relaxed">
-                    <p className="font-bold">লক্ষ্য করুন:</p>
-                    <p className="mt-0.5">
-                      অ্যাডমিন সেটিংসে Steadfast API Key ও Secret Key সেট করা থাকলে বুকিং সরাসরি সম্পন্ন হবে। আপনি অ্যাডমিন সেটিংস থেকে চাবি সংরক্ষণ করতে পারেন।
-                    </p>
-                  </div>
+              {/* API Gateway Status Badge */}
+              <div className="p-2.5 rounded-xl bg-orange-50 border border-orange-200/80 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-orange-950 font-bold text-xs">
+                  <Zap size={14} className="text-orange-600 fill-orange-600 animate-pulse" />
+                  <span>Rare Dreams Steadfast API Gateway Active</span>
                 </div>
-              )}
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
+                  রেডি
+                </span>
+              </div>
 
-              {/* Error Message */}
               {errorMsg && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-2xl flex items-start gap-2 animate-shake">
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2">
                   <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-                  <div className="text-xs font-bold leading-relaxed">{errorMsg}</div>
+                  <span>{errorMsg}</span>
                 </div>
               )}
 
-              {/* Booking Form */}
-              <div className="space-y-3.5">
-                {/* 1. Recipient Name */}
-                <div>
-                  <label className="block text-[11px] font-black uppercase text-neutral-600 mb-1">
-                    গ্রাহকের নাম (Recipient Name) *
+              {/* Form Input: Recipient Name */}
+              <div>
+                <label className="block text-[11px] font-bold text-neutral-700 mb-1">
+                  গ্রাহকের নাম (RECIPIENT NAME) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  placeholder="যেমন: মোঃ সাব্বির আহমেদ"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-neutral-900 text-xs font-medium"
+                />
+              </div>
+
+              {/* Form Input: Phone Number */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[11px] font-bold text-neutral-700">
+                    গ্রাহকের ফোন নম্বর (11 DIGITS PHONE) <span className="text-rose-500">*</span>
                   </label>
+                  <span className="text-[10px] text-neutral-400 font-mono">01XXXXXXXXX</span>
+                </div>
+                <div className="relative">
+                  <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
                   <input
-                    type="text"
-                    value={recipientName}
-                    onChange={(e) => setRecipientName(e.target.value)}
-                    placeholder="Customer Full Name"
-                    className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-2.5 rounded-xl text-xs font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-[#FF6A00]"
-                  />
-                </div>
-
-                {/* 2. Recipient Phone */}
-                <div>
-                  <label className="block text-[11px] font-black uppercase text-neutral-600 mb-1 flex items-center justify-between">
-                    <span>গ্রাহকের ফোন নম্বর (11 Digits Phone) *</span>
-                    <span className="text-[10px] text-neutral-400 font-mono">01XXXXXXXXX</span>
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-400">
-                      <Phone size={14} />
-                    </div>
-                    <input
-                      type="text"
-                      value={recipientPhone}
-                      onChange={(e) => setRecipientPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 11))}
-                      placeholder="01712345678"
-                      className="w-full bg-neutral-50 border border-neutral-300 pl-9 pr-3 py-2.5 rounded-xl text-xs font-mono font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-[#FF6A00]"
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Full Delivery Address */}
-                <div>
-                  <label className="block text-[11px] font-black uppercase text-neutral-600 mb-1">
-                    পূর্ণাঙ্গ ডেলিভারি ঠিকানা (Full Address with Thana & District) *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute top-3 left-3 pointer-events-none text-neutral-400">
-                      <MapPin size={14} />
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={recipientAddress}
-                      onChange={(e) => setRecipientAddress(e.target.value)}
-                      placeholder="House, Road, Area, Thana, District"
-                      className="w-full bg-neutral-50 border border-neutral-300 pl-9 pr-3 py-2.5 rounded-xl text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-[#FF6A00] resize-none"
-                    />
-                  </div>
-                </div>
-
-                {/* 4. COD Amount & Payment Status */}
-                <div className="bg-orange-50/60 p-3.5 rounded-2xl border border-orange-100 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase text-orange-950 flex items-center gap-1.5">
-                      <CreditCard size={14} className="text-[#FF6A00]" />
-                      <span>ক্যাশ অন ডেলিভারি (COD) কালেকশন পরিমাণ</span>
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-200 text-orange-900 uppercase">
-                      {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Paid Online'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center font-black text-neutral-500 text-xs">
-                        ৳
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={codAmount}
-                        onChange={(e) => setCodAmount(Math.max(0, Number(e.target.value)))}
-                        className="w-full bg-white border border-orange-300 pl-7 pr-3 py-2 rounded-xl text-sm font-mono font-black text-neutral-900 outline-none focus:ring-2 focus:ring-[#FF6A00]"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCodAmount(Math.round(order.total || 0))}
-                      className="px-2.5 py-2 bg-white hover:bg-orange-100 border border-orange-300 text-orange-900 rounded-xl text-[10px] font-bold transition-colors cursor-pointer"
-                    >
-                      মোট টাকা সেট
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCodAmount(0)}
-                      className="px-2.5 py-2 bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-700 rounded-xl text-[10px] font-bold transition-colors cursor-pointer"
-                    >
-                      ৳০ (পেইড)
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-neutral-500">
-                    কাস্টমার ডেলিভারির সময় এই টাকা Steadfast রাইডারকে প্রদান করবে।
-                  </p>
-                </div>
-
-                {/* 5. Special Note */}
-                <div>
-                  <label className="block text-[11px] font-black uppercase text-neutral-600 mb-1">
-                    কুরিয়ার ডেলিভারি নোট (Optional Note)
-                  </label>
-                  <input
-                    type="text"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="হ্যান্ডেল উইথ কেয়ার / কল করে ডেলিভারি দিন"
-                    className="w-full bg-neutral-50 border border-neutral-300 px-3.5 py-2 rounded-xl text-xs font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-[#FF6A00]"
+                    type="tel"
+                    value={recipientPhone}
+                    onChange={(e) => setRecipientPhone(e.target.value)}
+                    placeholder="01711223344"
+                    maxLength={11}
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-neutral-900 font-mono text-xs font-semibold"
                   />
                 </div>
               </div>
 
+              {/* Form Input: Address */}
+              <div>
+                <label className="block text-[11px] font-bold text-neutral-700 mb-1">
+                  পূর্ণাঙ্গ ডেলিভারি ঠিকানা (FULL ADDRESS WITH THANA & DISTRICT) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <MapPin size={14} className="absolute left-3.5 top-3 text-neutral-400" />
+                  <textarea
+                    rows={2}
+                    value={recipientAddress}
+                    onChange={(e) => setRecipientAddress(e.target.value)}
+                    placeholder="বাসা/হোল্ডিং নং, রোড, থানা, জেলা"
+                    className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-neutral-900 text-xs font-medium resize-none leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* Form Input: COD Amount */}
+              <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200/80 space-y-2">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1.5 font-bold text-neutral-900 text-xs">
+                    <CreditCard size={14} className="text-amber-600" />
+                    <span>ক্যাশ অন ডেলিভারি (COD) কালেকশন পরিমাণ</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-200 text-amber-900 rounded-md">
+                    CASH ON DELIVERY
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-neutral-500">৳</span>
+                    <input
+                      type="number"
+                      value={codAmount}
+                      onChange={(e) => setCodAmount(Number(e.target.value))}
+                      className="w-full pl-8 pr-3 py-2 bg-white rounded-xl border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-neutral-900 font-bold text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCodAmount(Math.round(order.total || 0))}
+                    className="px-2.5 py-2 bg-white hover:bg-amber-100/50 border border-amber-300 rounded-xl text-[11px] font-bold text-amber-900 transition-colors cursor-pointer shrink-0"
+                  >
+                    মোট টাকা সেট
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCodAmount(0)}
+                    className="px-2.5 py-2 bg-white hover:bg-neutral-100 border border-neutral-300 rounded-xl text-[11px] font-bold text-neutral-700 transition-colors cursor-pointer shrink-0"
+                  >
+                    ৳০ (পেইড)
+                  </button>
+                </div>
+                <p className="text-[10px] text-neutral-500">
+                  কাস্টমার ডেলিভারির সময় এই টাকা Steadfast রাইডারকে প্রদান করবে।
+                </p>
+              </div>
+
+              {/* Form Input: Order Note */}
+              <div>
+                <label className="block text-[11px] font-bold text-neutral-700 mb-1">
+                  কুরিয়ার ডেলিভারি নোট (OPTIONAL NOTE)
+                </label>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="যেমন: ফ্র্যাজাইল আইটেম, সাবধানে হ্যান্ডেল করুন"
+                  className="w-full px-3.5 py-2 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-neutral-900 text-xs font-medium"
+                />
+              </div>
+
               {/* Action Buttons */}
-              <div className="pt-3 border-t border-neutral-100 flex items-center justify-end gap-2.5">
+              <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={loading}
-                  className="px-4 py-2.5 rounded-xl border border-neutral-300 text-neutral-700 font-bold hover:bg-neutral-100 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-neutral-700 font-bold transition-colors cursor-pointer"
                 >
                   বাতিল
                 </button>
-
                 <button
                   type="button"
                   onClick={handleConfirmBooking}
                   disabled={loading}
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#FF6A00] to-[#EE0979] hover:brightness-105 active:scale-95 text-white font-black rounded-xl shadow-md shadow-orange-500/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF6A00] to-[#EE0979] hover:opacity-95 text-white font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
                 >
                   {loading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>বুকিং হচ্ছে...</span>
+                      <span>বুকিং প্রসেস হচ্ছে...</span>
                     </>
                   ) : (
                     <>
@@ -432,3 +424,5 @@ export function SteadfastBookingModal({
     </div>
   );
 }
+
+export default SteadfastBookingModal;

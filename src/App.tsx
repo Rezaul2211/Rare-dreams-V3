@@ -133,6 +133,8 @@ export default function App() {
               <Route path="payment" element={<PaymentGateway />} />
               <Route path="order-success/:id" element={<OrderSuccess />} />
               <Route path="login" element={<Login />} />
+              <Route path="register" element={<Login initialTab="register" />} />
+              <Route path="signup" element={<Login initialTab="register" />} />
               <Route path="account" element={<Account />} />
               <Route path="contact" element={<Contact />} />
               <Route path="returns" element={<Returns />} />

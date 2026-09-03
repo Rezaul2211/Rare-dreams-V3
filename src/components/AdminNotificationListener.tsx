@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuthStore } from '../store/useAuthStore';
 import { playNewOrderSound } from '../utils/audioAlert';
 import { showSystemNotification, requestPushNotificationPermission } from '../lib/pushNotifications';
 import { ShoppingBag, ArrowRight, X, Volume2, BellRing } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface NewOrderNotification {
@@ -15,88 +15,161 @@ interface NewOrderNotification {
   phone?: string;
   total?: number;
   message?: string;
+  district?: string;
   createdAt?: any;
 }
 
 export const AdminNotificationListener: React.FC = () => {
   const { user } = useAuthStore();
+  const location = useLocation();
   const [activeAlert, setActiveAlert] = useState<NewOrderNotification | null>(null);
-  const isInitialMount = useRef(true);
-  const appStartTime = useRef(new Date());
+  
+  // Track seen order IDs to avoid duplicate alerts and ignore historical orders on mount
+  const seenOrderIds = useRef<Set<string>>(new Set());
+  const initialMountDone = useRef<boolean>(false);
 
-  const isAdminOrSeller = Boolean(
-    user && (user.role === 'admin' || user.role === 'seller' || user.email?.toLowerCase().trim() === 'xmrezaul.karim998@gmail.com')
+  // Determine if this device/tab should receive Admin order alerts
+  const isEligibleAdmin = Boolean(
+    (user && (user.role === 'admin' || user.role === 'seller' || user.email?.toLowerCase().includes('karim'))) ||
+    (typeof window !== 'undefined' && (
+      localStorage.getItem('rare_dreams_is_admin') === 'true' ||
+      localStorage.getItem('rare_dreams_push_enabled') === 'true' ||
+      location.pathname.startsWith('/admin') ||
+      (typeof Notification !== 'undefined' && Notification.permission === 'granted')
+    ))
   );
 
+  // Sync admin flag to localStorage whenever user logs in as admin
   useEffect(() => {
-    if (!isAdminOrSeller) return;
+    if (user?.role === 'admin' || user?.role === 'seller' || user?.email?.toLowerCase().includes('karim')) {
+      localStorage.setItem('rare_dreams_is_admin', 'true');
+    }
+  }, [user]);
 
-    // Ask for browser notification permission on admin entry if not asked
+  useEffect(() => {
+    if (!isEligibleAdmin) return;
+
+    // Prompt for browser notification permission if not yet decided
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      requestPushNotificationPermission(user?.id, user?.phone, 'admin');
+      requestPushNotificationPermission(user?.id, user?.phone, 'admin').catch(() => {});
     }
 
-    // Real-time listener on new_order notifications
-    const notifsQuery = query(
-      collection(db, 'notifications'),
-      where('type', '==', 'new_order'),
+    // 1. Direct Real-Time Listener on 'orders' Collection
+    const ordersQuery = query(
+      collection(db, 'orders'),
       orderBy('createdAt', 'desc'),
-      limit(5)
+      limit(10)
     );
 
-    const unsubscribe = onSnapshot(
-      notifsQuery,
+    const unsubscribeOrders = onSnapshot(
+      ordersQuery,
       (snapshot) => {
-        // Skip historical notifications on first snapshot mount
-        if (isInitialMount.current) {
-          isInitialMount.current = false;
+        // Populate initial existing orders on first fetch
+        if (!initialMountDone.current) {
+          snapshot.docs.forEach((doc) => {
+            seenOrderIds.current.add(doc.id);
+          });
+          initialMountDone.current = true;
           return;
         }
 
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
-            const data = change.doc.data();
-            const createdAtDate = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+            const orderId = change.doc.id;
+            
+            // Check if we haven't seen this order yet
+            if (!seenOrderIds.current.has(orderId)) {
+              seenOrderIds.current.add(orderId);
+              const data = change.doc.data();
 
-            // Only trigger if order came in after or around app start time
-            if (createdAtDate.getTime() >= appStartTime.current.getTime() - 10000) {
-              const orderId = data.orderId || change.doc.id;
               const customerName = data.customerName || 'কাস্টমার';
-              const formattedTotal = '৳' + Number(data.total || 0).toLocaleString('en-IN');
+              const phone = data.phone || '';
+              const total = data.total || 0;
+              const formattedTotal = '৳' + Number(total).toLocaleString('en-IN');
+              const district = data.district || data.city || '';
 
-              // 1. Play real-time chime sound
+              // Trigger 1: Real-time Audio Chime
               playNewOrderSound();
 
-              // 2. Trigger native OS / browser notification
+              // Trigger 2: Native OS & Browser Push Notification
               showSystemNotification(`🛍️ নতুন অর্ডার এসেছে! (${formattedTotal})`, {
-                body: `কাস্টমার: ${customerName} (${data.phone || ''})\nঅর্ডার আইডি: #${orderId.slice(-6)}`,
+                body: `কাস্টমার: ${customerName} (${phone})${district ? ' - ' + district : ''}\nঅর্ডার আইডি: #${orderId.slice(-6).toUpperCase()}`,
                 icon: '/pwa-192x192.png',
                 tag: 'order_' + orderId,
-                url: `/admin/orders`
+                url: '/admin/orders'
               });
 
-              // 3. Show in-app banner
+              // Trigger 3: In-App Animated Alert Banner
               setActiveAlert({
-                id: change.doc.id,
+                id: orderId,
                 orderId: orderId,
                 customerName: customerName,
-                phone: data.phone,
-                total: data.total,
-                message: data.message
+                phone: phone,
+                total: total,
+                district: district
               });
             }
           }
         });
       },
       (error) => {
-        console.warn('Admin new order notification listener error:', error);
+        console.warn('Orders real-time listener error:', error);
       }
     );
 
-    return () => unsubscribe();
-  }, [isAdminOrSeller, user]);
+    // 2. Secondary Real-Time Listener on 'notifications' Collection for backup redundancy
+    const notifsQuery = query(
+      collection(db, 'notifications'),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
 
-  if (!isAdminOrSeller || !activeAlert) return null;
+    const unsubscribeNotifs = onSnapshot(
+      notifsQuery,
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            if (data.type === 'new_order' && data.orderId) {
+              const orderId = data.orderId;
+              if (!seenOrderIds.current.has(orderId)) {
+                seenOrderIds.current.add(orderId);
+                const formattedTotal = '৳' + Number(data.total || 0).toLocaleString('en-IN');
+
+                playNewOrderSound();
+
+                showSystemNotification(`🛍️ নতুন অর্ডার এসেছে! (${formattedTotal})`, {
+                  body: `${data.customerName || 'কাস্টমার'} (${data.phone || ''})\nঅর্ডার আইডি: #${orderId.slice(-6).toUpperCase()}`,
+                  icon: '/pwa-192x192.png',
+                  tag: 'notif_order_' + orderId,
+                  url: '/admin/orders'
+                });
+
+                setActiveAlert({
+                  id: change.doc.id,
+                  orderId: orderId,
+                  customerName: data.customerName,
+                  phone: data.phone,
+                  total: data.total,
+                  message: data.message
+                });
+              }
+            }
+          }
+        });
+      },
+      (err) => {
+        console.warn('Notifications listener warning:', err);
+      }
+    );
+
+    return () => {
+      unsubscribeOrders();
+      unsubscribeNotifs();
+    };
+  }, [isEligibleAdmin, user, location.pathname]);
+
+  if (!isEligibleAdmin || !activeAlert) return null;
 
   return (
     <AnimatePresence>
@@ -105,7 +178,7 @@ export const AdminNotificationListener: React.FC = () => {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -40, scale: 0.95 }}
         transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-        className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-[1100] bg-neutral-900/95 text-white backdrop-blur-md p-4 rounded-2xl shadow-2xl border-2 border-amber-500/50"
+        className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-[9999] bg-neutral-900/95 text-white backdrop-blur-md p-4 rounded-2xl shadow-2xl border-2 border-amber-500/50"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="w-10 h-10 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center shrink-0 font-bold shadow-md animate-pulse">
@@ -124,7 +197,7 @@ export const AdminNotificationListener: React.FC = () => {
               {activeAlert.customerName} {activeAlert.phone ? `(${activeAlert.phone})` : ''}
             </h4>
             <p className="text-xs text-neutral-300 mt-0.5">
-              অর্ডার #{activeAlert.orderId ? activeAlert.orderId.slice(-6) : ''} এখনই রিভিউ করুন
+              অর্ডার #{activeAlert.orderId ? activeAlert.orderId.slice(-6).toUpperCase() : ''} {activeAlert.district ? `• ${activeAlert.district}` : ''}
             </p>
           </div>
           <button
