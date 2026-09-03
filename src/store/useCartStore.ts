@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { CartItem } from '../types';
+import { safeZustandStorage, sanitizeCartItem } from '../lib/safeStorage';
 
 interface CartState {
   items: CartItem[];
@@ -21,15 +22,16 @@ export const useCartStore = create<CartState>()(
       items: [],
       directCheckoutItem: null,
       addItem: (item) => set((state) => {
+        const cleanItem = sanitizeCartItem(item);
         const existingItemIndex = state.items.findIndex(
-          (i) => i.id === item.id && i.selectedSize === item.selectedSize && i.selectedColor === item.selectedColor
+          (i) => i.id === cleanItem.id && i.selectedSize === cleanItem.selectedSize && i.selectedColor === cleanItem.selectedColor
         );
         if (existingItemIndex >= 0) {
           const newItems = [...state.items];
-          newItems[existingItemIndex].quantity += item.quantity;
+          newItems[existingItemIndex].quantity += cleanItem.quantity;
           return { items: newItems };
         }
-        return { items: [...state.items, item] };
+        return { items: [...state.items, cleanItem] };
       }),
       removeItem: (cartItemId) => set((state) => {
         if (state.directCheckoutItem && state.directCheckoutItem.cartItemId === cartItemId) {
@@ -54,7 +56,9 @@ export const useCartStore = create<CartState>()(
         };
       }),
       clearCart: () => set({ items: [], directCheckoutItem: null }),
-      setDirectCheckoutItem: (item) => set({ directCheckoutItem: item }),
+      setDirectCheckoutItem: (item) => set({ 
+        directCheckoutItem: item ? sanitizeCartItem(item) : null 
+      }),
       getCheckoutItems: () => {
         const state = get();
         if (state.directCheckoutItem) {
@@ -73,6 +77,11 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'rare-dreams-cart',
+      storage: createJSONStorage(() => safeZustandStorage),
+      partialize: (state) => ({
+        items: state.items.map(sanitizeCartItem),
+        directCheckoutItem: state.directCheckoutItem ? sanitizeCartItem(state.directCheckoutItem) : null,
+      }),
     }
   )
 );

@@ -88,11 +88,14 @@ export default function App() {
             const script = document.createElement('script');
             script.async = true;
             script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+            script.onerror = () => {
+              console.warn("Could not load FB Pixel script.");
+            };
             document.head.appendChild(script);
           }
 
-          win.fbq('init', fbId);
-          win.fbq('track', 'PageView');
+          win.fbq?.('init', fbId);
+          win.fbq?.('track', 'PageView');
         } catch (e) {
           console.warn("FB Pixel load error:", e);
         }
@@ -107,48 +110,50 @@ export default function App() {
   }, [user]);
 
   return (
-    <BrowserRouter>
-      <ScrollToTop />
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Home />} />
-            <Route path="shop" element={<Shop />} />
-            <Route path="category/:category" element={<Shop />} />
-            <Route path="collection/:category" element={<Shop />} />
-            <Route path="daily-drops" element={<Shop />} />
-            <Route path="most-loved" element={<Shop />} />
-            <Route path="best-sellers" element={<Shop />} />
-            <Route path="product/:id" element={<ProductDetail />} />
-            <Route path="cart" element={<Cart />} />
-            <Route path="checkout" element={<Checkout />} />
-            <Route path="payment" element={<PaymentGateway />} />
-            <Route path="order-success/:id" element={<OrderSuccess />} />
-            <Route path="login" element={<Login />} />
-            <Route path="account" element={<Account />} />
-            <Route path="contact" element={<Contact />} />
-            <Route path="returns" element={<Returns />} />
-            <Route path="license" element={<License />} />
-            <Route path="privacy" element={<Privacy />} />
-            <Route path="terms" element={<Terms />} />
-            <Route path="track-order" element={<TrackOrder />} />
-            <Route path="track" element={<TrackOrder />} />
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ScrollToTop />
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Home />} />
+              <Route path="shop" element={<Shop />} />
+              <Route path="category/:category" element={<Shop />} />
+              <Route path="collection/:category" element={<Shop />} />
+              <Route path="daily-drops" element={<Shop />} />
+              <Route path="most-loved" element={<Shop />} />
+              <Route path="best-sellers" element={<Shop />} />
+              <Route path="product/:id" element={<ProductDetail />} />
+              <Route path="cart" element={<Cart />} />
+              <Route path="checkout" element={<Checkout />} />
+              <Route path="payment" element={<PaymentGateway />} />
+              <Route path="order-success/:id" element={<OrderSuccess />} />
+              <Route path="login" element={<Login />} />
+              <Route path="account" element={<Account />} />
+              <Route path="contact" element={<Contact />} />
+              <Route path="returns" element={<Returns />} />
+              <Route path="license" element={<License />} />
+              <Route path="privacy" element={<Privacy />} />
+              <Route path="terms" element={<Terms />} />
+              <Route path="track-order" element={<TrackOrder />} />
+              <Route path="track" element={<TrackOrder />} />
 
-            <Route path="admin" element={<AdminLayout />}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="products" element={<AdminProducts />} />
-              <Route path="products/new" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
-              <Route path="products/edit/:id" element={<ErrorBoundary><ProductForm /></ErrorBoundary>} />
-              <Route path="orders" element={<AdminOrders />} />
-              <Route path="reports" element={<AdminReports />} />
-              <Route path="notifications" element={<AdminPushNotifications />} />
-              <Route path="customers" element={<AdminCustomers />} />
-              <Route path="settings" element={<AdminSettings />} />
-              <Route path="system" element={<AdminSystem />} />
+              <Route path="admin" element={<AdminLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="products/new" element={<ProductForm />} />
+                <Route path="products/edit/:id" element={<ProductForm />} />
+                <Route path="orders" element={<AdminOrders />} />
+                <Route path="reports" element={<AdminReports />} />
+                <Route path="notifications" element={<AdminPushNotifications />} />
+                <Route path="customers" element={<AdminCustomers />} />
+                <Route path="settings" element={<AdminSettings />} />
+                <Route path="system" element={<AdminSystem />} />
+              </Route>
             </Route>
-          </Route>
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

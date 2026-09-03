@@ -141,7 +141,9 @@ export async function checkGeolocationPermission(): Promise<'granted' | 'prompt'
 export function getDeviceCoordinates(): Promise<{ latitude: number; longitude: number }> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.geolocation) {
-      return reject({ code: -1, message: 'Geolocation is not supported by this browser.' });
+      const err = new Error('Geolocation is not supported by this browser.');
+      (err as any).code = -1;
+      return reject(err);
     }
 
     navigator.geolocation.getCurrentPosition(

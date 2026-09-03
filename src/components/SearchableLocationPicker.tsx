@@ -30,6 +30,15 @@ export const SearchableLocationPicker: React.FC<SearchableLocationPickerProps> =
   const thanaContainerRef = useRef<HTMLDivElement>(null);
   const districtInputRef = useRef<HTMLInputElement>(null);
   const thanaInputRef = useRef<HTMLInputElement>(null);
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Current selected district object
   const currentDistrictObj = useMemo(() => {
@@ -115,7 +124,8 @@ export const SearchableLocationPicker: React.FC<SearchableLocationPickerProps> =
     setThanaDropdownOpen(true);
 
     // Auto-focus Thana search box smoothly
-    setTimeout(() => {
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = setTimeout(() => {
       thanaInputRef.current?.focus();
     }, 60);
   };
@@ -194,7 +204,7 @@ export const SearchableLocationPicker: React.FC<SearchableLocationPickerProps> =
               {filteredDistricts.length > 0 ? (
                 filteredDistricts.map((dist) => {
                   const isSelected =
-                    selectedDistrict.toLowerCase() === dist.nameEn.toLowerCase() ||
+                    (selectedDistrict ? selectedDistrict.toLowerCase() === dist.nameEn.toLowerCase() : false) ||
                     selectedDistrict === dist.nameBn;
                   return (
                     <button
@@ -316,7 +326,7 @@ export const SearchableLocationPicker: React.FC<SearchableLocationPickerProps> =
               {filteredThanas.length > 0 ? (
                 filteredThanas.map((thana) => {
                   const isSelected =
-                    selectedThana.toLowerCase() === thana.nameEn.toLowerCase() ||
+                    (selectedThana ? selectedThana.toLowerCase() === thana.nameEn.toLowerCase() : false) ||
                     selectedThana === thana.nameBn;
                   return (
                     <button

@@ -2,10 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Image as ImageIcon, Save, Loader2, Sparkles, Upload, Check, RefreshCw, AlertCircle, Phone, MessageCircle, Share2, CreditCard, ShieldCheck, FileText, Plus, Trash2, Search, Globe, ExternalLink, Copy, ArrowLeft } from 'lucide-react';
+import { 
+  Image as ImageIcon, Save, Loader2, Sparkles, Upload, Check, RefreshCw, 
+  AlertCircle, Phone, MessageCircle, Share2, CreditCard, ShieldCheck, 
+  FileText, Plus, Trash2, Search, Globe, ExternalLink, Copy, ArrowLeft,
+  Truck, Key, Eye, EyeOff, CheckCircle2
+} from 'lucide-react';
 import { useStoreConfigStore, DEFAULT_STORE_CONFIG } from '../../store/useStoreConfigStore';
 import { useCategoryStore, CategoryItem } from '../../store/useCategoryStore';
 import { StoreConfig } from '../../types';
+import { safeRandomUUID } from '../../lib/uuid';
 
 export interface BannerSlide {
   id: number;
@@ -113,6 +119,9 @@ export default function AdminSettings() {
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState<{ type: string; index: number } | null>(null);
+  const [showSteadfastKeys, setShowSteadfastKeys] = useState(false);
+  const [testingSteadfast, setTestingSteadfast] = useState(false);
+  const [steadfastTestResult, setSteadfastTestResult] = useState<{ success: boolean; message: string; balance?: number } | null>(null);
 
   const { config, updateConfig } = useStoreConfigStore();
 
@@ -180,7 +189,7 @@ export default function AdminSettings() {
     const nextNum = categories.length + 1;
     const title = `New Category ${nextNum}`;
     const newCat: CategoryItem = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       title,
       link: `/category/${encodeURIComponent(title)}`,
       image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=400&q=60&auto=format&fit=crop'
@@ -387,6 +396,51 @@ export default function AdminSettings() {
         }
       ];
       setCategories(standard);
+    }
+  };
+
+  const handleTestSteadfastConnection = async () => {
+    if (!storeForm.steadfastApiKey || !storeForm.steadfastSecretKey) {
+      setSteadfastTestResult({
+        success: false,
+        message: 'দয়া করে Steadfast API Key এবং Secret Key দুটোই লিখুন।'
+      });
+      return;
+    }
+
+    setTestingSteadfast(true);
+    setSteadfastTestResult(null);
+
+    try {
+      const res = await fetch('/api/courier/steadfast/check-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: storeForm.steadfastApiKey,
+          secretKey: storeForm.steadfastSecretKey
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSteadfastTestResult({
+          success: true,
+          message: data.message || 'Steadfast সার্ভারে সফলভাবে কানেক্ট হয়েছে!',
+          balance: data.balance
+        });
+      } else {
+        setSteadfastTestResult({
+          success: false,
+          message: data.message || 'ক্রেডেনশিয়াল সঠিক নয় বা সংযোগ পাওয়া যায়নি।'
+        });
+      }
+    } catch (err: any) {
+      setSteadfastTestResult({
+        success: false,
+        message: 'কানেকশন এরর: ' + (err.message || 'সার্ভারে সংযোগ ব্যর্থ')
+      });
+    } finally {
+      setTestingSteadfast(false);
     }
   };
 
@@ -1067,6 +1121,150 @@ export default function AdminSettings() {
             </div>
           </div>
 
+        </div>
+      </div>
+
+      {/* SECTION 4: STEADFAST COURIER INTEGRATION */}
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-neutral-200 shadow-xs space-y-6">
+        <div className="border-b border-neutral-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#FF6A00] to-[#EE0979] text-white flex items-center justify-center shadow-xs">
+                <Truck size={18} />
+              </span>
+              <h2 className="text-lg font-black uppercase text-neutral-900 tracking-tight">
+                স্টেডফাস্ট কুরিয়ার সার্ভিস ইন্টিগ্রেশন (Steadfast Courier API)
+              </h2>
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">
+              অর্ডার পেজ থেকে সরাসরি ১-ক্লিকে পার্সেল বুকিং, পিকআপ রিকোয়েস্ট এবং গ্রাহকদের অটোমেটিক লাইভ ট্র্যাকিং।
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {storeForm.steadfastApiKey && storeForm.steadfastSecretKey ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle2 size={13} />
+                <span>কনফিগারেশন সক্রিয়</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                <AlertCircle size={13} />
+                <span>চাবি প্রয়োজন</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* API Credentials Inputs */}
+        <div className="bg-gradient-to-br from-orange-50/40 via-white to-pink-50/20 p-5 rounded-2xl border border-orange-200/80 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase text-neutral-900 tracking-wider flex items-center gap-2">
+              <Key size={16} className="text-[#FF6A00]" />
+              <span>মার্চেন্ট এপিআই কি ও সিক্রেট কি (API & Secret Key)</span>
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowSteadfastKeys(!showSteadfastKeys)}
+              className="text-xs font-bold text-neutral-600 hover:text-neutral-900 flex items-center gap-1 cursor-pointer"
+            >
+              {showSteadfastKeys ? <EyeOff size={14} /> : <Eye size={14} />}
+              <span>{showSteadfastKeys ? 'চাবি লুকান' : 'চাবি দেখুন'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                Steadfast API Key *
+              </label>
+              <input
+                type={showSteadfastKeys ? "text" : "password"}
+                value={storeForm.steadfastApiKey || ''}
+                onChange={(e) => handleStoreFormChange('steadfastApiKey', e.target.value.trim())}
+                placeholder="যেমন: abcdef1234567890..."
+                className="w-full bg-white border border-neutral-300 px-3.5 py-2.5 rounded-xl text-xs font-mono font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-[#FF6A00]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-neutral-600 mb-1">
+                Steadfast Secret Key *
+              </label>
+              <input
+                type={showSteadfastKeys ? "text" : "password"}
+                value={storeForm.steadfastSecretKey || ''}
+                onChange={(e) => handleStoreFormChange('steadfastSecretKey', e.target.value.trim())}
+                placeholder="যেমন: sec_9876543210..."
+                className="w-full bg-white border border-neutral-300 px-3.5 py-2.5 rounded-xl text-xs font-mono font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-[#FF6A00]"
+              />
+            </div>
+          </div>
+
+          {/* Test Connection Button & Result */}
+          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-orange-100">
+            <button
+              type="button"
+              onClick={handleTestSteadfastConnection}
+              disabled={testingSteadfast}
+              className="px-4 py-2.5 bg-neutral-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {testingSteadfast ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>সংযোগ পরীক্ষা হচ্ছে...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={14} />
+                  <span>কানেকশন টেস্ট ও ব্যালেন্স চেক করুন</span>
+                </>
+              )}
+            </button>
+
+            {steadfastTestResult && (
+              <div className={`text-xs font-bold px-3.5 py-2 rounded-xl border flex items-center gap-2 ${
+                steadfastTestResult.success 
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}>
+                {steadfastTestResult.success ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertCircle size={16} className="text-rose-600 shrink-0" />}
+                <div>
+                  <span>{steadfastTestResult.message}</span>
+                  {steadfastTestResult.balance !== undefined && (
+                    <span className="ml-2 font-mono font-black text-emerald-950 bg-emerald-100/70 px-2 py-0.5 rounded">
+                      ব্যালেন্স: ৳{steadfastTestResult.balance}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bengali Step-by-Step Instructions */}
+        <div className="bg-neutral-50 p-4 sm:p-5 rounded-2xl border border-neutral-200/70 space-y-2.5">
+          <div className="flex items-center gap-2 text-neutral-800 font-bold text-xs">
+            <ShieldCheck size={16} className="text-emerald-600" />
+            <span>কীভাবে আপনার Steadfast API Key এবং Secret Key পাবেন?</span>
+          </div>
+          <ol className="text-xs text-neutral-600 space-y-1.5 list-decimal list-inside leading-relaxed">
+            <li>
+              প্রথমে স্টেডফাস্ট মার্চেন্ট পোর্টালে লগইন করুন:{' '}
+              <a 
+                href="https://portal.steadfast.com.bd" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-[#FF6A00] font-bold hover:underline inline-flex items-center gap-0.5"
+              >
+                <span>portal.steadfast.com.bd</span>
+                <ExternalLink size={11} />
+              </a>
+            </li>
+            <li>বাম পাশের মেনু থেকে <b>Settings</b> অথবা <b>API Credentials</b> অপশনে যান।</li>
+            <li>সেখান থেকে <b>API Key</b> এবং <b>Secret Key</b> কপি করে উপরের বক্সে পেস্ট করুন।</li>
+            <li>নিচের <b>"Save All Settings"</b> বাটনে ক্লিক করুন। এরপর অ্যাডমিন অর্ডার লিস্ট থেকে ১-ক্লিকেই পার্সেল বুকিং দেওয়া যাবে!</li>
+          </ol>
         </div>
       </div>
 

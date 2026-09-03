@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { StoreConfig } from '../types';
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from '../lib/safeStorage';
 
 export const DEFAULT_STORE_CONFIG: StoreConfig = {
   logoUrl: '',
@@ -19,6 +20,10 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   bkashNumber: '01712345678',
   nagadNumber: '01812345678',
   rocketNumber: '01912345678',
+  steadfastApiKey: '',
+  steadfastSecretKey: '',
+  steadfastBaseUrl: 'https://portal.steadfast.com.bd/api/v1',
+  steadfastEnabled: true,
   metaTitle: 'Rare Dreams | Exclusive Luxury Kids & Family Fashion Bangladesh',
   metaDescription: 'Shop premium, designer kids wear, boys panjabi, girls lehenga, baby essentials & footwear at Rare Dreams Bangladesh. 100% genuine fabrics, fast cash on delivery nationwide.',
   metaKeywords: 'Rare Dreams, kids apparel, boys panjabi, girls lehenga, baby clothes Bangladesh, footwear Dhaka, luxury kids fashion, online shopping BD, cash on delivery',
@@ -41,13 +46,13 @@ const STORAGE_KEY = 'rare_dreams_cached_store_config';
 
 const getInitialConfig = (): StoreConfig => {
   try {
-    const cached = localStorage.getItem(STORAGE_KEY);
+    const cached = safeLocalStorageGetItem(STORAGE_KEY);
     if (cached) {
       const parsed = JSON.parse(cached);
       return { ...DEFAULT_STORE_CONFIG, ...parsed };
     }
   } catch (e) {
-    console.warn("Could not read cached store config from localStorage", e);
+    console.warn("Could not read cached store config from storage", e);
   }
   return DEFAULT_STORE_CONFIG;
 };
@@ -68,11 +73,7 @@ export const useStoreConfigStore = create<StoreConfigState>((set, get) => ({
             config: merged,
             loading: false,
           });
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-          } catch (e) {
-            // ignore storage full errors
-          }
+          safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(merged));
         } else {
           set({ config: DEFAULT_STORE_CONFIG, loading: false });
         }
@@ -89,11 +90,7 @@ export const useStoreConfigStore = create<StoreConfigState>((set, get) => ({
   updateConfig: async (newConfig: Partial<StoreConfig>) => {
     const updated = { ...get().config, ...newConfig };
     set({ config: updated });
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (e) {
-      // ignore
-    }
+    safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(updated));
     try {
       const docRef = doc(db, 'settings', 'storeConfig');
       await setDoc(docRef, updated, { merge: true });

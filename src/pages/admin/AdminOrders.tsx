@@ -28,8 +28,10 @@ import {
   FileText,
   AlertCircle,
   Building2,
-  Home
+  Home,
+  ExternalLink
 } from 'lucide-react';
+import { SteadfastBookingModal } from '../../components/SteadfastBookingModal';
 
 type OrderStatus = 'Pending' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
 
@@ -73,7 +75,8 @@ const OrderCard = memo(({
   onSelectOrder, 
   onCopy, 
   copiedId, 
-  isUpdating
+  isUpdating,
+  onBookCourier
 }: { 
   order: Order; 
   onStatusChange: (id: string, status: OrderStatus) => void;
@@ -81,6 +84,7 @@ const OrderCard = memo(({
   onCopy: (id: string) => void;
   copiedId: string | null;
   isUpdating: boolean;
+  onBookCourier: (order: Order) => void;
 }) => {
   const districtName = order.district || (order.city?.includes(',') ? order.city.split(',').pop()?.trim() : order.city);
   const thanaName = order.thana || (order.city?.includes(',') ? order.city.split(',')[0]?.trim() : '');
@@ -217,6 +221,36 @@ const OrderCard = memo(({
             </>
           )}
 
+          {/* Steadfast Courier 1-Click Booking or Status Badge */}
+          {order.courierTrackingCode ? (
+            <div className="flex items-center gap-1.5 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 rounded-xl px-2.5 py-1 text-xs">
+              <Truck size={13} className="text-[#FF6A00]" />
+              <a 
+                href={`https://steadfast.com.bd/t/${order.courierTrackingCode}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono font-black text-[#FF6A00] hover:underline text-xs flex items-center gap-1"
+                title="Steadfast এ লাইভ ট্র্যাকিং দেখুন"
+              >
+                <span>#{order.courierTrackingCode}</span>
+                <ExternalLink size={10} />
+              </a>
+              <span className="text-[10px] bg-orange-100 text-orange-900 font-black px-1.5 py-0.2 rounded uppercase">
+                {order.courierStatus || 'Booked'}
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onBookCourier(order)}
+              className="px-2.5 py-1.5 bg-gradient-to-r from-[#FF6A00] to-[#EE0979] hover:brightness-105 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
+              title="Steadfast Courier এ ১-ক্লিকে পার্সেল বুক করুন"
+            >
+              <Truck size={13} />
+              <span>স্টেডফাস্ট বুকিং</span>
+            </button>
+          )}
+
           {/* Status Dropdown */}
           <select
             value={order.status}
@@ -257,6 +291,63 @@ export default function AdminOrders() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedFullAddress, setCopiedFullAddress] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [bookingOrder, setBookingOrder] = useState<Order | null>(null);
+  const [refreshingTrackingId, setRefreshingTrackingId] = useState<string | null>(null);
+
+  const handleBookingSuccess = (orderId: string, result: { consignmentId: string | number; trackingCode: string; status: string }) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id === orderId) {
+        return {
+          ...o,
+          courierName: 'steadfast',
+          courierConsignmentId: result.consignmentId,
+          courierTrackingCode: result.trackingCode,
+          courierStatus: result.status,
+          status: o.status === 'Pending' || o.status === 'Confirmed' ? 'Processing' : o.status
+        };
+      }
+      return o;
+    }));
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder(prev => prev ? {
+        ...prev,
+        courierName: 'steadfast',
+        courierConsignmentId: result.consignmentId,
+        courierTrackingCode: result.trackingCode,
+        courierStatus: result.status,
+        status: prev.status === 'Pending' || prev.status === 'Confirmed' ? 'Processing' : prev.status
+      } : null);
+    }
+  };
+
+  const handleRefreshTracking = async (order: Order) => {
+    const code = order.courierTrackingCode || order.courierConsignmentId;
+    if (!code) return;
+
+    setRefreshingTrackingId(order.id);
+    try {
+      const res = await fetch(`/api/courier/steadfast/track/${code}`, {
+        headers: {
+          'x-steadfast-api-key': config.steadfastApiKey || '',
+          'x-steadfast-secret-key': config.steadfastSecretKey || ''
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.status) {
+        await updateDoc(doc(db, 'orders', order.id), {
+          courierStatus: data.status
+        });
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, courierStatus: data.status } : o));
+        if (selectedOrder?.id === order.id) {
+          setSelectedOrder(prev => prev ? { ...prev, courierStatus: data.status } : null);
+        }
+      }
+    } catch (err) {
+      console.error("Tracking update error:", err);
+    } finally {
+      setRefreshingTrackingId(null);
+    }
+  };
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -612,6 +703,97 @@ export default function AdminOrders() {
             </div>
           </div>
 
+          {/* Steadfast Courier Service Card */}
+          <div className="bg-gradient-to-br from-orange-50/70 via-white to-pink-50/30 p-4 rounded-2xl border border-orange-200/90 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#FF6A00] to-[#EE0979] text-white flex items-center justify-center shadow-2xs">
+                  <Truck size={16} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-neutral-900 uppercase tracking-wider">
+                    স্টেডফাস্ট কুরিয়ার পার্সেল ডেলিভারি
+                  </h3>
+                  <p className="text-[10px] text-neutral-500">
+                    {selectedOrder.courierTrackingCode ? 'পার্সেল বুকিং সম্পন্ন হয়েছে' : 'এখনও কুরিয়ারে বুকিং দেওয়া হয়নি'}
+                  </p>
+                </div>
+              </div>
+
+              {selectedOrder.courierTrackingCode ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleRefreshTracking(selectedOrder)}
+                    disabled={refreshingTrackingId === selectedOrder.id}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-700 bg-white hover:bg-neutral-100 border border-neutral-300 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                    title="রিয়েল-টাইম ডেলিভারি স্ট্যাটাস চেক করুন"
+                  >
+                    <RefreshCw size={12} className={refreshingTrackingId === selectedOrder.id ? "animate-spin text-[#FF6A00]" : ""} />
+                    <span>স্ট্যাটাস রিফ্রেশ</span>
+                  </button>
+
+                  <a
+                    href={`https://steadfast.com.bd/t/${selectedOrder.courierTrackingCode}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-white bg-[#FF6A00] hover:bg-[#E55F00] px-2.5 py-1 rounded-lg transition-all shadow-2xs cursor-pointer"
+                  >
+                    <span>লাইভ ট্র্যাকিং</span>
+                    <ExternalLink size={11} />
+                  </a>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setBookingOrder(selectedOrder)}
+                  className="inline-flex items-center gap-1.5 text-xs font-black text-white bg-gradient-to-r from-[#FF6A00] to-[#EE0979] hover:brightness-105 active:scale-95 px-3.5 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer"
+                >
+                  <Truck size={14} />
+                  <span>১-ক্লিকে পার্সেল বুক করুন</span>
+                </button>
+              )}
+            </div>
+
+            {selectedOrder.courierTrackingCode && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                <div className="bg-white p-2.5 rounded-xl border border-neutral-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase block">Tracking Code</span>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="font-mono font-black text-neutral-900 text-xs">
+                      {selectedOrder.courierTrackingCode}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(String(selectedOrder.courierTrackingCode));
+                        setCopiedId('tracking');
+                        setTimeout(() => setCopiedId(null), 1500);
+                      }}
+                      className="text-neutral-400 hover:text-black cursor-pointer"
+                    >
+                      {copiedId === 'tracking' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-xl border border-neutral-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase block">Consignment ID</span>
+                  <span className="font-mono font-black text-neutral-800 text-xs mt-0.5 block">
+                    {selectedOrder.courierConsignmentId || 'N/A'}
+                  </span>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-xl border border-neutral-200 shadow-2xs">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase block">কুরিয়ার স্ট্যাটাস</span>
+                  <span className="inline-block mt-0.5 font-bold text-xs uppercase px-2 py-0.5 rounded-md bg-orange-100 text-orange-900">
+                    {selectedOrder.courierStatus || 'in_review'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Products List Table */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -801,10 +983,20 @@ export default function AdminOrders() {
               onCopy={copyToClipboard}
               copiedId={copiedId}
               isUpdating={updatingId === order.id}
+              onBookCourier={(ord) => setBookingOrder(ord)}
             />
           ))}
         </div>
       )}
+
+      {/* Steadfast Courier 1-Click Booking Modal */}
+      <SteadfastBookingModal
+        isOpen={!!bookingOrder}
+        onClose={() => setBookingOrder(null)}
+        order={bookingOrder}
+        storeConfig={config}
+        onBookingSuccess={handleBookingSuccess}
+      />
     </div>
   );
 }

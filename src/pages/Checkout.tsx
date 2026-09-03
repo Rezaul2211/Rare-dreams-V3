@@ -811,13 +811,13 @@ export default function Checkout() {
 
       </form>
 
-      {/* MOBILE FLOATING LIQUID GLASS CHECKOUT BAR (Rendered in Portal to float above all page content) */}
+      {/* MOBILE FLOATING SOLID HIGH-PERFORMANCE CHECKOUT BAR */}
       {!isProcessingOrder && typeof document !== 'undefined' && document.body && createPortal(
         <div 
           id="mobile-sticky-checkout-bar"
           className="fixed bottom-3.5 left-3.5 right-3.5 z-[999] pointer-events-auto lg:hidden"
         >
-          <div className="bg-white/95 backdrop-blur-2xl border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.08)] rounded-[24px] p-2.5 px-4 flex items-center justify-between gap-3 max-w-lg mx-auto">
+          <div className="bg-white border border-neutral-200 shadow-[0_10px_35px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] rounded-[20px] p-2.5 px-4 flex items-center justify-between gap-3 max-w-lg mx-auto">
             
             <div className="min-w-0">
               <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight block">

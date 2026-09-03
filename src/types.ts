@@ -108,6 +108,12 @@ export interface Order {
   senderNumber?: string;
   transactionId?: string;
   status: 'Pending' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  courierName?: string;
+  courierConsignmentId?: number | string;
+  courierTrackingCode?: string;
+  courierStatus?: string;
+  courierBookedAt?: any;
+  courierNote?: string;
   createdAt: any;
 }
 
@@ -128,6 +134,11 @@ export interface StoreConfig {
   bkashNumber: string;
   nagadNumber: string;
   rocketNumber: string;
+  // Steadfast Courier API Configuration
+  steadfastApiKey?: string;
+  steadfastSecretKey?: string;
+  steadfastBaseUrl?: string;
+  steadfastEnabled?: boolean;
   // SEO & Google Indexing Configuration
   metaTitle?: string;
   metaDescription?: string;

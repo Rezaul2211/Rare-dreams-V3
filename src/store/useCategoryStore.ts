@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { safeLocalStorageGetItem, safeLocalStorageSetItem, safeLocalStorageRemoveItem } from '../lib/safeStorage';
 
 export interface CategoryItem {
   id?: string;
@@ -74,7 +75,7 @@ interface CategoryState {
 export const useCategoryStore = create<CategoryState>((set, get) => {
   const getInitialCategories = () => {
     try {
-      const cached = localStorage.getItem('rare_dreams_categories');
+      const cached = safeLocalStorageGetItem('rare_dreams_categories');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -95,14 +96,14 @@ export const useCategoryStore = create<CategoryState>((set, get) => {
             if (data.list && Array.isArray(data.list) && data.list.length > 0) {
               const sorted = sortCategoriesByStandardOrder(data.list);
               set({ categories: sorted, loading: false });
-              localStorage.setItem('rare_dreams_categories', JSON.stringify(sorted));
+              safeLocalStorageSetItem('rare_dreams_categories', JSON.stringify(sorted));
             } else {
               set({ categories: sortCategoriesByStandardOrder(DEFAULT_CATEGORIES), loading: false });
-              localStorage.removeItem('rare_dreams_categories');
+              safeLocalStorageRemoveItem('rare_dreams_categories');
             }
           } else {
             set({ categories: sortCategoriesByStandardOrder(DEFAULT_CATEGORIES), loading: false });
-            localStorage.removeItem('rare_dreams_categories');
+            safeLocalStorageRemoveItem('rare_dreams_categories');
           }
         }, (error) => {
           console.error("Firestore categories listener error:", error);
@@ -115,7 +116,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => {
     },
     saveCategories: async (newCategories: CategoryItem[]) => {
       set({ categories: newCategories });
-      localStorage.setItem('rare_dreams_categories', JSON.stringify(newCategories));
+      safeLocalStorageSetItem('rare_dreams_categories', JSON.stringify(newCategories));
       try {
         const docRef = doc(db, 'settings', 'categories');
         await setDoc(docRef, { list: newCategories }, { merge: true });

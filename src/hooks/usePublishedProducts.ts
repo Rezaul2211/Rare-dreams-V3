@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product } from '../types';
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from '../lib/safeStorage';
 
 export const STARTER_CATALOG_PRODUCTS: Product[] = [
   // Men's collection
@@ -302,7 +303,7 @@ function notifyListeners(products: Product[]) {
 // Load cached products from localStorage safely
 function loadFromLocalStorage(): Product[] | null {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const raw = safeLocalStorageGetItem(LOCAL_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
@@ -317,10 +318,29 @@ function loadFromLocalStorage(): Product[] | null {
   return null;
 }
 
-// Save products to localStorage safely
+// Save products to localStorage safely (storing lean data to avoid quota exhaust)
 function saveToLocalStorage(products: Product[]) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(products));
+    // Store at most 30 items in local cache and strip any large base64 strings
+    const leanProducts = products.slice(0, 30).map(p => {
+      const sanitizedImages = (p.images || []).map(img => {
+        // If image is a massive data URL (> 50KB), skip caching that individual string in localStorage
+        if (typeof img === 'string' && img.startsWith('data:') && img.length > 50000) {
+          return '';
+        }
+        return img;
+      }).filter(Boolean);
+
+      return {
+        ...p,
+        images: sanitizedImages.length > 0 ? sanitizedImages : (p.image ? [p.image] : []),
+        description: typeof p.description === 'string' && p.description.length > 500 
+          ? p.description.substring(0, 500) 
+          : p.description
+      };
+    });
+
+    safeLocalStorageSetItem(LOCAL_STORAGE_KEY, JSON.stringify(leanProducts));
   } catch (err) {
     // Ignore storage quota errors
   }

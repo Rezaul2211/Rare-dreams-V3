@@ -35,6 +35,7 @@ import SEO from '../components/SEO';
 import { calculateDiscount, formatPrice } from '../utils/productUtils';
 import { getColorSwatch } from '../utils/colorUtils';
 import { usePublishedProducts, getCachedProductById } from '../hooks/usePublishedProducts';
+import { safeRandomUUID } from '../lib/uuid';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -317,53 +318,78 @@ export default function ProductDetail() {
 
   const handleAddToCart = useCallback((e?: React.MouseEvent<HTMLElement>) => {
     if (!product) return;
-    trackAddToCart({
-      content_name: product.name,
-      content_ids: [product.id],
-      value: product.price * quantity,
-    });
+    try {
+      trackAddToCart({
+        content_name: product.name,
+        content_ids: [product.id],
+        value: (product.price || 0) * (quantity || 1),
+      });
+    } catch (err) {
+      console.warn("Pixel tracking error:", err);
+    }
 
     const chosenImage = activeImage || displayImages[selectedImageIndex] || product.image;
     
-    if (e) {
-      animateAddToCart(product, e, {
-        size: selectedSize || undefined,
-        color: selectedColor || undefined,
-        quantity,
-      });
-    } else {
+    try {
+      if (e) {
+        animateAddToCart(product, e, {
+          size: selectedSize || undefined,
+          color: selectedColor || undefined,
+          quantity: quantity || 1,
+        });
+      } else {
+        addItem({
+          ...product,
+          cartItemId: safeRandomUUID(),
+          selectedSize: selectedSize || undefined,
+          selectedColor: selectedColor || undefined,
+          selectedColorImage: chosenImage,
+          quantity: quantity || 1,
+        });
+      }
+    } catch (err) {
+      console.warn("Fallback addItem in handleAddToCart:", err);
       addItem({
         ...product,
-        cartItemId: crypto.randomUUID(),
+        cartItemId: safeRandomUUID(),
         selectedSize: selectedSize || undefined,
         selectedColor: selectedColor || undefined,
         selectedColorImage: chosenImage,
-        quantity,
+        quantity: quantity || 1,
       });
     }
   }, [product, quantity, selectedSize, selectedColor, activeImage, displayImages, selectedImageIndex, animateAddToCart, addItem]);
 
   const handleBuyNow = useCallback(() => {
     if (!product) return;
-    trackAddToCart({
-      content_name: product.name,
-      content_ids: [product.id],
-      value: product.price * quantity,
-    });
+    try {
+      trackAddToCart({
+        content_name: product.name,
+        content_ids: [product.id],
+        value: (product.price || 0) * (quantity || 1),
+      });
+    } catch (err) {
+      console.warn("Pixel tracking error:", err);
+    }
 
     const chosenImage = activeImage || displayImages[selectedImageIndex] || product.image;
 
-    const directItem = {
-      ...product,
-      cartItemId: `direct-${product.id}-${selectedSize || 'default'}-${selectedColor || 'default'}`,
-      selectedSize: selectedSize || undefined,
-      selectedColor: selectedColor || undefined,
-      selectedColorImage: chosenImage,
-      quantity,
-    };
+    try {
+      const directItem = {
+        ...product,
+        cartItemId: `direct-${product.id}-${selectedSize || 'default'}-${selectedColor || 'default'}-${Date.now()}`,
+        selectedSize: selectedSize || undefined,
+        selectedColor: selectedColor || undefined,
+        selectedColorImage: chosenImage,
+        quantity: quantity || 1,
+      };
 
-    setDirectCheckoutItem(directItem);
-    navigate('/checkout');
+      setDirectCheckoutItem(directItem);
+    } catch (err) {
+      console.error("Error setting direct checkout item:", err);
+    } finally {
+      navigate('/checkout');
+    }
   }, [product, quantity, selectedSize, selectedColor, activeImage, displayImages, selectedImageIndex, setDirectCheckoutItem, navigate]);
 
   const handleWhatsAppOrder = useCallback(() => {
@@ -461,7 +487,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             <button
               onClick={() => navigate(-1)}
               aria-label="Back"
-              className="w-9 h-9 rounded-full bg-white/95 backdrop-blur-md shadow-2xs border border-purple-100 flex items-center justify-center text-neutral-700 hover:text-black active:scale-90 transition-all cursor-pointer"
+              className="w-9 h-9 rounded-full bg-white shadow-xs border border-neutral-200 flex items-center justify-center text-neutral-700 hover:text-black active:scale-90 transition-all cursor-pointer"
             >
               <ChevronLeft size={20} />
             </button>
@@ -471,7 +497,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               <button
                 onClick={handleShare}
                 aria-label="Share"
-                className="w-9 h-9 rounded-full bg-white/95 backdrop-blur-md shadow-2xs border border-purple-100 flex items-center justify-center text-neutral-700 hover:text-black active:scale-90 transition-all cursor-pointer"
+                className="w-9 h-9 rounded-full bg-white shadow-xs border border-neutral-200 flex items-center justify-center text-neutral-700 hover:text-black active:scale-90 transition-all cursor-pointer"
               >
                 <Share2 size={17} />
               </button>
@@ -480,10 +506,10 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                 onClick={() => product && toggleWishlist(product.id)}
                 aria-label="Wishlist"
                 className={clsx(
-                  "w-9 h-9 rounded-full backdrop-blur-md shadow-2xs border flex items-center justify-center active:scale-90 transition-all cursor-pointer",
+                  "w-9 h-9 rounded-full shadow-xs border flex items-center justify-center active:scale-90 transition-all cursor-pointer",
                   favorited
                     ? "bg-rose-50 border-rose-200 text-rose-500"
-                    : "bg-white/95 border-purple-100 text-neutral-700 hover:text-black"
+                    : "bg-white border-neutral-200 text-neutral-700 hover:text-black"
                 )}
               >
                 <Heart size={17} className={favorited ? "fill-rose-500" : ""} />
@@ -581,10 +607,10 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                 setRotationAngle(0);
               }}
               className={clsx(
-                "absolute bottom-2.5 right-3.5 z-20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-black shadow-md active:scale-95 transition-all cursor-pointer",
+                "absolute bottom-2.5 right-3.5 z-20 rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-black shadow-md active:scale-95 transition-all cursor-pointer",
                 is360Mode
                   ? "bg-[#5B46E8] text-white ring-2 ring-purple-300 shadow-purple-500/20"
-                  : "bg-white/95 text-neutral-800 border border-purple-100 hover:border-[#5B46E8]/40"
+                  : "bg-white text-neutral-800 border border-neutral-200 hover:border-[#5B46E8]/40"
               )}
             >
               <Rotate3d size={14} className={is360Mode ? "animate-spin text-white" : "text-[#5B46E8]"} />
@@ -593,7 +619,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
 
             {/* 360 Guide Overlay Tag */}
             {is360Mode && (
-              <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-20 bg-black/80 backdrop-blur-md text-white text-[10.5px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse whitespace-nowrap">
+              <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-20 bg-black/90 text-white text-[10.5px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse whitespace-nowrap">
                 <Rotate3d size={12} />
                 <span>ঘুরিয়ে দেখতে ডানে বা বামে টানুন</span>
               </div>
@@ -760,8 +786,8 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             </div>
           )}
 
-          {/* DESKTOP ONLY INLINE ACTIONS */}
-          <div className="hidden md:block space-y-2 pt-2">
+          {/* INLINE PRODUCT ACTIONS */}
+          <div className="space-y-2 pt-2">
             <div className="text-xs sm:text-sm font-bold text-neutral-900">
               পরিমাণ
             </div>
@@ -770,15 +796,25 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               {/* Stepper */}
               <div className="h-11 rounded-xl border border-neutral-200 bg-white flex items-center justify-between px-2 shrink-0">
                 <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-6 h-6 rounded-md flex items-center justify-center text-base font-bold text-neutral-600 hover:bg-neutral-100 active:scale-95 transition-colors cursor-pointer"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuantity((prev) => Math.max(1, prev - 1));
+                  }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-base font-bold text-neutral-600 hover:bg-neutral-100 active:scale-95 transition-colors cursor-pointer"
+                  aria-label="Decrease quantity"
                 >
                   −
                 </button>
                 <span className="font-black text-sm text-neutral-900">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="w-6 h-6 rounded-md flex items-center justify-center text-base font-bold text-neutral-600 hover:bg-neutral-100 active:scale-95 transition-colors cursor-pointer"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuantity((prev) => Math.min(99, prev + 1));
+                  }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-base font-bold text-neutral-600 hover:bg-neutral-100 active:scale-95 transition-colors cursor-pointer"
+                  aria-label="Increase quantity"
                 >
                   +
                 </button>
@@ -786,27 +822,22 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
 
               {/* Add to Cart */}
               <button
+                type="button"
                 onClick={handleAddToCart}
-                className="h-11 rounded-xl bg-[#6B46C1] hover:bg-[#5B3CC4] active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-[0_3px_12px_rgba(107,70,193,0.25)] transition-all cursor-pointer whitespace-nowrap px-2"
+                className="h-11 rounded-xl bg-[#6B46C1] hover:bg-[#5B3CC4] active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap px-2"
               >
                 <ShoppingBag size={15} strokeWidth={2.4} className="shrink-0" />
                 <span className="truncate">কার্টে যোগ করুন</span>
               </button>
 
-              {/* Buy Now (High-Impact Fiery Flame Eye-Catching Button) */}
+              {/* Buy Now (High Conversion Fast Solid Button) */}
               <button
+                type="button"
                 onClick={handleBuyNow}
-                className="relative overflow-hidden h-11 rounded-xl bg-gradient-to-r from-[#FF0844] via-[#FF3366] to-[#FF8008] hover:from-[#E00638] hover:to-[#E67300] active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-[0_0_24px_rgba(255,50,0,0.8),0_4px_14px_rgba(255,100,0,0.4)] animate-[fire-pulse_1.5s_infinite_ease-in-out] transition-all cursor-pointer whitespace-nowrap px-3 group"
+                className="h-11 rounded-xl bg-gradient-to-r from-[#FF0844] to-[#FF6A00] hover:brightness-105 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer whitespace-nowrap px-3"
               >
-                {/* Rising flame glare effect */}
-                <div className="absolute inset-0 bg-gradient-to-t from-transparent via-yellow-400/30 to-white/40 pointer-events-none animate-pulse" />
-                
-                {/* Floating flame particles */}
-                <span className="absolute -top-1 left-2 w-1.5 h-1.5 rounded-full bg-yellow-300 blur-[0.5px] animate-[flame-rise_1.6s_infinite_linear]" />
-                <span className="absolute -top-1 right-3 w-2 h-2 rounded-full bg-orange-400 blur-[0.5px] animate-[flame-rise_1.9s_infinite_linear]" />
-                
-                <Flame size={16} className="relative z-10 text-yellow-300 fill-yellow-400 animate-bounce shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
-                <span className="relative z-10 truncate font-black drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] tracking-wide">এখনই কিনুন</span>
+                <Flame size={16} className="text-yellow-300 fill-yellow-400 shrink-0" />
+                <span className="truncate font-black tracking-wide">এখনই কিনুন</span>
               </button>
             </div>
           </div>
@@ -1042,30 +1073,36 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
       )}
 
       {/* ========================================================= */}
-      {/* FLOATING LIQUID GLASS MOBILE ACTION BAR (Ultra Translucent Liquid Glass) */}
+      {/* FLOATING HIGH-CONVERSION MOBILE ACTION BAR (ALWAYS IN VIEW) */}
       {/* ========================================================= */}
       {typeof document !== 'undefined' && document.body && createPortal(
         <div 
-          id="floating-product-action-bar"
-          className="md:hidden fixed bottom-3 left-3 right-3 z-[999] pointer-events-auto"
+          id="product-mobile-action-bar"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-[995] bg-white border-t border-neutral-200 shadow-[0_-4px_24px_rgba(0,0,0,0.14)] px-3 py-2 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
         >
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)] rounded-[20px] p-1.5 xs:p-2 flex items-center gap-1.5 xs:gap-2 max-w-lg mx-auto will-change-[backdrop-filter,transform]">
+          <div className="max-w-md mx-auto flex items-center gap-2">
             
-            {/* Stepper with smooth crystal glass capsule styling */}
-            <div className="h-10 rounded-[14px] bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-between px-1.5 shrink-0 min-w-[76px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)]">
+            {/* Stepper with clean, solid, high-contrast styling */}
+            <div className="h-11 rounded-xl bg-neutral-100 border border-neutral-300/90 flex items-center justify-between px-2 shrink-0 min-w-[86px]">
               <button
                 type="button"
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/40 active:scale-90 transition-all cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuantity((prev) => Math.max(1, prev - 1));
+                }}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-base font-black text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
                 aria-label="Decrease quantity"
               >
                 −
               </button>
-              <span className="font-black text-xs sm:text-sm text-neutral-950 px-1">{quantity}</span>
+              <span className="font-black text-sm text-neutral-950 px-1">{quantity}</span>
               <button
                 type="button"
-                onClick={() => setQuantity(quantity + 1)}
-                className="w-5.5 h-5.5 rounded-lg flex items-center justify-center text-sm font-bold text-neutral-800 hover:bg-white/40 active:scale-90 transition-all cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuantity((prev) => Math.min(99, prev + 1));
+                }}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-base font-black text-neutral-700 hover:bg-white active:scale-90 transition-all cursor-pointer"
                 aria-label="Increase quantity"
               >
                 +
@@ -1076,22 +1113,20 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             <button
               type="button"
               onClick={(e) => handleAddToCart(e)}
-              className="flex-1 h-10 rounded-[14px] bg-[#6B46C1] hover:bg-[#5B3CC4] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-[0_3px_10px_rgba(107,70,193,0.22)] transition-all cursor-pointer whitespace-nowrap px-1.5"
+              className="flex-1 h-11 rounded-xl bg-[#6B46C1] hover:bg-[#5B3CC4] active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap px-2"
             >
-              <ShoppingBag size={14} strokeWidth={2.4} className="shrink-0" />
+              <ShoppingBag size={16} strokeWidth={2.4} className="shrink-0" />
               <span className="truncate">কার্টে যোগ করুন</span>
             </button>
 
-            {/* Buy Now CTA (With High-Impact Fiery Flame Animation) */}
+            {/* Buy Now CTA */}
             <button
               type="button"
               onClick={handleBuyNow}
-              className="relative overflow-hidden flex-1 h-10 rounded-[14px] bg-gradient-to-r from-[#FF0844] via-[#FF3366] to-[#FF8008] hover:from-[#E00638] hover:to-[#E67300] active:scale-95 text-white font-black text-xs flex items-center justify-center gap-1 shadow-[0_0_22px_rgba(255,50,0,0.85),0_3px_12px_rgba(255,100,0,0.4)] animate-[fire-pulse_1.5s_infinite_ease-in-out] transition-all cursor-pointer whitespace-nowrap px-2"
+              className="flex-1 h-11 rounded-xl bg-gradient-to-r from-[#FF0844] to-[#FF6A00] hover:brightness-105 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer whitespace-nowrap px-2"
             >
-              {/* Flame overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-transparent via-yellow-400/30 to-white/35 pointer-events-none animate-pulse" />
-              <Flame size={14} className="relative z-10 text-yellow-300 fill-yellow-400 animate-bounce shrink-0 drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]" />
-              <span className="relative z-10 truncate font-black drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]">এখনই কিনুন</span>
+              <Flame size={16} className="text-yellow-300 fill-yellow-400 shrink-0" />
+              <span className="truncate">এখনই কিনুন</span>
             </button>
 
           </div>

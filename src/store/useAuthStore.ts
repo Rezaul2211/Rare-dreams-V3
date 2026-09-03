@@ -4,6 +4,7 @@ import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { fetchUserRole } from '../lib/roles';
+import { safeLocalStorageGetItem, safeLocalStorageSetItem, safeLocalStorageRemoveItem } from '../lib/safeStorage';
 
 interface AuthState {
   user: User | null;
@@ -22,16 +23,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: true,
   setUser: (user) => {
     if (user) {
-      localStorage.setItem('rare_dreams_user', JSON.stringify(user));
+      safeLocalStorageSetItem('rare_dreams_user', JSON.stringify(user));
     } else {
-      localStorage.removeItem('rare_dreams_user');
+      safeLocalStorageRemoveItem('rare_dreams_user');
     }
     set({ user });
   },
   setLoading: (loading) => set({ loading }),
   logout: async () => {
     // Clear user state and cached local storage immediately
-    localStorage.removeItem('rare_dreams_user');
+    safeLocalStorageRemoveItem('rare_dreams_user');
     set({ user: null, loading: false });
 
     try {
@@ -48,7 +49,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!currentUser) return;
     const updatedUser: User = { ...currentUser, ...data };
     set({ user: updatedUser });
-    localStorage.setItem('rare_dreams_user', JSON.stringify(updatedUser));
+    safeLocalStorageSetItem('rare_dreams_user', JSON.stringify(updatedUser));
     
     // Sync with Firestore
     try {
@@ -60,7 +61,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   initialize: () => {
     // First load from localStorage for instant response on custom domains like Vercel
-    const cachedUser = localStorage.getItem('rare_dreams_user');
+    const cachedUser = safeLocalStorageGetItem('rare_dreams_user');
     if (cachedUser) {
       try {
         const parsed = JSON.parse(cachedUser);
@@ -103,7 +104,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               createdAt: data.createdAt || new Date()
             };
 
-            localStorage.setItem('rare_dreams_user', JSON.stringify(activeUser));
+            safeLocalStorageSetItem('rare_dreams_user', JSON.stringify(activeUser));
             set({ user: activeUser, loading: false });
           } else {
             const newUser: User = {
@@ -119,7 +120,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             };
             
             setDoc(userRef, newUser).catch(console.error);
-            localStorage.setItem('rare_dreams_user', JSON.stringify(newUser));
+            safeLocalStorageSetItem('rare_dreams_user', JSON.stringify(newUser));
             set({ user: newUser, loading: false });
           }
         } catch (error) {
@@ -132,12 +133,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             role: role,
             createdAt: new Date()
           };
-          localStorage.setItem('rare_dreams_user', JSON.stringify(fallbackUser));
+          safeLocalStorageSetItem('rare_dreams_user', JSON.stringify(fallbackUser));
           set({ user: fallbackUser, loading: false });
         }
       } else {
         // If firebase auth emits null on transient refresh, check if localStorage user exists
-        const existingCache = localStorage.getItem('rare_dreams_user');
+        const existingCache = safeLocalStorageGetItem('rare_dreams_user');
         if (existingCache) {
           try {
             const parsed = JSON.parse(existingCache);

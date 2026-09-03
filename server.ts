@@ -1224,6 +1224,262 @@ app.post("/api/admin/diagnostics/update-key", (req, res) => {
   return res.json({ success: true, message: "Grok API key updated in active runtime." });
 });
 
+// -------------------------------------------------------------
+// Steadfast Courier Service Integration (portal.steadfast.com.bd)
+// -------------------------------------------------------------
+interface SteadfastCredentials {
+  apiKey: string;
+  secretKey: string;
+}
+
+function getSteadfastCredentials(req?: express.Request): SteadfastCredentials | null {
+  const apiKey = (
+    req?.body?.apiKey ||
+    req?.headers?.['x-steadfast-api-key'] ||
+    process.env.STEADFAST_API_KEY ||
+    ""
+  ).toString().trim();
+
+  const secretKey = (
+    req?.body?.secretKey ||
+    req?.headers?.['x-steadfast-secret-key'] ||
+    process.env.STEADFAST_SECRET_KEY ||
+    ""
+  ).toString().trim();
+
+  if (!apiKey || !secretKey) {
+    return null;
+  }
+  return { apiKey, secretKey };
+}
+
+// 1. Check Steadfast Credentials & Balance
+app.post("/api/courier/steadfast/check-credentials", async (req, res) => {
+  const creds = getSteadfastCredentials(req);
+  if (!creds) {
+    return res.status(400).json({
+      success: false,
+      message: "Steadfast API Key এবং Secret Key দেওয়া হয়নি। দয়া করে অ্যাডমিন সেটিংসে আপনার চাবি দিন।"
+    });
+  }
+
+  const startTime = Date.now();
+  try {
+    const response = await fetch("https://portal.steadfast.com.bd/api/v1/get_balance", {
+      method: "GET",
+      headers: {
+        "Api-Key": creds.apiKey,
+        "Secret-Key": creds.secretKey,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const data = (await response.json().catch(() => null)) as any;
+    const latency = Date.now() - startTime;
+
+    if (!response.ok || (data && data.status !== 200 && data.status !== 201)) {
+      addSystemLog({
+        level: 'warn',
+        module: 'COURIER',
+        message: `Steadfast credentials check failed: ${data?.message || response.statusText}`,
+        statusCode: response.status,
+        latencyMs: latency,
+        details: data
+      });
+      return res.status(400).json({
+        success: false,
+        message: data?.message || "Steadfast এপিআই ক্রেডেনশিয়াল সঠিক নয় বা সংযোগ পাওয়া যায়নি।",
+        details: data
+      });
+    }
+
+    addSystemLog({
+      level: 'success',
+      module: 'COURIER',
+      message: `Steadfast connection verified successfully. Balance: ${data?.current_balance ?? 'N/A'} BDT.`,
+      statusCode: response.status,
+      latencyMs: latency
+    });
+
+    return res.json({
+      success: true,
+      balance: data?.current_balance ?? 0,
+      message: "স্টেডফাস্ট কুরিয়ারে সফলভাবে কানেক্ট হয়েছে!",
+      data
+    });
+  } catch (error: any) {
+    addSystemLog({
+      level: 'error',
+      module: 'COURIER',
+      message: `Steadfast connection error: ${error?.message || error}`,
+      details: { error: String(error) }
+    });
+    return res.status(500).json({
+      success: false,
+      message: "Steadfast সার্ভারে সংযোগ করতে সমস্যা হয়েছে: " + (error?.message || "নেটওয়ার্ক ত্রুটি")
+    });
+  }
+});
+
+// 2. 1-Click Create Order / Book Parcel on Steadfast
+app.post("/api/courier/steadfast/create-order", async (req, res) => {
+  const creds = getSteadfastCredentials(req);
+  if (!creds) {
+    return res.status(400).json({
+      success: false,
+      message: "Steadfast API Key ও Secret Key প্রয়োজন। অ্যাডমিন সেটিংসে কনফিগার করুন।"
+    });
+  }
+
+  const { invoice, recipient_name, recipient_phone, recipient_address, cod_amount, note } = req.body;
+
+  if (!recipient_name || !recipient_phone || !recipient_address) {
+    return res.status(400).json({
+      success: false,
+      message: "প্রাপকের নাম, মোবাইল নম্বর এবং ঠিকানা পূরণ করা বাধ্যতামূলক।"
+    });
+  }
+
+  // Format BD phone to 11 digits
+  let formattedPhone = recipient_phone.toString().replace(/[^0-9]/g, '');
+  if (formattedPhone.startsWith('880')) {
+    formattedPhone = formattedPhone.substring(2);
+  } else if (formattedPhone.startsWith('88')) {
+    formattedPhone = formattedPhone.substring(2);
+  }
+  if (!formattedPhone.startsWith('0') && formattedPhone.length === 10) {
+    formattedPhone = '0' + formattedPhone;
+  }
+
+  if (formattedPhone.length !== 11 || !formattedPhone.startsWith('01')) {
+    return res.status(400).json({
+      success: false,
+      message: `ভুল মোবাইল নম্বর (${recipient_phone})। ১১ ডিজিটের ভ্যালিড বাংলাদেশী মোবাইল নম্বর দিন (যেমন 01XXXXXXXXX)।`
+    });
+  }
+
+  const cleanInvoice = (invoice || `INV-${Date.now()}`).toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30);
+  const numericCod = Math.max(0, Math.round(Number(cod_amount) || 0));
+
+  const payload = {
+    invoice: cleanInvoice,
+    recipient_name: recipient_name.toString().trim().slice(0, 100),
+    recipient_phone: formattedPhone,
+    recipient_address: recipient_address.toString().trim().slice(0, 250),
+    cod_amount: numericCod,
+    note: (note || "Rare Dreams Parcel Delivery").toString().trim().slice(0, 250)
+  };
+
+  const startTime = Date.now();
+  try {
+    const response = await fetch("https://portal.steadfast.com.bd/api/v1/create_order", {
+      method: "POST",
+      headers: {
+        "Api-Key": creds.apiKey,
+        "Secret-Key": creds.secretKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = (await response.json().catch(() => null)) as any;
+    const latency = Date.now() - startTime;
+
+    if (!response.ok || (data && data.status !== 200 && data.status !== 201)) {
+      addSystemLog({
+        level: 'error',
+        module: 'COURIER',
+        message: `Steadfast booking failed for ${cleanInvoice}: ${data?.message || response.statusText}`,
+        statusCode: response.status,
+        latencyMs: latency,
+        details: { payload, response: data }
+      });
+      return res.status(400).json({
+        success: false,
+        message: data?.message || (data?.errors ? JSON.stringify(data.errors) : "পার্সেল বুকিং ব্যর্থ হয়েছে।"),
+        details: data
+      });
+    }
+
+    addSystemLog({
+      level: 'success',
+      module: 'COURIER',
+      message: `Steadfast parcel booked for ${cleanInvoice}. Tracking: ${data?.consignment?.tracking_code || 'N/A'}. Consignment: ${data?.consignment?.consignment_id}`,
+      statusCode: response.status,
+      latencyMs: latency,
+      details: data?.consignment
+    });
+
+    return res.json({
+      success: true,
+      message: "স্টেডফাস্ট কুরিয়ারে পার্সেল সফলভাবে বুকিং হয়েছে!",
+      consignment: data?.consignment,
+      tracking_code: data?.consignment?.tracking_code,
+      consignment_id: data?.consignment?.consignment_id,
+      status: data?.consignment?.status || 'in_review'
+    });
+  } catch (error: any) {
+    addSystemLog({
+      level: 'error',
+      module: 'COURIER',
+      message: `Steadfast create order network error: ${error?.message || error}`,
+      details: { error: String(error) }
+    });
+    return res.status(500).json({
+      success: false,
+      message: "স্টেডফাস্ট সার্ভারে রিকোয়েস্ট পাঠাতে ব্যর্থ হয়েছে: " + (error?.message || "নেটওয়ার্ক ত্রুটি")
+    });
+  }
+});
+
+// 3. Check Real-Time Delivery Status by Tracking Code or Consignment ID
+app.get("/api/courier/steadfast/track/:identifier", async (req, res) => {
+  const creds = getSteadfastCredentials(req);
+  if (!creds) {
+    return res.status(400).json({
+      success: false,
+      message: "Steadfast API Key ও Secret Key পাওয়া যায়নি।"
+    });
+  }
+
+  const { identifier } = req.params;
+  const isCid = /^\d+$/.test(identifier);
+  const endpoint = isCid 
+    ? `https://portal.steadfast.com.bd/api/v1/status_by_cid/${identifier}`
+    : `https://portal.steadfast.com.bd/api/v1/status_by_trackingcode/${identifier}`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        "Api-Key": creds.apiKey,
+        "Secret-Key": creds.secretKey,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const data = (await response.json().catch(() => null)) as any;
+    if (!response.ok || (data && data.status !== 200)) {
+      return res.status(400).json({
+        success: false,
+        message: data?.message || "ট্র্যাকিং তথ্য পাওয়া যায়নি।",
+        details: data
+      });
+    }
+
+    return res.json({
+      success: true,
+      status: data?.delivery_status || data?.status || 'unknown',
+      details: data
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "ট্র্যাকিং স্ট্যাটাস আনতে সমস্যা হয়েছে: " + error?.message
+    });
+  }
+});
+
 // Dynamic robots.txt
 app.get("/robots.txt", (req, res) => {
   const host = req.headers.host || "raredreams.com.bd";
