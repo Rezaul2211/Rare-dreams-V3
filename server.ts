@@ -2,11 +2,26 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
+import webpush from "web-push";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { GoogleGenAI } from "@google/genai";
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BDa6JUFB_Um0OUPJxaFZUxwOxRaAGBrzsD0lemYYeZmKD45lsbpbieaA66x35A3RaRK9tfK4eQ33z5OAsHlpRYs";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "16k69Uf8AFtVvrGKa8wlA5q2ihOoZqtG7QYQNbXXH28";
+
+try {
+  webpush.setVapidDetails(
+    "mailto:admin@raredreamsbd.com",
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+  console.log("[WebPush] VAPID details configured successfully.");
+} catch (vErr) {
+  console.warn("[WebPush] VAPID setup note:", vErr);
+}
 
 if (!getApps().length) {
   try {
@@ -833,7 +848,34 @@ app.post("/api/make-admin", async (req, res) => {
   }
 });
 
-// Admin New Order Native Push Notification Endpoint (FCM Background Multicast)
+// Public VAPID Key retrieval endpoint for Web Push
+app.get("/api/push/vapid-key", (req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+// Register or refresh Web Push subscription endpoint
+app.post("/api/push/subscribe", async (req, res) => {
+  try {
+    const { token, role, userId, subscription } = req.body;
+    if (!token) return res.status(400).json({ error: "Token is required" });
+
+    const db = getFirestore();
+    await db.collection("fcm_tokens").doc(token).set({
+      token,
+      role: role || "customer",
+      userId: userId || "anonymous",
+      subscription: subscription || null,
+      updatedAt: new Date()
+    }, { merge: true });
+
+    res.json({ success: true, message: "Subscription registered" });
+  } catch (error: any) {
+    console.warn("Push subscription registration error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Admin New Order Native Push Notification Endpoint (WebPush & FCM Dual Multicast)
 app.post("/api/notifications/push-admin-order", async (req, res) => {
   try {
     const { orderId, customerName, phone, total, district } = req.body;
@@ -842,11 +884,13 @@ app.post("/api/notifications/push-admin-order", async (req, res) => {
 
     console.log(`[Push Admin Order] Triggered for order ${orderId} by ${customerName} (${formattedTotal})`);
 
-    // Fetch all admin tokens from Firestore fcm_tokens collection
+    // Fetch all admin tokens and subscriptions from Firestore fcm_tokens collection
     const db = getFirestore();
     const tokensSnap = await db.collection('fcm_tokens').get();
     
     const adminTokens: string[] = [];
+    const adminSubscriptions: any[] = [];
+
     tokensSnap.forEach((docSnap) => {
       const d = docSnap.data();
       const role = (d.role || '').toLowerCase();
@@ -860,6 +904,9 @@ app.post("/api/notifications/push-admin-order", async (req, res) => {
         email.includes('karim') || 
         email.includes('admin')
       ) {
+        if (d.subscription && d.subscription.endpoint) {
+          adminSubscriptions.push(d.subscription);
+        }
         const token = d.token || docSnap.id;
         if (token && typeof token === 'string' && token.length > 20 && !adminTokens.includes(token)) {
           adminTokens.push(token);
@@ -867,87 +914,107 @@ app.post("/api/notifications/push-admin-order", async (req, res) => {
       }
     });
 
-    console.log(`[Push Admin Order] Found ${adminTokens.length} active Admin FCM device token(s)`);
+    console.log(`[Push Admin Order] Found ${adminTokens.length} token(s), ${adminSubscriptions.length} WebPush subscription(s) for Admins.`);
 
-    if (adminTokens.length === 0) {
-      return res.json({ 
-        success: true, 
-        delivered: 0, 
-        message: "No active admin device tokens registered. Open admin panel on mobile and enable push notifications." 
-      });
-    }
+    const webPushPayload = JSON.stringify({
+      title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
+      body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}\nঅর্ডার #${(orderId || '').slice(-6).toUpperCase()}`,
+      icon: '/pwa-192x192.png',
+      badge: '/favicon-32x32.png',
+      vibrate: [350, 100, 350, 100, 350],
+      url: '/admin/orders',
+      orderId: String(orderId || ''),
+      tag: 'order_' + String(orderId || Date.now())
+    });
 
-    try {
-      const messaging = getMessaging();
-      const payload = {
-        tokens: adminTokens,
-        notification: {
-          title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
-          body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}\nঅর্ডার #${(orderId || '').slice(-6).toUpperCase()}`,
-        },
-        data: {
-          title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
-          body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
-          url: '/admin/orders',
-          orderId: String(orderId || ''),
-          customerName: String(customerName || ''),
-          phone: String(phone || ''),
-          total: String(total || 0),
-          targetRole: 'admin',
-          tag: 'order_' + String(orderId || Date.now())
-        },
-        webpush: {
-          headers: {
-            Urgency: "high",
-            TTL: "86400"
-          },
+    let webPushDelivered = 0;
+    // 1. Deliver directly through W3C WebPush Protocol (Works in background even when browser/tab is closed!)
+    await Promise.allSettled(
+      adminSubscriptions.map(async (sub) => {
+        try {
+          await webpush.sendNotification(sub, webPushPayload, {
+            urgency: 'high',
+            TTL: 86400
+          });
+          webPushDelivered++;
+        } catch (subErr: any) {
+          console.warn('[Push Admin Order] WebPush delivery note for endpoint:', subErr?.statusCode || subErr?.message);
+        }
+      })
+    );
+
+    // 2. Companion FCM Multicast delivery if Firebase Admin is available
+    let fcmDelivered = 0;
+    if (adminTokens.length > 0) {
+      try {
+        const messaging = getMessaging();
+        const payload = {
+          tokens: adminTokens,
           notification: {
             title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
+            body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}\nঅর্ডার #${(orderId || '').slice(-6).toUpperCase()}`,
+          },
+          data: {
+            title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
             body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
-            icon: '/pwa-192x192.png',
-            badge: '/favicon-32x32.png',
-            vibrate: [350, 120, 350, 120, 350],
-            requireInteraction: true,
-            tag: 'order_' + String(orderId || Date.now()),
-            data: {
-              url: '/admin/orders',
-              orderId: String(orderId || '')
+            url: '/admin/orders',
+            orderId: String(orderId || ''),
+            customerName: String(customerName || ''),
+            phone: String(phone || ''),
+            total: String(total || 0),
+            targetRole: 'admin',
+            tag: 'order_' + String(orderId || Date.now())
+          },
+          webpush: {
+            headers: {
+              Urgency: "high",
+              TTL: "86400"
+            },
+            notification: {
+              title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
+              body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
+              icon: '/pwa-192x192.png',
+              badge: '/favicon-32x32.png',
+              vibrate: [350, 120, 350, 120, 350],
+              requireInteraction: true,
+              tag: 'order_' + String(orderId || Date.now()),
+              data: {
+                url: '/admin/orders',
+                orderId: String(orderId || '')
+              }
+            },
+            fcmOptions: {
+              link: '/admin/orders'
             }
           },
-          fcmOptions: {
-            link: '/admin/orders'
+          android: {
+            priority: "high" as const,
+            notification: {
+              title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
+              body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
+              sound: "default",
+              defaultVibrateTimings: true,
+              defaultSound: true,
+              tag: 'order_' + String(orderId || Date.now())
+            }
           }
-        },
-        android: {
-          priority: "high" as const,
-          notification: {
-            title: `🛍️ নতুন অর্ডার - ${formattedTotal}`,
-            body: `${customerName || 'কাস্টমার'} (${phone || 'N/A'})${displayDistrict}`,
-            sound: "default",
-            defaultVibrateTimings: true,
-            defaultSound: true,
-            tag: 'order_' + String(orderId || Date.now())
-          }
-        }
-      };
+        };
 
-      const response = await messaging.sendEachForMulticast(payload);
-      console.log(`[Push Admin Order] Successfully sent to ${response.successCount} admin devices, ${response.failureCount} failed.`);
-
-      return res.json({
-        success: true,
-        sentCount: response.successCount,
-        failureCount: response.failureCount,
-        totalAdmins: adminTokens.length
-      });
-    } catch (fcmError: any) {
-      console.warn("[Push Admin Order] FCM send failed:", fcmError?.message || fcmError);
-      return res.status(200).json({
-        success: false,
-        error: fcmError?.message,
-        message: "Firestore notification saved, FCM multicast note."
-      });
+        const response = await messaging.sendEachForMulticast(payload);
+        fcmDelivered = response.successCount;
+      } catch (fcmErr: any) {
+        console.warn("[Push Admin Order] FCM send note:", fcmErr?.message || fcmErr);
+      }
     }
+
+    console.log(`[Push Admin Order] Delivered: ${webPushDelivered} via WebPush, ${fcmDelivered} via FCM.`);
+
+    return res.json({
+      success: true,
+      webPushDelivered,
+      fcmDelivered,
+      totalAdmins: adminTokens.length + adminSubscriptions.length
+    });
   } catch (error: any) {
     console.error("Push admin order error:", error);
     res.status(500).json({ error: error.message });
@@ -965,87 +1032,123 @@ app.post("/api/notifications/broadcast", async (req, res) => {
     const db = getFirestore();
     const tokensSnap = await db.collection('fcm_tokens').get();
     const targetTokens: string[] = [];
+    const targetSubscriptions: any[] = [];
 
     tokensSnap.forEach((docSnap) => {
       const d = docSnap.data();
       const role = (d.role || 'customer').toLowerCase();
       const token = d.token || docSnap.id;
 
-      if (!token || typeof token !== 'string' || token.length < 20) return;
-
+      let match = false;
       if (target === 'admins') {
-        if (role === 'admin' || role === 'seller') {
-          if (!targetTokens.includes(token)) targetTokens.push(token);
-        }
+        if (role === 'admin' || role === 'seller') match = true;
       } else if (target === 'customers') {
-        if (role !== 'admin' && role !== 'seller') {
-          if (!targetTokens.includes(token)) targetTokens.push(token);
-        }
+        if (role !== 'admin' && role !== 'seller') match = true;
       } else {
         // 'all'
-        if (!targetTokens.includes(token)) targetTokens.push(token);
+        match = true;
+      }
+
+      if (match) {
+        if (d.subscription && d.subscription.endpoint) {
+          targetSubscriptions.push(d.subscription);
+        }
+        if (token && typeof token === 'string' && token.length > 20 && !targetTokens.includes(token)) {
+          targetTokens.push(token);
+        }
       }
     });
 
-    if (targetTokens.length === 0) {
-      return res.json({ success: true, delivered: 0, message: "No subscribers found for this target." });
+    const webPushPayload = JSON.stringify({
+      title: title,
+      body: body,
+      icon: imageUrl || '/pwa-192x192.png',
+      badge: '/favicon-32x32.png',
+      vibrate: [300, 100, 300],
+      url: url || '/shop',
+      tag: 'campaign_' + Date.now()
+    });
+
+    let webPushDelivered = 0;
+    await Promise.allSettled(
+      targetSubscriptions.map(async (sub) => {
+        try {
+          await webpush.sendNotification(sub, webPushPayload, {
+            urgency: 'high',
+            TTL: 86400
+          });
+          webPushDelivered++;
+        } catch (subErr: any) {
+          console.warn('[Broadcast Push] WebPush note:', subErr?.statusCode || subErr?.message);
+        }
+      })
+    );
+
+    let fcmDelivered = 0;
+    if (targetTokens.length > 0) {
+      try {
+        const messaging = getMessaging();
+        const payload = {
+          tokens: targetTokens,
+          notification: {
+            title: title,
+            body: body,
+            imageUrl: imageUrl || undefined
+          },
+          data: {
+            title: String(title),
+            body: String(body),
+            url: url || '/shop',
+            targetRole: target || 'all',
+            tag: 'campaign_' + Date.now()
+          },
+          webpush: {
+            headers: { 
+              Urgency: "high",
+              TTL: "86400"
+            },
+            notification: {
+              title: title,
+              body: body,
+              icon: imageUrl || '/pwa-192x192.png',
+              badge: '/favicon-32x32.png',
+              vibrate: [300, 100, 300],
+              requireInteraction: true,
+              tag: 'campaign_' + Date.now(),
+              data: {
+                url: url || '/shop'
+              }
+            },
+            fcmOptions: {
+              link: url || '/shop'
+            }
+          },
+          android: {
+            priority: "high" as const,
+            notification: {
+              title: title,
+              body: body,
+              sound: "default",
+              defaultVibrateTimings: true,
+              defaultSound: true,
+              tag: 'campaign_' + Date.now()
+            }
+          }
+        };
+
+        const response = await messaging.sendEachForMulticast(payload);
+        fcmDelivered = response.successCount;
+      } catch (fcmErr: any) {
+        console.warn("[Broadcast Push] FCM send note:", fcmErr?.message || fcmErr);
+      }
     }
 
-    const messaging = getMessaging();
-    const payload = {
-      tokens: targetTokens,
-      notification: {
-        title: title,
-        body: body,
-        imageUrl: imageUrl || undefined
-      },
-      data: {
-        title: String(title),
-        body: String(body),
-        url: url || '/shop',
-        targetRole: target || 'all',
-        tag: 'campaign_' + Date.now()
-      },
-      webpush: {
-        headers: { 
-          Urgency: "high",
-          TTL: "86400"
-        },
-        notification: {
-          title: title,
-          body: body,
-          icon: imageUrl || '/pwa-192x192.png',
-          badge: '/favicon-32x32.png',
-          vibrate: [300, 100, 300],
-          requireInteraction: true,
-          tag: 'campaign_' + Date.now(),
-          data: {
-            url: url || '/shop'
-          }
-        },
-        fcmOptions: {
-          link: url || '/shop'
-        }
-      },
-      android: {
-        priority: "high" as const,
-        notification: {
-          title: title,
-          body: body,
-          sound: "default",
-          defaultVibrateTimings: true,
-          defaultSound: true,
-          tag: 'campaign_' + Date.now()
-        }
-      }
-    };
-
-    const response = await messaging.sendEachForMulticast(payload);
     return res.json({
       success: true,
-      delivered: response.successCount,
-      failed: response.failureCount,
-      total: targetTokens.length
+      delivered: webPushDelivered + fcmDelivered,
+      webPushDelivered,
+      fcmDelivered,
+      total: targetTokens.length + targetSubscriptions.length
     });
   } catch (error: any) {
     console.error("Broadcast push error:", error);

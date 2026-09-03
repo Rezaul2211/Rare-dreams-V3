@@ -4,6 +4,23 @@ import { db } from './firebase';
 import { fetchClientNetworkInfo, parseUserAgent } from '../utils/deviceParser';
 import { playNewOrderSound, playOfferNotificationSound } from '../utils/audioAlert';
 
+export const VAPID_PUBLIC_KEY = "BDa6JUFB_Um0OUPJxaFZUxwOxRaAGBrzsD0lemYYeZmKD45lsbpbieaA66x35A3RaRK9tfK4eQ33z5OAsHlpRYs";
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export interface PushNotificationSubscription {
   token: string;
   userId?: string;
@@ -20,6 +37,7 @@ export interface PushNotificationSubscription {
   os?: string;
   deviceType?: 'mobile' | 'tablet' | 'desktop';
   screen?: string;
+  subscription?: any;
 }
 
 /**
@@ -30,9 +48,28 @@ export function showSystemNotification(title: string, options?: NotificationOpti
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
 
+    // Check if service worker can show it with action & vibration
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then((registration) => {
+        registration.showNotification(title, {
+          icon: '/pwa-192x192.png',
+          badge: '/favicon-32x32.png',
+          vibrate: [300, 100, 300],
+          ...options
+        } as any);
+      }).catch(() => {
+        new Notification(title, {
+          icon: '/pwa-192x192.png',
+          badge: '/favicon-32x32.png',
+          ...options
+        });
+      });
+      return;
+    }
+
     const notif = new Notification(title, {
       icon: '/pwa-192x192.png',
-      badge: '/favicon.png',
+      badge: '/favicon-32x32.png',
       ...options
     });
 
@@ -51,7 +88,7 @@ export function showSystemNotification(title: string, options?: NotificationOpti
 }
 
 /**
- * Request Notification Permission and register Service Worker token
+ * Request Notification Permission and register Service Worker token + WebPush subscription
  */
 export async function requestPushNotificationPermission(userId?: string, userPhone?: string, role?: string): Promise<string | null> {
   try {
@@ -71,8 +108,24 @@ export async function requestPushNotificationPermission(userId?: string, userPho
     if ('serviceWorker' in navigator) {
       try {
         registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+        await navigator.serviceWorker.ready;
       } catch (swErr) {
         console.warn("Service worker registration error:", swErr);
+      }
+    }
+
+    let webPushSubscription: PushSubscription | null = null;
+    if (registration && 'pushManager' in registration) {
+      try {
+        // Subscribe to browser Web Push API with VAPID key
+        webPushSubscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+        console.log('[WebPush] Successfully subscribed to PushManager:', webPushSubscription.endpoint);
+      } catch (pushErr) {
+        console.info('[WebPush] PushManager subscription note (checking existing):', pushErr);
+        webPushSubscription = await registration.pushManager.getSubscription().catch(() => null);
       }
     }
 
@@ -82,18 +135,21 @@ export async function requestPushNotificationPermission(userId?: string, userPho
     if (supported) {
       try {
         const messaging = getMessaging();
-        const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || undefined;
-
         currentToken = await getToken(messaging, {
           serviceWorkerRegistration: registration,
-          vapidKey: vapidKey
+          vapidKey: VAPID_PUBLIC_KEY
         });
       } catch (fcmErr) {
         console.warn("Could not get FCM token:", fcmErr);
       }
     }
 
-    // Fallback pseudo-token if FCM not connected
+    // Use endpoint hash or token
+    if (!currentToken && webPushSubscription) {
+      currentToken = 'sub_' + btoa(webPushSubscription.endpoint).slice(-32);
+    }
+
+    // Fallback pseudo-token if neither connected
     if (!currentToken) {
       currentToken = localStorage.getItem('rare_dreams_fcm_token') || ('fcm_client_' + Math.random().toString(36).substring(2) + Date.now().toString(36));
     }
@@ -118,6 +174,8 @@ export async function requestPushNotificationPermission(userId?: string, userPho
         console.warn("Could not fetch network info:", e);
       }
 
+      const subscriptionJSON = webPushSubscription ? webPushSubscription.toJSON() : null;
+
       // Save or update token in Firestore under fcm_tokens collection
       const tokenDocRef = doc(db, 'fcm_tokens', currentToken);
       await setDoc(tokenDocRef, {
@@ -125,6 +183,7 @@ export async function requestPushNotificationPermission(userId?: string, userPho
         userId: userId || 'anonymous',
         userPhone: userPhone || '',
         role: role || 'customer',
+        subscription: subscriptionJSON,
         deviceInfo: navigator.userAgent,
         browser: parsedDevice.browser,
         browserVersion: parsedDevice.browserVersion,
@@ -141,11 +200,23 @@ export async function requestPushNotificationPermission(userId?: string, userPho
       localStorage.setItem('rare_dreams_fcm_token', currentToken);
       localStorage.setItem('rare_dreams_push_enabled', 'true');
 
+      // Also register with backend API for immediate push dispatch sync
+      fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: currentToken,
+          role: role || 'customer',
+          userId: userId || 'anonymous',
+          subscription: subscriptionJSON
+        })
+      }).catch(() => {});
+
       return currentToken;
     }
     return null;
   } catch (error) {
-    console.warn("Error retrieving Firebase FCM token:", error);
+    console.warn("Error retrieving Web Push / FCM token:", error);
     return null;
   }
 }

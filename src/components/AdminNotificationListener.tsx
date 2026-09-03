@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { useAuthStore } from '../store/useAuthStore';
 import { playNewOrderSound } from '../utils/audioAlert';
 import { showSystemNotification, requestPushNotificationPermission } from '../lib/pushNotifications';
-import { ShoppingBag, ArrowRight, X, Volume2, BellRing } from 'lucide-react';
+import { ArrowRight, X, Volume2, BellRing } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -24,9 +24,10 @@ export const AdminNotificationListener: React.FC = () => {
   const location = useLocation();
   const [activeAlert, setActiveAlert] = useState<NewOrderNotification | null>(null);
   
-  // Track seen order IDs to avoid duplicate alerts and ignore historical orders on mount
+  // Track seen order IDs and mount timestamp to avoid any duplicate/historical alerts on refresh
   const seenOrderIds = useRef<Set<string>>(new Set());
   const initialMountDone = useRef<boolean>(false);
+  const mountTimestamp = useRef<number>(Date.now());
 
   // Determine if this device/tab should receive Admin order alerts
   // STRICT: Only genuine authenticated admins or users on /admin routes!
@@ -58,12 +59,12 @@ export const AdminNotificationListener: React.FC = () => {
   useEffect(() => {
     if (!isEligibleAdmin) return;
 
-    // Ensure FCM push notification token is registered with role: 'admin' for background push alerts
+    // Ensure Push notification token is registered with role: 'admin' for background push alerts
     if (typeof window !== 'undefined' && 'Notification' in window) {
       requestPushNotificationPermission(user?.id, user?.phone, 'admin').catch(() => {});
     }
 
-    // 1. Direct Real-Time Listener on 'orders' Collection
+    // Direct Real-Time Listener on 'orders' Collection
     const ordersQuery = query(
       collection(db, 'orders'),
       orderBy('createdAt', 'desc'),
@@ -73,7 +74,7 @@ export const AdminNotificationListener: React.FC = () => {
     const unsubscribeOrders = onSnapshot(
       ordersQuery,
       (snapshot) => {
-        // Populate initial existing orders on first fetch
+        // First fetch on page load/refresh: record all existing orders so none trigger alarms
         if (!initialMountDone.current) {
           snapshot.docs.forEach((doc) => {
             seenOrderIds.current.add(doc.id);
@@ -90,6 +91,13 @@ export const AdminNotificationListener: React.FC = () => {
             if (!seenOrderIds.current.has(orderId)) {
               seenOrderIds.current.add(orderId);
               const data = change.doc.data();
+
+              // Extra safety: only alarm if order was created around or after mount time (within last 2 minutes max)
+              const orderCreatedAt = data.createdAt?.toMillis ? data.createdAt.toMillis() : (data.createdAt ? new Date(data.createdAt).getTime() : Date.now());
+              if (orderCreatedAt < mountTimestamp.current - 120000) {
+                // Historical order from past session, ignore
+                return;
+              }
 
               const customerName = data.customerName || 'কাস্টমার';
               const phone = data.phone || '';
@@ -126,55 +134,8 @@ export const AdminNotificationListener: React.FC = () => {
       }
     );
 
-    // 2. Secondary Real-Time Listener on 'notifications' Collection for backup redundancy
-    const notifsQuery = query(
-      collection(db, 'notifications'),
-      orderBy('createdAt', 'desc'),
-      limit(5)
-    );
-
-    const unsubscribeNotifs = onSnapshot(
-      notifsQuery,
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added') {
-            const data = change.doc.data();
-            if (data.type === 'new_order' && data.orderId) {
-              const orderId = data.orderId;
-              if (!seenOrderIds.current.has(orderId)) {
-                seenOrderIds.current.add(orderId);
-                const formattedTotal = '৳' + Number(data.total || 0).toLocaleString('en-IN');
-
-                playNewOrderSound();
-
-                showSystemNotification(`🛍️ নতুন অর্ডার এসেছে! (${formattedTotal})`, {
-                  body: `${data.customerName || 'কাস্টমার'} (${data.phone || ''})\nঅর্ডার আইডি: #${orderId.slice(-6).toUpperCase()}`,
-                  icon: '/pwa-192x192.png',
-                  tag: 'notif_order_' + orderId,
-                  url: '/admin/orders'
-                });
-
-                setActiveAlert({
-                  id: change.doc.id,
-                  orderId: orderId,
-                  customerName: data.customerName,
-                  phone: data.phone,
-                  total: data.total,
-                  message: data.message
-                });
-              }
-            }
-          }
-        });
-      },
-      (err) => {
-        console.warn('Notifications listener warning:', err);
-      }
-    );
-
     return () => {
       unsubscribeOrders();
-      unsubscribeNotifs();
     };
   }, [isEligibleAdmin, user, location.pathname]);
 
