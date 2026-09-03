@@ -5,12 +5,6 @@ import { db } from '../../lib/firebase';
 import { Order } from '../../types';
 import { useStoreConfigStore } from '../../store/useStoreConfigStore';
 import { 
-  createSteadfastOrder, 
-  getSteadfastStatus, 
-  getSteadfastTrackingUrl, 
-  formatSteadfastStatus 
-} from '../../services/steadfastService';
-import { 
   CheckCircle2, 
   XCircle, 
   Clock, 
@@ -31,11 +25,10 @@ import {
   ArrowLeft,
   Printer,
   MessageCircle,
-  ExternalLink,
-  Send,
-  Loader2,
+  FileText,
   AlertCircle,
-  FlaskConical
+  Building2,
+  Home
 } from 'lucide-react';
 
 type OrderStatus = 'Pending' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
@@ -80,10 +73,7 @@ const OrderCard = memo(({
   onSelectOrder, 
   onCopy, 
   copiedId, 
-  isUpdating,
-  onOpenSteadfastModal,
-  onSyncSteadfast,
-  isSyncingCourier
+  isUpdating
 }: { 
   order: Order; 
   onStatusChange: (id: string, status: OrderStatus) => void;
@@ -91,15 +81,13 @@ const OrderCard = memo(({
   onCopy: (id: string) => void;
   copiedId: string | null;
   isUpdating: boolean;
-  onOpenSteadfastModal: (order: Order) => void;
-  onSyncSteadfast: (order: Order) => void;
-  isSyncingCourier?: boolean;
 }) => {
-  const isCourierBooked = Boolean(order.courierTrackingCode);
+  const districtName = order.district || (order.city?.includes(',') ? order.city.split(',').pop()?.trim() : order.city);
+  const thanaName = order.thana || (order.city?.includes(',') ? order.city.split(',')[0]?.trim() : '');
 
   return (
     <div 
-      className={`bg-white rounded-2xl p-3.5 sm:p-4 border transition-all hover:shadow-sm w-full min-w-0 ${
+      className={`bg-white rounded-2xl p-3.5 sm:p-4 border transition-all hover:shadow-xs w-full min-w-0 ${
         order.status === 'Pending' ? 'border-amber-300 bg-amber-50/20' : 'border-neutral-200'
       }`}
     >
@@ -119,45 +107,70 @@ const OrderCard = memo(({
             </button>
             {getStatusBadge(order.status as OrderStatus)}
 
-            {/* Courier Tracking Badge */}
-            {isCourierBooked ? (
-              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300">
-                <Truck size={10} className="text-emerald-600" />
-                <span className="font-mono font-bold">{order.courierTrackingCode}</span>
-                {order.courierStatus && (
-                  <span className="text-[9px] bg-emerald-200/80 px-1 rounded text-emerald-900 ml-1">
-                    {formatSteadfastStatus(order.courierStatus).labelBn}
-                  </span>
-                )}
+            {/* Location Badges for Quick Glance */}
+            {districtName && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
+                <MapPin size={10} className="text-blue-600" />
+                <span>{districtName}</span>
+                {thanaName && <span className="text-blue-600 font-medium">({thanaName})</span>}
               </span>
-            ) : null}
+            )}
 
             <span className="text-[11px] text-neutral-400 font-medium ml-auto sm:ml-0">
               {formatDate(order.createdAt)}
             </span>
           </div>
 
-          {/* Customer Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs w-full min-w-0">
+          {/* Customer & Location Info */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs w-full min-w-0">
+            {/* 1. Customer */}
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-neutral-400 uppercase">Customer</p>
-              <p className="font-bold text-neutral-900 truncate">{order.customerName || 'Guest User'}</p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-neutral-400 uppercase">Phone & Location</p>
-              <p className="font-medium text-neutral-800 flex items-center space-x-1 truncate">
-                <a href={`tel:${order.phone}`} className="text-neutral-900 font-bold hover:underline flex items-center space-x-1 truncate">
+              <p className="text-[10px] font-black text-neutral-400 uppercase tracking-wider">গ্রাহক (Customer)</p>
+              <p className="font-bold text-neutral-900 text-sm truncate mt-0.5">{order.customerName || 'Guest User'}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <a href={`tel:${order.phone}`} className="text-neutral-800 font-mono font-bold hover:underline flex items-center space-x-1 text-xs">
                   <Phone size={11} className="text-emerald-600 shrink-0" />
-                  <span className="truncate">{order.phone}</span>
+                  <span>{order.phone}</span>
                 </a>
-                <span className="text-neutral-400 truncate">({order.city})</span>
+              </div>
+            </div>
+
+            {/* 2. District, Thana & Detailed Address Separated */}
+            <div className="min-w-0">
+              <p className="text-[10px] font-black text-neutral-400 uppercase tracking-wider">ডেলিভারি লোকেশন ও ঠিকানা</p>
+              
+              {/* Distinct Badges for District & Thana */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-900 border border-blue-200 shadow-2xs">
+                  <span className="text-[9px] uppercase font-bold text-blue-600">জেলা:</span>
+                  <span>{districtName || 'N/A'}</span>
+                </span>
+                {thanaName && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-purple-50 text-purple-900 border border-purple-200 shadow-2xs">
+                    <span className="text-[9px] uppercase font-bold text-purple-600">থানা:</span>
+                    <span>{thanaName}</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Local House / Road Address */}
+              <p className="text-[11px] text-neutral-700 font-medium mt-1 line-clamp-2 bg-neutral-50 px-2 py-1 rounded-lg border border-neutral-200/60" title={order.address}>
+                <span className="font-bold text-neutral-900">ঠিকানা: </span>
+                {order.address || 'N/A'}
               </p>
             </div>
+
+            {/* 3. Payment & Total */}
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-neutral-400 uppercase">Payment & Total</p>
-              <p className="font-medium text-neutral-900 truncate">
-                <span className="font-black text-neutral-900">৳ {order.total?.toFixed(0)}</span>
-                <span className="text-neutral-500 text-[10px] uppercase font-bold ml-1">({order.paymentMethod})</span>
+              <p className="text-[10px] font-black text-neutral-400 uppercase tracking-wider">পেমেন্ট ও সর্বমোট</p>
+              <p className="font-medium text-neutral-900 mt-0.5">
+                <span className="font-black text-neutral-900 text-sm font-mono">৳ {order.total?.toFixed(0)}</span>
+                <span className="text-neutral-600 text-[10px] uppercase font-bold ml-1.5 bg-neutral-100 px-1.5 py-0.5 rounded">
+                  {order.paymentMethod}
+                </span>
+              </p>
+              <p className="text-[10px] text-neutral-500 font-medium mt-1">
+                পণ্য: <b className="text-neutral-800">{(order.products || []).length} টি</b> | ডেলিভারি: <b className="text-neutral-800">৳{order.shipping || 0}</b>
               </p>
             </div>
           </div>
@@ -204,30 +217,6 @@ const OrderCard = memo(({
             </>
           )}
 
-          {/* Steadfast 1-Click Action Button */}
-          {isCourierBooked ? (
-            <a
-              href={getSteadfastTrackingUrl(order.courierTrackingCode!)}
-              target="_blank"
-              rel="noreferrer"
-              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
-              title="Steadfast Live Track"
-            >
-              <Truck size={12} className="text-emerald-700" />
-              <span>ট্র্যাকিং</span>
-              <ExternalLink size={10} />
-            </a>
-          ) : order.status !== 'Cancelled' ? (
-            <button
-              onClick={() => onOpenSteadfastModal(order)}
-              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1 cursor-pointer"
-              title="Send to Steadfast Courier"
-            >
-              <Truck size={12} />
-              <span>স্টেডফাস্ট বুকিং</span>
-            </button>
-          ) : null}
-
           {/* Status Dropdown */}
           <select
             value={order.status}
@@ -266,22 +255,8 @@ export default function AdminOrders() {
   const [activeTab, setActiveTab] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedFullAddress, setCopiedFullAddress] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  // Steadfast Courier Booking State
-  const [bookingModalOrder, setBookingModalOrder] = useState<Order | null>(null);
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingError, setBookingError] = useState<string | null>(null);
-  const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
-  const [syncingTrackingCode, setSyncingTrackingCode] = useState<string | null>(null);
-  const [bookingForm, setBookingForm] = useState({
-    invoice: '',
-    recipientName: '',
-    recipientPhone: '',
-    recipientAddress: '',
-    codAmount: 0,
-    note: ''
-  });
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -313,7 +288,7 @@ export default function AdminOrders() {
         const statusBengali: Record<string, string> = {
           Confirmed: 'কনফার্ম করা হয়েছে',
           Processing: 'প্যাকিং ও প্রসেসিং চলছে',
-          Shipped: 'কুরিয়ারে পাঠানো হয়েছে',
+          Shipped: 'ডেলিভারির জন্য পাঠানো হয়েছে',
           Delivered: 'সফলভাবে ডেলিভারি সম্পন্ন হয়েছে',
           Cancelled: 'বাতিল করা হয়েছে'
         };
@@ -352,185 +327,39 @@ export default function AdminOrders() {
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
-  // Open Steadfast Booking Modal
-  const handleOpenBookingModal = useCallback((order: Order) => {
-    setBookingModalOrder(order);
-    setBookingError(null);
-    setBookingSuccess(null);
+  const handleCopyFullAddress = useCallback((order: Order) => {
+    const dist = order.district || (order.city?.includes(',') ? order.city.split(',').pop()?.trim() : order.city) || 'N/A';
+    const thana = order.thana || (order.city?.includes(',') ? order.city.split(',')[0]?.trim() : '') || 'N/A';
+    const text = `গ্রাহকের নাম: ${order.customerName || 'N/A'}
+মোবাইল: ${order.phone || 'N/A'}
+জেলা: ${dist}
+থানা/উপজেলা: ${thana}
+ঠিকানা: ${order.address || 'N/A'}
+সর্বমোট প্রদেয়: ৳${order.total?.toFixed(0)} (${order.paymentMethod?.toUpperCase() || 'COD'})
+অর্ডার আইডি: #${order.id}`;
 
-    // Calculate default COD Amount
-    // If paid via online or status is paid, codAmount is 0; otherwise total amount
-    const isPaid = order.paymentStatus === 'paid';
-    const defaultCod = isPaid ? 0 : Math.round(Number(order.total || 0));
-
-    setBookingForm({
-      invoice: order.id,
-      recipientName: order.customerName || 'Customer',
-      recipientPhone: (order.phone || '').trim(),
-      recipientAddress: `${order.address || ''}${order.city ? ', ' + order.city : ''}`.trim(),
-      codAmount: defaultCod,
-      note: `Rare Dreams Luxury Order #${order.id.slice(0, 8)}`
-    });
+    navigator.clipboard.writeText(text);
+    setCopiedFullAddress(true);
+    setTimeout(() => setCopiedFullAddress(false), 2000);
   }, []);
 
-  // Submit Steadfast Courier Booking
-  const handleConfirmSteadfastBooking = async (forceTestMode?: boolean) => {
-    if (!bookingModalOrder) return;
-
-    if (!config.steadfastApiKey || !config.steadfastSecretKey) {
-      setBookingError("স্টেডফাস্ট এপিআই কি কনফিগার করা হয়নি! দয়া করে প্রথমে Admin Settings থেকে Steadfast API Key এবং Secret Key দিন।");
-      return;
-    }
-
-    if (!bookingForm.recipientName.trim()) {
-      setBookingError("গ্রাহকের নাম আবশ্যক।");
-      return;
-    }
-
-    if (!bookingForm.recipientPhone.trim() || bookingForm.recipientPhone.replace(/[^0-9]/g, '').length < 11) {
-      setBookingError("সঠিক ১১ ডিজিটের গ্রাহকের ফোন নম্বর দিন।");
-      return;
-    }
-
-    if (!bookingForm.recipientAddress.trim() || bookingForm.recipientAddress.length < 5) {
-      setBookingError("বিস্তারিত ডেলিভারি ঠিকানা দিন (কমপক্ষে ৫ অক্ষর)।");
-      return;
-    }
-
-    setBookingLoading(true);
-    setBookingError(null);
-    setBookingSuccess(null);
-
-    try {
-      const isTest = false; // Forced false as per user request to remove test mode
-      const payload = {
-        invoice: bookingForm.invoice,
-        recipient_name: bookingForm.recipientName.trim(),
-        recipient_phone: bookingForm.recipientPhone.trim(),
-        recipient_address: bookingForm.recipientAddress.trim(),
-        cod_amount: Number(bookingForm.codAmount || 0),
-        note: bookingForm.note.trim() || undefined,
-      };
-
-      const res = await createSteadfastOrder(payload, {
-        apiKey: config.steadfastApiKey,
-        secretKey: config.steadfastSecretKey,
-        testMode: isTest,
-      });
-
-      if (!res.success || !res.data) {
-        throw new Error(res.message || 'কুরিয়ার বুকিং ব্যর্থ হয়েছে।');
-      }
-
-      const consignment = res.data;
-
-      // Update Firestore Order
-      const updatedFields: Partial<Order> = {
-        courierProvider: 'steadfast',
-        courierConsignmentId: String(consignment.consignment_id),
-        courierTrackingCode: consignment.tracking_code,
-        courierStatus: consignment.status || 'in_review',
-        courierBookedAt: new Date().toISOString(),
-        courierCodAmount: Number(bookingForm.codAmount || 0),
-        status: 'Shipped' // Automatically advance to Shipped
-      };
-
-      await updateDoc(doc(db, 'orders', bookingModalOrder.id), updatedFields as any);
-
-      // Add Notification
-      try {
-        await addDoc(collection(db, 'notifications'), {
-          orderId: bookingModalOrder.id,
-          userId: bookingModalOrder.userId || 'guest',
-          userPhone: bookingModalOrder.phone || '',
-          title: `🚚 অর্ডার ডেলিভারির জন্য পাঠানো হয়েছে (#${bookingModalOrder.id.slice(-6).toUpperCase()})`,
-          message: `আপনার পার্সেলটি Steadfast কুরিয়ারে বুকিং হয়েছে। ট্র্যাকিং কোড: ${consignment.tracking_code}`,
-          type: 'order_status',
-          status: 'Shipped',
-          read: false,
-          createdAt: serverTimestamp()
-        });
-      } catch (ne) {
-        console.warn('Notification log error:', ne);
-      }
-
-      // Update state
-      setOrders(prev => prev.map(o => o.id === bookingModalOrder.id ? { ...o, ...updatedFields } : o));
-      setSelectedOrder(prev => prev && prev.id === bookingModalOrder.id ? { ...prev, ...updatedFields } : prev);
-
-      setBookingSuccess(`পার্সেল সফলভাবে বুকিং সম্পন্ন হয়েছে! ট্র্যাকিং কোড: ${consignment.tracking_code}`);
-      
-      setTimeout(() => {
-        setBookingModalOrder(null);
-        setBookingSuccess(null);
-      }, 2200);
-
-    } catch (err: any) {
-      console.error("Steadfast booking error:", err);
-      setBookingError(err?.message || "স্টেডফাস্ট সার্ভারের সাথে যোগাযোগে সমস্যা হয়েছে।");
-    } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  // Sync Steadfast Live Status
-  const handleSyncSteadfastStatus = async (order: Order) => {
-    if (!order.courierTrackingCode) return;
-    setSyncingTrackingCode(order.courierTrackingCode);
-
-    try {
-      const res = await getSteadfastStatus(order.courierTrackingCode, {
-        apiKey: config.steadfastApiKey,
-        secretKey: config.steadfastSecretKey,
-      });
-
-      if (res.success && res.data?.delivery_status) {
-        const newCourierStatus = res.data.delivery_status;
-        const updates: Partial<Order> = {
-          courierStatus: newCourierStatus
-        };
-
-        if (newCourierStatus === 'delivered') {
-          updates.status = 'Delivered';
-        } else if (newCourierStatus === 'cancelled') {
-          updates.status = 'Cancelled';
-        }
-
-        await updateDoc(doc(db, 'orders', order.id), updates as any);
-
-        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updates } : o));
-        setSelectedOrder(prev => prev && prev.id === order.id ? { ...prev, ...updates } : prev);
-
-        const statusMeta = formatSteadfastStatus(newCourierStatus);
-        alert(`স্টেটাস আপডেট সফল: ${statusMeta.labelBn} (${statusMeta.labelEn})`);
-      } else {
-        alert(res.message || 'স্টেটাস পাওয়া যায়নি।');
-      }
-    } catch (err: any) {
-      alert(`স্টেটাস সিঙ্ক ব্যর্থ: ${err?.message || 'Error'}`);
-    } finally {
-      setSyncingTrackingCode(null);
-    }
-  };
-
-  // Filter logic
   const filteredOrders = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
     return orders.filter(order => {
       const matchesTab = activeTab === 'All' || order.status === activeTab;
+      const q = searchQuery.toLowerCase().trim();
       const matchesSearch = !q || 
         order.id.toLowerCase().includes(q) ||
-        (order.customerName || '').toLowerCase().includes(q) ||
-        (order.phone || '').includes(q) ||
-        (order.city || '').toLowerCase().includes(q) ||
-        (order.address || '').toLowerCase().includes(q) ||
-        (order.courierTrackingCode || '').toLowerCase().includes(q);
+        (order.customerName && order.customerName.toLowerCase().includes(q)) ||
+        (order.phone && order.phone.includes(q)) ||
+        (order.district && order.district.toLowerCase().includes(q)) ||
+        (order.thana && order.thana.toLowerCase().includes(q)) ||
+        (order.city && order.city.toLowerCase().includes(q)) ||
+        (order.address && order.address.toLowerCase().includes(q));
 
       return matchesTab && matchesSearch;
     });
   }, [orders, activeTab, searchQuery]);
 
-  // Metrics
   const { pendingCount, confirmedCount, processingCount, shippedCount, deliveredCount, cancelledCount, totalRevenue } = useMemo(() => {
     let p = 0, c = 0, pr = 0, s = 0, d = 0, can = 0, rev = 0;
     orders.forEach(o => {
@@ -538,12 +367,10 @@ export default function AdminOrders() {
       else if (o.status === 'Confirmed') c++;
       else if (o.status === 'Processing') pr++;
       else if (o.status === 'Shipped') s++;
-      else if (o.status === 'Delivered') d++;
-      else if (o.status === 'Cancelled') can++;
-
-      if (o.status !== 'Cancelled') {
-        rev += (o.total || 0);
-      }
+      else if (o.status === 'Delivered') {
+        d++;
+        rev += Number(o.total || 0);
+      } else if (o.status === 'Cancelled') can++;
     });
     return {
       pendingCount: p,
@@ -557,8 +384,8 @@ export default function AdminOrders() {
   }, [orders]);
 
   if (selectedOrder) {
-    const isBooked = Boolean(selectedOrder.courierTrackingCode);
-    const courierStatusMeta = selectedOrder.courierStatus ? formatSteadfastStatus(selectedOrder.courierStatus) : null;
+    const districtName = selectedOrder.district || (selectedOrder.city?.includes(',') ? selectedOrder.city.split(',').pop()?.trim() : selectedOrder.city) || 'N/A';
+    const thanaName = selectedOrder.thana || (selectedOrder.city?.includes(',') ? selectedOrder.city.split(',')[0]?.trim() : '') || 'N/A';
 
     return (
       <div className="w-full max-w-4xl mx-auto space-y-4 pb-16 animate-in fade-in duration-150">
@@ -628,138 +455,161 @@ export default function AdminOrders() {
           </div>
 
           {/* Customer & Delivery Information Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Customer Contact */}
-            <div className="bg-neutral-50/80 p-4 rounded-2xl border border-neutral-200/70 space-y-2.5 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* 1. Customer Contact Card */}
+            <div className="bg-neutral-50/80 p-4 rounded-2xl border border-neutral-200/70 space-y-3 text-xs">
               <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
                 <UserCheck size={14} className="text-neutral-500" />
-                <span>গ্রাহকের তথ্য (Customer Info)</span>
+                <span>গ্রাহকের তথ্য (Customer Contact)</span>
               </h3>
-              <p><span className="font-bold text-neutral-600">নাম:</span> <span className="font-bold text-neutral-900">{selectedOrder.customerName || selectedOrder.name || 'Guest Customer'}</span></p>
-              <p className="flex items-center gap-2">
-                <span className="font-bold text-neutral-600">ফোন:</span> 
-                <span className="font-mono font-bold text-neutral-900">{selectedOrder.phone}</span>
-                {selectedOrder.phone && (
-                  <a
-                    href={`tel:${selectedOrder.phone}`}
-                    className="p-1 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors inline-flex items-center"
-                    title="Call Customer"
-                  >
-                    <Phone size={12} />
-                  </a>
-                )}
-                {selectedOrder.phone && (
-                  <a
-                    href={`https://wa.me/88${selectedOrder.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${selectedOrder.customerName || ''}, regarding your order #${selectedOrder.id} at out shop:`)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1 text-teal-600 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors inline-flex items-center"
-                    title="WhatsApp Customer"
-                  >
-                    <MessageCircle size={12} />
-                  </a>
-                )}
-              </p>
-              {selectedOrder.email && (
-                <p><span className="font-bold text-neutral-600">ইমেইল:</span> {selectedOrder.email}</p>
-              )}
-            </div>
-
-            {/* Delivery & Payment */}
-            <div className="bg-neutral-50/80 p-4 rounded-2xl border border-neutral-200/70 space-y-2.5 text-xs">
-              <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
-                <MapPin size={14} className="text-neutral-500" />
-                <span>ডেলিভারি ও পেমেন্ট (Shipping & Payment)</span>
-              </h3>
-              <p><span className="font-bold text-neutral-600">ঠিকানা:</span> <span className="text-neutral-900">{selectedOrder.address || selectedOrder.shippingAddress || 'N/A'}, {selectedOrder.city || ''}</span></p>
-              <p><span className="font-bold text-neutral-600">পেমেন্ট মেথড:</span> <span className="font-bold text-neutral-900">{selectedOrder.paymentMethod || 'Cash On Delivery'}</span></p>
-              <p><span className="font-bold text-neutral-600">পেমেন্ট স্ট্যাটাস:</span> <span className="font-semibold text-neutral-800 uppercase">{selectedOrder.paymentStatus || 'Pending'}</span></p>
-            </div>
-          </div>
-
-          {/* Steadfast Courier Integration Section */}
-          <div className="p-5 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-teal-50/40 space-y-3.5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                  <Truck size={18} />
-                </div>
+              
+              <div className="bg-white p-3 rounded-xl border border-neutral-200 space-y-2">
                 <div>
-                  <h3 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                    Steadfast Courier Delivery (স্টেডফাস্ট কুরিয়ার)
-                  </h3>
-                  <p className="text-[11px] text-neutral-600">
-                    {isBooked ? 'পার্সেলটি স্টেটফাস্ট কুরিয়ারে বুকিং করা আছে' : 'অর্ডারটি সরাসরি স্টেটফাস্টে বুকিং করুন'}
-                  </p>
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase block">নাম</span>
+                  <span className="font-bold text-sm text-neutral-900">
+                    {selectedOrder.customerName || selectedOrder.name || 'Guest Customer'}
+                  </span>
                 </div>
-              </div>
 
-              {isBooked ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSyncSteadfastStatus(selectedOrder)}
-                    disabled={syncingTrackingCode === selectedOrder.courierTrackingCode}
-                    className="px-3 py-1.5 bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center space-x-1 cursor-pointer"
-                  >
-                    <RefreshCw size={12} className={syncingTrackingCode === selectedOrder.courierTrackingCode ? "animate-spin" : ""} />
-                    <span>স্ট্যাটাস রিফ্রেশ</span>
-                  </button>
-
-                  <a
-                    href={getSteadfastTrackingUrl(selectedOrder.courierTrackingCode!)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1 cursor-pointer"
-                  >
-                    <span>লাইভ ট্র্যাক দেখুন</span>
-                    <ExternalLink size={12} />
-                  </a>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleOpenBookingModal(selectedOrder)}
-                  disabled={selectedOrder.status === 'Cancelled'}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center space-x-2 cursor-pointer disabled:opacity-50"
-                >
-                  <Truck size={15} />
-                  <span>১-ক্লিকে স্টেটফাস্টে বুকিং করুন</span>
-                </button>
-              )}
-            </div>
-
-            {/* Booked Info Display */}
-            {isBooked && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-emerald-200/70 text-xs">
-                <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-100">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase">Tracking Code</p>
-                  <div className="flex items-center space-x-1.5 mt-0.5">
-                    <p className="font-mono font-bold text-emerald-900">{selectedOrder.courierTrackingCode}</p>
-                    <button onClick={() => copyToClipboard(selectedOrder.courierTrackingCode!)} className="text-neutral-400 hover:text-black">
-                      {copiedId === selectedOrder.courierTrackingCode ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-                    </button>
+                <div>
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase block">মোবাইল নম্বর</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="font-mono font-black text-sm text-neutral-900">{selectedOrder.phone}</span>
+                    {selectedOrder.phone && (
+                      <a
+                        href={`tel:${selectedOrder.phone}`}
+                        className="px-2 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors inline-flex items-center gap-1 font-bold text-[11px]"
+                        title="কল করুন"
+                      >
+                        <Phone size={11} />
+                        <span>কল</span>
+                      </a>
+                    )}
+                    {selectedOrder.phone && (
+                      <a
+                        href={`https://wa.me/88${selectedOrder.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`আসসালামু আলাইকুম ${selectedOrder.customerName || ''},\nRare Dreams থেকে আপনার অর্ডার #${selectedOrder.id} সংক্রান্ত তথ্য:\nজেলা: ${districtName}\nথানা: ${thanaName}\nঠিকানা: ${selectedOrder.address || selectedOrder.shippingAddress || 'N/A'}\nসর্বমোট মূল্য: ৳${selectedOrder.total?.toFixed(0)} (${selectedOrder.paymentMethod?.toUpperCase() || 'COD'})\n\nআমরা কি আপনার অর্ডারটি কনফার্ম করব?`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-1 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors inline-flex items-center gap-1 font-bold text-[11px]"
+                        title="WhatsApp এ মেসেজ দিন"
+                      >
+                        <MessageCircle size={11} />
+                        <span>WhatsApp</span>
+                      </a>
+                    )}
                   </div>
                 </div>
 
-                <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-100">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase">Consignment ID</p>
-                  <p className="font-mono font-bold text-neutral-900 mt-0.5">#{selectedOrder.courierConsignmentId || 'N/A'}</p>
-                </div>
+                {selectedOrder.email && (
+                  <div>
+                    <span className="text-[10px] font-bold text-neutral-400 uppercase block">ইমেইল</span>
+                    <span className="font-medium text-neutral-700">{selectedOrder.email}</span>
+                  </div>
+                )}
+              </div>
+            </div>
 
-                <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-100">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase">Courier Status</p>
-                  <p className="font-bold text-emerald-800 mt-0.5">
-                    {courierStatusMeta?.labelBn || selectedOrder.courierStatus}
+            {/* 2. Structured Delivery Address Card - District, Thana & Street Address Separated */}
+            <div className="bg-neutral-50/80 p-4 rounded-2xl border border-neutral-200/70 space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <MapPin size={14} className="text-orange-600" />
+                  <span>ডেলিভারি ঠিকানা ও লোকেশন বিবরণ</span>
+                </h3>
+
+                {/* 1-Click Copy Full Address Button */}
+                <button
+                  type="button"
+                  onClick={() => handleCopyFullAddress(selectedOrder)}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-700 bg-white hover:bg-neutral-100 border border-neutral-300 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                  title="সম্পূর্ণ ঠিকানা ও অর্ডারের বিবরণ এক ক্লিকে কপি করুন"
+                >
+                  {copiedFullAddress ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                  <span>{copiedFullAddress ? 'কপি হয়েছে' : 'সম্পূর্ণ ঠিকানা কপি'}</span>
+                </button>
+              </div>
+
+              {/* District and Thana Highlighted Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider flex items-center gap-1">
+                      <MapPin size={12} className="text-blue-600" />
+                      <span>জেলা (District)</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                      {districtName.toLowerCase().includes('dhaka') ? 'ঢাকার ভিতরে' : 'ঢাকার বাহিরে'}
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-base font-black text-blue-950 mt-1">
+                    {districtName}
                   </p>
                 </div>
 
-                <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-100">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase">COD Collection</p>
-                  <p className="font-mono font-black text-neutral-900 mt-0.5">৳ {Number(selectedOrder.courierCodAmount ?? selectedOrder.total ?? 0).toLocaleString()}</p>
+                <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider flex items-center gap-1">
+                      <Building2 size={12} className="text-purple-600" />
+                      <span>থানা / উপজেলা (Thana / Upazila)</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
+                      উপজেলা
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-base font-black text-purple-950 mt-1">
+                    {thanaName || 'N/A'}
+                  </p>
                 </div>
               </div>
-            )}
+
+              {/* Local House / Road / Village Detailed Address */}
+              <div className="bg-white p-3.5 rounded-xl border border-neutral-200 shadow-2xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-neutral-500 uppercase tracking-wider flex items-center gap-1">
+                    <Home size={12} className="text-neutral-600" />
+                    <span>বাসা / রোড / গ্রাম / পূর্ণাঙ্গ ঠিকানা (Street Address)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedOrder.address || selectedOrder.shippingAddress || '');
+                      setCopiedId('address');
+                      setTimeout(() => setCopiedId(null), 1500);
+                    }}
+                    className="text-[10px] font-bold text-neutral-500 hover:text-black flex items-center gap-0.5 cursor-pointer"
+                    title="শুধু এই ঠিকানাটুকু কপি করুন"
+                  >
+                    {copiedId === 'address' ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}
+                    <span>{copiedId === 'address' ? 'কপি হয়েছে' : 'কপি'}</span>
+                  </button>
+                </div>
+                <p className="text-xs sm:text-sm font-bold text-neutral-900 whitespace-pre-wrap leading-relaxed bg-neutral-50/70 p-2.5 rounded-lg border border-neutral-200/60">
+                  {selectedOrder.address || selectedOrder.shippingAddress || 'N/A'}
+                </p>
+              </div>
+
+              {/* Payment & Delivery Info */}
+              <div className="pt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] border-t border-neutral-200/60">
+                <div>
+                  <span className="text-neutral-500 font-bold">পেমেন্ট মেথড:</span>{' '}
+                  <span className="font-bold text-neutral-900 uppercase">{selectedOrder.paymentMethod || 'COD'}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 font-bold">পেমেন্ট স্ট্যাটাস:</span>{' '}
+                  <span className="font-bold uppercase px-2 py-0.5 rounded-md bg-neutral-200 text-neutral-800 text-[10px]">
+                    {selectedOrder.paymentStatus || 'Pending'}
+                  </span>
+                </div>
+              </div>
+
+              {selectedOrder.orderNotes && (
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-[11px] text-amber-900">
+                  <span className="font-bold block">অর্ডার নোট:</span>
+                  <p>{selectedOrder.orderNotes}</p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Products List Table */}
@@ -809,217 +659,16 @@ export default function AdminOrders() {
           <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-1.5 text-xs sm:text-sm font-medium">
             <div className="flex items-center justify-between text-neutral-600">
               <span>সাবটোটাল (Subtotal):</span>
-              <span className="font-mono font-bold text-neutral-900">৳ {((selectedOrder.total || 0) - (selectedOrder.shippingCost || 0)).toLocaleString()}</span>
+              <span className="font-mono font-bold text-neutral-900">৳ {((selectedOrder.total || 0) - (selectedOrder.shippingCost || selectedOrder.shipping || 0)).toLocaleString()}</span>
             </div>
-            {selectedOrder.shippingCost !== undefined && (
-              <div className="flex items-center justify-between text-neutral-600">
-                <span>ডেলিভারি চার্জ (Delivery):</span>
-                <span className="font-mono font-bold text-neutral-900">৳ {Number(selectedOrder.shippingCost || 0).toLocaleString()}</span>
-              </div>
-            )}
+            <div className="flex items-center justify-between text-neutral-600">
+              <span>ডেলিভারি চার্জ (Delivery):</span>
+              <span className="font-mono font-bold text-neutral-900">৳ {Number(selectedOrder.shippingCost || selectedOrder.shipping || selectedOrder.deliveryCost || 0).toLocaleString()}</span>
+            </div>
             <div className="pt-2 border-t border-neutral-200 flex items-center justify-between text-sm sm:text-base font-black text-neutral-900">
               <span>সর্বমোট মূল্য (Total Amount):</span>
               <span className="text-emerald-700">৳ {Number(selectedOrder.total || 0).toLocaleString()}</span>
             </div>
-          </div>
-        </div>
-
-        {/* Steadfast Booking Modal (when opened from details view) */}
-        {bookingModalOrder && renderSteadfastModal()}
-      </div>
-    );
-  }
-
-  function renderSteadfastModal() {
-    if (!bookingModalOrder) return null;
-
-    const isKeysConfigured = Boolean(config.steadfastApiKey && config.steadfastSecretKey);
-
-    return (
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-        <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-neutral-200 overflow-hidden animate-in zoom-in-95 duration-150">
-          {/* Modal Header */}
-          <div className="px-6 py-4 bg-neutral-900 text-white flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="p-2 rounded-xl bg-emerald-600 text-white">
-                <Truck size={18} />
-              </div>
-              <div>
-                <h3 className="font-black text-sm uppercase tracking-wide">
-                  Steadfast Courier পার্সেল বুকিং
-                </h3>
-                <p className="text-[11px] text-neutral-300">
-                  অর্ডার #{bookingModalOrder.id.slice(0, 8)} • সরাসরি আসল মার্চেন্ট বুকিং
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setBookingModalOrder(null)}
-              disabled={bookingLoading}
-              className="text-neutral-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Modal Body */}
-          <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-            {!isKeysConfigured && (
-              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start space-x-2 text-xs text-amber-900">
-                <AlertCircle size={16} className="text-amber-700 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">Steadfast API Key সেট করা নেই!</p>
-                  <p className="text-[11px] text-amber-800 mt-0.5">
-                    বুকিং করার আগে <Link to="/admin/settings" className="underline font-bold text-amber-950">Admin Settings</Link> এ গিয়ে আপনার Steadfast API Key ও Secret Key সেভ করুন।
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {bookingError && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs text-rose-900">
-                <div className="flex items-start space-x-2 font-bold text-rose-800">
-                  <XCircle size={16} className="shrink-0 text-rose-600 mt-0.5" />
-                  <span>{bookingError}</span>
-                </div>
-                <div className="pt-1 flex flex-wrap items-center gap-2">
-                  <a
-                    href="https://portal.steadfast.com.bd"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 bg-neutral-800 hover:bg-black text-white rounded-lg font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <span>🌐 Steadfast পোর্টালে যান</span>
-                    <ExternalLink size={10} />
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {bookingSuccess && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-2 text-xs font-bold text-emerald-800">
-                <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
-                <span>{bookingSuccess}</span>
-              </div>
-            )}
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-neutral-700 uppercase text-[11px] mb-1">
-                  Invoice / Order ID
-                </label>
-                <input
-                  type="text"
-                  value={bookingForm.invoice}
-                  onChange={(e) => setBookingForm(prev => ({ ...prev, invoice: e.target.value }))}
-                  className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3.5 py-2 font-mono font-bold text-neutral-800 outline-none focus:ring-2 focus:ring-black"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-neutral-700 uppercase text-[11px] mb-1">
-                    গ্রাহকের নাম (Recipient Name)
-                  </label>
-                  <input
-                    type="text"
-                    value={bookingForm.recipientName}
-                    onChange={(e) => setBookingForm(prev => ({ ...prev, recipientName: e.target.value }))}
-                    className="w-full bg-white border border-neutral-300 rounded-xl px-3.5 py-2 font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-neutral-700 uppercase text-[11px] mb-1">
-                    ফোন নম্বর (Recipient Phone)
-                  </label>
-                  <input
-                    type="text"
-                    value={bookingForm.recipientPhone}
-                    onChange={(e) => setBookingForm(prev => ({ ...prev, recipientPhone: e.target.value }))}
-                    placeholder="01XXXXXXXXX"
-                    className="w-full bg-white border border-neutral-300 rounded-xl px-3.5 py-2 font-mono font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-neutral-700 uppercase text-[11px] mb-1">
-                  ডেলিভারির পূর্ণ ঠিকানা (Recipient Address)
-                </label>
-                <textarea
-                  rows={2}
-                  value={bookingForm.recipientAddress}
-                  onChange={(e) => setBookingForm(prev => ({ ...prev, recipientAddress: e.target.value }))}
-                  className="w-full bg-white border border-neutral-300 rounded-xl p-3 font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-neutral-700 uppercase text-[11px] mb-1 flex items-center justify-between">
-                    <span>COD কালেকশন টাকা</span>
-                    <span className="text-[10px] text-neutral-400 font-normal">টাকা কুরিয়ার তুলবে</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-neutral-400">৳</span>
-                    <input
-                      type="number"
-                      value={bookingForm.codAmount}
-                      onChange={(e) => setBookingForm(prev => ({ ...prev, codAmount: Number(e.target.value) }))}
-                      className="w-full bg-white border border-neutral-300 rounded-xl pl-7 pr-3 py-2 font-mono font-black text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                  <p className="text-[10px] text-neutral-500 mt-1">
-                    কাস্টমার যদি আগে বিকাশ/কার্ডে পেমেন্ট করে থাকে তবে 0 রাখুন।
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-neutral-700 uppercase text-[11px] mb-1">
-                    কুরিয়ার রাইডারের জন্য নোট (Note)
-                  </label>
-                  <input
-                    type="text"
-                    value={bookingForm.note}
-                    onChange={(e) => setBookingForm(prev => ({ ...prev, note: e.target.value }))}
-                    placeholder="Fragile / Handle with care"
-                    className="w-full bg-white border border-neutral-300 rounded-xl px-3.5 py-2 font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Modal Footer */}
-          <div className="p-4 bg-neutral-50 border-t border-neutral-100 flex items-center justify-end space-x-2.5">
-            <button
-              type="button"
-              onClick={() => setBookingModalOrder(null)}
-              disabled={bookingLoading}
-              className="px-4 py-2.5 rounded-xl border border-neutral-300 text-xs font-bold text-neutral-700 hover:bg-neutral-100 transition-colors cursor-pointer"
-            >
-              বাতিল
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleConfirmSteadfastBooking()}
-              disabled={bookingLoading || !isKeysConfigured}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-            >
-              {bookingLoading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>বুকিং হচ্ছে...</span>
-                </>
-              ) : (
-                <>
-                  <Send size={14} />
-                  <span>কনফার্ম ও স্টেটফাস্ট বুক করুন</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
       </div>
@@ -1043,7 +692,7 @@ export default function AdminOrders() {
             Order Management
           </h1>
           <p className="text-[11px] sm:text-xs text-neutral-500 font-medium">
-            Review, confirm, Steadfast courier dispatch, and track orders ({orders.length} total)
+            Review, confirm, manage and track customer orders ({orders.length} total)
           </p>
         </div>
 
@@ -1086,7 +735,7 @@ export default function AdminOrders() {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input 
             type="text" 
-            placeholder="Search Order ID, Name, Phone, City, Tracking Code..."
+            placeholder="Search Order ID, Name, Phone, District, Thana, Address..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-neutral-50 border border-neutral-200 rounded-xl pl-8 pr-7 py-1.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-black transition-all"
@@ -1152,16 +801,10 @@ export default function AdminOrders() {
               onCopy={copyToClipboard}
               copiedId={copiedId}
               isUpdating={updatingId === order.id}
-              onOpenSteadfastModal={handleOpenBookingModal}
-              onSyncSteadfast={handleSyncSteadfastStatus}
-              isSyncingCourier={syncingTrackingCode === order.courierTrackingCode}
             />
           ))}
         </div>
       )}
-
-      {/* Steadfast Courier Booking Modal */}
-      {renderSteadfastModal()}
     </div>
   );
 }

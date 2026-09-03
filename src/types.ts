@@ -97,6 +97,7 @@ export interface Order {
   city?: string;
   district?: string;
   upazila?: string;
+  thana?: string;
   postalCode?: string;
   products: CartItem[];
   subtotal: number;
@@ -108,13 +109,6 @@ export interface Order {
   transactionId?: string;
   status: 'Pending' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   createdAt: any;
-  // Courier Integration (Steadfast)
-  courierProvider?: 'steadfast' | 'pathao' | 'redx' | 'manual';
-  courierConsignmentId?: number | string;
-  courierTrackingCode?: string;
-  courierStatus?: string;
-  courierBookedAt?: string;
-  courierCodAmount?: number;
 }
 
 export interface StoreConfig {
@@ -145,11 +139,6 @@ export interface StoreConfig {
   facebookPixelId?: string;
   facebookPageId?: string;
   googleAnalyticsId?: string;
-  // Steadfast Courier API Configuration
-  steadfastApiKey?: string;
-  steadfastSecretKey?: string;
-  steadfastAutoBook?: boolean;
-  steadfastTestMode?: boolean;
 }
 
 export interface Review {

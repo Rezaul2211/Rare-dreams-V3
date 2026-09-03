@@ -9,7 +9,7 @@ import { useStoreConfigStore } from '../store/useStoreConfigStore';
 import { trackInitiateCheckout, trackPurchase } from '../lib/pixel';
 import { requestLocationAddress } from '../lib/geolocation';
 import { requestPushNotificationPermission } from '../lib/pushNotifications';
-import { BD_DISTRICTS, getThanasByDistrict } from '../lib/bdData';
+import { SearchableLocationPicker } from '../components/SearchableLocationPicker';
 import { 
   ShieldCheck, 
   ChevronLeft, 
@@ -77,16 +77,16 @@ export default function Checkout() {
 
   const checkoutItems = getCheckoutItems();
 
-  // Form State
+  // Form State - No default district or thana selected
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
-    district: 'Dhaka',
-    thana: 'Dhanmondi',
+    district: '',
+    thana: '',
     address: '',
     orderNotes: '',
-    deliveryArea: 'inside_dhaka' as 'inside_dhaka' | 'outside_dhaka',
+    deliveryArea: '' as '' | 'inside_dhaka' | 'outside_dhaka',
     paymentMethod: 'cod' as 'cod' | 'bKash' | 'nagad',
   });
 
@@ -97,11 +97,14 @@ export default function Checkout() {
 
   // Selected delivery option based on district
   const selectedDeliveryOption = useMemo(() => {
+    if (!formData.district) {
+      return null;
+    }
     const isInsideDhaka = formData.district.toLowerCase().trim() === 'dhaka';
-    return DELIVERY_OPTIONS.find(opt => opt.id === (isInsideDhaka ? 'inside_dhaka' : 'outside_dhaka')) || DELIVERY_OPTIONS[0];
+    return DELIVERY_OPTIONS.find(opt => opt.id === (isInsideDhaka ? 'inside_dhaka' : 'outside_dhaka')) || DELIVERY_OPTIONS[1];
   }, [formData.district]);
 
-  const shipping = selectedDeliveryOption.cost;
+  const shipping = selectedDeliveryOption ? selectedDeliveryOption.cost : 0;
   const total = subtotal + shipping;
 
   // Track InitiateCheckout on page entry
@@ -114,32 +117,24 @@ export default function Checkout() {
     }
   }, []);
 
-  // District thana list
-  const currentDistrictThanas = useMemo(() => {
-    return getThanasByDistrict(formData.district);
-  }, [formData.district]);
-
-  // Handle District Change
-  const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newDistrict = e.target.value;
-    const isInsideDhaka = newDistrict.toLowerCase().trim() === 'dhaka';
-    const thanasList = getThanasByDistrict(newDistrict);
-    const defaultThana = thanasList.length > 0 ? thanasList[0].nameEn : '';
-
+  // Handle District Change from SearchableLocationPicker
+  const handleDistrictChange = (districtEn: string, districtBn: string, isDhaka: boolean) => {
     setFormData(prev => ({
       ...prev,
-      district: newDistrict,
-      thana: defaultThana,
-      deliveryArea: isInsideDhaka ? 'inside_dhaka' : 'outside_dhaka',
+      district: districtEn,
+      thana: '', // Reset thana when district changes
+      deliveryArea: isDhaka ? 'inside_dhaka' : 'outside_dhaka',
     }));
+    setErrorMessage(null);
   };
 
-  // Handle Thana Change
-  const handleThanaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  // Handle Thana Change from SearchableLocationPicker
+  const handleThanaChange = (thanaEn: string, thanaBn: string) => {
     setFormData(prev => ({
       ...prev,
-      thana: e.target.value
+      thana: thanaEn,
     }));
+    setErrorMessage(null);
   };
 
   // Handle Generic Input Change
@@ -199,6 +194,11 @@ export default function Checkout() {
 
     if (!formData.district.trim()) {
       setErrorMessage('অনুগ্রহ করে আপনার জেলা নির্বাচন করুন।');
+      return false;
+    }
+
+    if (!formData.thana.trim()) {
+      setErrorMessage('অনুগ্রহ করে আপনার থানা বা উপজেলা নির্বাচন করুন।');
       return false;
     }
 
@@ -277,8 +277,8 @@ export default function Checkout() {
         address: formData.address.trim(),
         email: formData.email.trim() || '',
         orderNotes: formData.orderNotes.trim() || '',
-        deliveryArea: selectedDeliveryOption.labelEn,
-        deliveryAreaBn: selectedDeliveryOption.labelBn,
+        deliveryArea: selectedDeliveryOption ? selectedDeliveryOption.labelEn : (formData.district.toLowerCase() === 'dhaka' ? 'Inside Dhaka' : 'Outside Dhaka'),
+        deliveryAreaBn: selectedDeliveryOption ? selectedDeliveryOption.labelBn : (formData.district.toLowerCase() === 'dhaka' ? 'ঢাকার ভিতরে' : 'ঢাকার বাহিরে'),
         deliveryCost: shipping,
         city: `${formData.thana ? formData.thana + ', ' : ''}${formData.district}`,
         products: sanitizedProducts,
@@ -644,47 +644,19 @@ export default function Checkout() {
               />
             </div>
 
-            {/* Field 5: District & Thana Side-by-Side strictly in 2 columns */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              
-              {/* Select District Dropdown */}
-              <div className="relative">
-                <select
-                  value={formData.district}
-                  onChange={handleDistrictChange}
-                  className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-2.5 sm:px-3.5 py-3.5 pr-7 sm:pr-9 outline-none rounded-xl text-xs sm:text-sm font-semibold text-neutral-900 appearance-none cursor-pointer focus:ring-2 focus:ring-orange-500/10 transition-all truncate"
-                >
-                  <option value="" disabled>জেলা নির্বাচন করুন</option>
-                  {BD_DISTRICTS.map((dist) => (
-                    <option key={dist.nameEn} value={dist.nameEn}>
-                      {dist.nameBn} ({dist.nameEn}) {dist.isDhaka ? '— ৳৮০' : '— ৳১২০'}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-neutral-500">
-                  <ChevronDown size={15} />
-                </div>
-              </div>
-
-              {/* Select Thana Dropdown */}
-              <div className="relative">
-                <select
-                  value={formData.thana}
-                  onChange={handleThanaChange}
-                  className="w-full bg-white border border-neutral-300 focus:border-orange-500 px-2.5 sm:px-3.5 py-3.5 pr-7 sm:pr-9 outline-none rounded-xl text-xs sm:text-sm font-semibold text-neutral-900 appearance-none cursor-pointer focus:ring-2 focus:ring-orange-500/10 transition-all truncate"
-                >
-                  <option value="" disabled>থানা / উপজেলা নির্বাচন</option>
-                  {currentDistrictThanas.map((thana) => (
-                    <option key={thana.nameEn} value={thana.nameEn}>
-                      {thana.nameBn ? `${thana.nameBn} (${thana.nameEn})` : thana.nameEn}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-neutral-500">
-                  <ChevronDown size={15} />
-                </div>
-              </div>
-
+            {/* Field 5: Searchable District & Thana Selector Side-by-Side with Instant Live Search */}
+            <div className="space-y-1 pt-1">
+              <label className="text-xs font-bold text-neutral-700 flex items-center justify-between">
+                <span>জেলা ও থানা / উপজেলা নির্বাচন করুন *</span>
+                <span className="text-[10px] text-neutral-400 font-normal">ক্লিক করে সার্চ করুন</span>
+              </label>
+              <SearchableLocationPicker
+                selectedDistrict={formData.district}
+                selectedThana={formData.thana}
+                onDistrictChange={handleDistrictChange}
+                onThanaChange={handleThanaChange}
+                error={errorMessage}
+              />
             </div>
 
             {/* Field 6: Order Notes (Optional) */}
@@ -719,11 +691,13 @@ export default function Checkout() {
               <div className="flex items-center gap-2 text-neutral-700">
                 <Truck size={16} className="text-orange-600 shrink-0" />
                 <span>
-                  ডেলিভারি চার্জ ({selectedDeliveryOption.labelBn}):
+                  {selectedDeliveryOption 
+                    ? `ডেলিভারি চার্জ (${selectedDeliveryOption.labelBn}):` 
+                    : 'ডেলিভারি চার্জ (জেলা নির্বাচন করুন):'}
                 </span>
               </div>
               <span className="font-black text-neutral-900 text-sm font-mono">
-                ৳{shipping}
+                {selectedDeliveryOption ? `৳${shipping}` : '৳০'}
               </span>
             </div>
 

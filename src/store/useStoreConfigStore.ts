@@ -28,10 +28,6 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   facebookPixelId: '',
   facebookPageId: '',
   googleAnalyticsId: '',
-  steadfastApiKey: '',
-  steadfastSecretKey: '',
-  steadfastAutoBook: false,
-  steadfastTestMode: false,
 };
 
 interface StoreConfigState {
