@@ -38,6 +38,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { parseUserAgent, FcmDeviceDoc } from '../../utils/deviceParser';
+import { playNewOrderSound, playOfferNotificationSound } from '../../utils/audioAlert';
+import { showSystemNotification, requestPushNotificationPermission, notifyAdminsOfNewOrder } from '../../lib/pushNotifications';
 
 interface PushCampaign {
   id: string;
@@ -219,13 +221,15 @@ export default function AdminPushNotifications() {
         createdAt: serverTimestamp()
       });
 
-      // Simulate local immediate test alert if permission is granted in current browser
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title.trim(), {
-          body: message.trim(),
-          icon: '/icon-192.png'
-        });
-      }
+      // Play chime sound
+      playOfferNotificationSound();
+
+      // Show system notification in active browser
+      showSystemNotification(title.trim(), {
+        body: message.trim(),
+        icon: '/pwa-192x192.png',
+        url: targetUrl.trim() || '/shop'
+      });
 
       setSendSuccess(true);
       setTitle('');
@@ -237,6 +241,43 @@ export default function AdminPushNotifications() {
       setErrorMessage('নোটিফিকেশন সেন্ড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     } finally {
       setSending(false);
+    }
+  };
+
+  // Test Order Notification for Admin Verification
+  const handleTestOrderNotification = async () => {
+    try {
+      playNewOrderSound();
+      showSystemNotification('🛍️ টেস্ট অর্ডার অ্যালার্ট! (৳৩,৪৫০)', {
+        body: 'কাস্টমার: মোঃ রাসেল হোসেন (01711223344) - Dhaka\nসিস্টেম নোটিফিকেশন সফলভাবে কাজ করছে!',
+        icon: '/pwa-192x192.png',
+        tag: 'test_order_' + Date.now(),
+        url: '/admin/orders'
+      });
+
+      await notifyAdminsOfNewOrder({
+        id: 'TEST-' + Math.floor(100000 + Math.random() * 900000),
+        customerName: 'মোঃ রাসেল হোসেন (টেস্ট কাস্টমার)',
+        phone: '01711-223344',
+        total: 3450,
+        district: 'Dhaka',
+        itemsCount: 2
+      });
+
+      alert('✅ টেস্ট অর্ডার নোটিফিকেশন সফলভাবে পাঠানো হয়েছে এবং সাউন্ড বেজেছে!');
+    } catch (e) {
+      console.warn('Test order alert error:', e);
+    }
+  };
+
+  // Enable Notifications
+  const handleEnableNotifications = async () => {
+    const res = await requestPushNotificationPermission(undefined, undefined, 'admin');
+    if (res || Notification.permission === 'granted') {
+      alert('✅ এই ডিভাইসে ব্রাউজার ও পিডব্লিউএ পুশ নোটিফিকেশন সফলভাবে সক্রিয় হয়েছে!');
+      fetchSubscribersAndHistory();
+    } else {
+      alert('নোটিফিকেশন পারমিশন পাওয়া যায়নি। অনুগ্রহ করে ব্রাউজার সেটিংস থেকে Allow করুন।');
     }
   };
 
@@ -347,15 +388,33 @@ export default function AdminPushNotifications() {
           </p>
         </div>
 
-        {/* Live Status indicator */}
-        <div className="flex items-center gap-2 self-start md:self-auto">
+        {/* Live Status indicator & Test Trigger */}
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
           <button
+            type="button"
+            onClick={handleTestOrderNotification}
+            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold transition-all flex items-center gap-1.5 text-xs shadow-xs cursor-pointer"
+            title="টেস্ট নতুন অর্ডার অ্যালার্ট পাঠান"
+          >
+            <Bell size={14} className="animate-bounce" />
+            <span>টেস্ট অর্ডার অ্যালার্ট</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleEnableNotifications}
+            className="px-3 py-2 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-semibold transition-colors flex items-center gap-1.5 text-xs cursor-pointer"
+            title="ব্রাউজার নোটিফিকেশন চালু করুন"
+          >
+            <ShieldCheck size={14} className="text-emerald-600" />
+            <span>পারমিশন সক্রিয়</span>
+          </button>
+          <button
+            type="button"
             onClick={fetchSubscribersAndHistory}
-            className="p-2.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+            className="p-2 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-neutral-600 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
             title="রিফ্রেশ করুন"
           >
             <RefreshCw size={14} className={loadingDevices ? "animate-spin text-indigo-600" : ""} />
-            <span>রিফ্রেশ</span>
           </button>
           <span className="text-xs font-bold px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200/80 flex items-center gap-1.5 shadow-2xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>

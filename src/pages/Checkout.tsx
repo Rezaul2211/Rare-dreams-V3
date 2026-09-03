@@ -8,7 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useStoreConfigStore } from '../store/useStoreConfigStore';
 import { trackInitiateCheckout, trackPurchase } from '../lib/pixel';
 import { requestLocationAddress } from '../lib/geolocation';
-import { requestPushNotificationPermission } from '../lib/pushNotifications';
+import { requestPushNotificationPermission, notifyAdminsOfNewOrder } from '../lib/pushNotifications';
 import { SearchableLocationPicker } from '../components/SearchableLocationPicker';
 import { 
   ShieldCheck, 
@@ -299,6 +299,16 @@ export default function Checkout() {
         ...orderData,
         createdAt: serverTimestamp(),
       });
+
+      // Dispatch real-time notification alert to admins
+      notifyAdminsOfNewOrder({
+        id: orderId,
+        customerName: formData.name.trim(),
+        phone: cleanPhone,
+        total: total,
+        district: formData.district,
+        itemsCount: sanitizedProducts.reduce((acc, item) => acc + item.quantity, 0),
+      }).catch((e) => console.warn('Admin notification dispatch error:', e));
 
       setOrderProgressStep(3);
       await new Promise(r => setTimeout(r, 700));

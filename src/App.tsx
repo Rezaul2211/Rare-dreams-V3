@@ -16,6 +16,8 @@ import { useAuthStore } from './store/useAuthStore';
 import { useStoreConfigStore } from './store/useStoreConfigStore';
 import { seedProductsIfEmpty } from './lib/seed';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import AdminNotificationListener from './components/AdminNotificationListener';
+import CustomerNotificationListener from './components/CustomerNotificationListener';
 
 // Lazy loaded routes with automatic retry to prevent dynamic import fetch errors
 const Shop = lazyWithRetry(() => import('./pages/Shop'));
@@ -113,6 +115,8 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <ScrollToTop />
+        <AdminNotificationListener />
+        <CustomerNotificationListener />
         <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<Layout />}>

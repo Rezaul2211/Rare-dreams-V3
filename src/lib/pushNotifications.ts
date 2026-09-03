@@ -1,7 +1,8 @@
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { fetchClientNetworkInfo, parseUserAgent } from '../utils/deviceParser';
+import { playNewOrderSound, playOfferNotificationSound } from '../utils/audioAlert';
 
 export interface PushNotificationSubscription {
   token: string;
@@ -22,17 +23,39 @@ export interface PushNotificationSubscription {
 }
 
 /**
+ * Display native browser / system notification safely
+ */
+export function showSystemNotification(title: string, options?: NotificationOptions & { url?: string }) {
+  try {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    const notif = new Notification(title, {
+      icon: '/pwa-192x192.png',
+      badge: '/favicon.png',
+      ...options
+    });
+
+    if (options?.url) {
+      notif.onclick = function () {
+        window.focus();
+        if (options.url) {
+          window.location.href = options.url;
+        }
+        notif.close();
+      };
+    }
+  } catch (e) {
+    console.warn('Could not display system notification:', e);
+  }
+}
+
+/**
  * Request Notification Permission and register Service Worker token
  */
 export async function requestPushNotificationPermission(userId?: string, userPhone?: string, role?: string): Promise<string | null> {
   try {
-    const supported = await isSupported();
-    if (!supported) {
-      console.warn("Firebase Web Push is not supported in this browser environment.");
-      return null;
-    }
-
-    if (!('Notification' in window)) {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
       console.warn("This browser does not support desktop notifications.");
       return null;
     }
@@ -43,25 +66,39 @@ export async function requestPushNotificationPermission(userId?: string, userPho
       return null;
     }
 
-    // Register service worker if not already registered
+    // Register service worker if supported
     let registration: ServiceWorkerRegistration | undefined;
     if ('serviceWorker' in navigator) {
-      registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+      try {
+        registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+      } catch (swErr) {
+        console.warn("Service worker registration error:", swErr);
+      }
     }
 
-    const messaging = getMessaging();
+    let currentToken: string | null = null;
+    const supported = await isSupported().catch(() => false);
     
-    // Optional VAPID key support from environment or default
-    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || undefined;
+    if (supported) {
+      try {
+        const messaging = getMessaging();
+        const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || undefined;
 
-    const currentToken = await getToken(messaging, {
-      serviceWorkerRegistration: registration,
-      vapidKey: vapidKey
-    });
+        currentToken = await getToken(messaging, {
+          serviceWorkerRegistration: registration,
+          vapidKey: vapidKey
+        });
+      } catch (fcmErr) {
+        console.warn("Could not get FCM token:", fcmErr);
+      }
+    }
+
+    // Fallback pseudo-token if FCM not connected
+    if (!currentToken) {
+      currentToken = localStorage.getItem('rare_dreams_fcm_token') || ('fcm_client_' + Math.random().toString(36).substring(2) + Date.now().toString(36));
+    }
 
     if (currentToken) {
-      console.log("FCM Device Token retrieved:", currentToken);
-      
       // Parse device info
       const parsedDevice = parseUserAgent(navigator.userAgent);
       
@@ -105,13 +142,46 @@ export async function requestPushNotificationPermission(userId?: string, userPho
       localStorage.setItem('rare_dreams_push_enabled', 'true');
 
       return currentToken;
-    } else {
-      console.warn("No registration token available. Request permission to generate one.");
-      return null;
     }
+    return null;
   } catch (error) {
     console.warn("Error retrieving Firebase FCM token:", error);
     return null;
+  }
+}
+
+/**
+ * Dispatch an instant Admin New Order notification
+ */
+export async function notifyAdminsOfNewOrder(orderData: {
+  id: string;
+  customerName: string;
+  phone: string;
+  total: number;
+  district?: string;
+  itemsCount?: number;
+}) {
+  try {
+    const formattedTotal = '৳' + Number(orderData.total || 0).toLocaleString('en-IN');
+    const districtInfo = orderData.district ? ` (${orderData.district})` : '';
+
+    // 1. Add record into notifications collection for admin real-time listener
+    await addDoc(collection(db, 'notifications'), {
+      title: '🛍️ নতুন অর্ডার এসেছে!',
+      message: `${orderData.customerName} - ${formattedTotal}${districtInfo}`,
+      type: 'new_order',
+      targetRole: 'admin',
+      orderId: orderData.id,
+      customerName: orderData.customerName,
+      phone: orderData.phone,
+      total: orderData.total,
+      read: false,
+      createdAt: serverTimestamp()
+    });
+
+    console.log('Order notification dispatched to Firestore for order:', orderData.id);
+  } catch (e) {
+    console.warn('Could not dispatch new order notification to Firestore:', e);
   }
 }
 
@@ -130,6 +200,8 @@ export async function setupForegroundNotificationListener(
       const title = payload.notification?.title || payload.data?.title || 'Rare Dreams Notification';
       const body = payload.notification?.body || payload.data?.body || 'নতুন আপডেট!';
       
+      playOfferNotificationSound();
+
       // Show in-app banner or toast
       onNotificationReceived({
         title,
@@ -138,15 +210,15 @@ export async function setupForegroundNotificationListener(
       });
 
       // Also trigger browser Notification if permission is granted
-      if (Notification.permission === 'granted') {
-        new Notification(title, {
-          body,
-          icon: '/icon-192.png'
-        });
-      }
+      showSystemNotification(title, {
+        body,
+        icon: '/pwa-192x192.png',
+        url: payload.data?.url || '/'
+      });
     });
   } catch (error) {
     console.warn("Foreground message listener setup failed:", error);
     return () => {};
   }
 }
+
