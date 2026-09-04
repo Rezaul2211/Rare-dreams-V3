@@ -300,15 +300,8 @@ export default function Checkout() {
         createdAt: serverTimestamp(),
       });
 
-      // Dispatch real-time notification alert to admins
-      notifyAdminsOfNewOrder({
-        id: orderId,
-        customerName: formData.name.trim(),
-        phone: cleanPhone,
-        total: total,
-        district: formData.district,
-        itemsCount: sanitizedProducts.reduce((acc, item) => acc + item.quantity, 0),
-      }).catch((e) => console.warn('Admin notification dispatch error:', e));
+      // Dispatch real-time notification alert to admins - MOVED TO BACKEND CLOUD FUNCTION
+      // notifyAdminsOfNewOrder(...) is removed to adhere to authoritative backend trigger
 
       setOrderProgressStep(3);
       await new Promise(r => setTimeout(r, 700));

@@ -155,16 +155,8 @@ export default function PaymentGateway() {
         createdAt: serverTimestamp(),
       });
 
-      // Dispatch instant push notification alert to admins
-      notifyAdminsOfNewOrder({
-        id: orderId,
-        customerName: formData.name.trim(),
-        phone: cleanPhone,
-        total: total,
-        district: formData.district,
-        itemsCount: sanitizedProducts.reduce((acc, item) => acc + item.quantity, 0),
-      }).catch((e) => console.warn('Admin notification dispatch error in PaymentGateway:', e));
-
+      // Dispatch instant push notification alert to admins - MOVED TO BACKEND CLOUD FUNCTION
+      
       setOrderProgressStep(3);
       await new Promise(r => setTimeout(r, 700));
 
