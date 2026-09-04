@@ -67,9 +67,9 @@ export default function App() {
 
   // Dynamically initialize Facebook Pixel when configured
   useEffect(() => {
-    if (config?.facebookPixelId && typeof window !== 'undefined') {
-      const fbId = config.facebookPixelId.trim();
-      if (fbId && !(window as any)._fbq_initialized) {
+    const fbId = (config?.facebookPixelId || '1502286171625978').trim();
+    if (fbId && typeof window !== 'undefined') {
+      if (!(window as any)._fbq_initialized) {
         (window as any)._fbq_initialized = true;
         try {
           const win = window as any;

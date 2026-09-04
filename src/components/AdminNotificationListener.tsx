@@ -129,8 +129,11 @@ export const AdminNotificationListener: React.FC = () => {
           }
         });
       },
-      (error) => {
-        console.warn('Orders real-time listener error:', error);
+      (error: any) => {
+        if (error?.message?.includes('Quota') || error?.code === 'resource-exhausted') {
+          return;
+        }
+        console.warn('Orders real-time listener warning:', error);
       }
     );
 

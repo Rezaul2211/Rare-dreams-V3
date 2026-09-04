@@ -30,7 +30,7 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   googleSiteVerification: '',
   canonicalDomain: 'https://raredreams.com.bd',
   ogImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop',
-  facebookPixelId: '',
+  facebookPixelId: '1502286171625978',
   facebookPageId: '',
   googleAnalyticsId: '',
 };
@@ -78,7 +78,11 @@ export const useStoreConfigStore = create<StoreConfigState>((set, get) => ({
           set({ config: DEFAULT_STORE_CONFIG, loading: false });
         }
       }, (error) => {
-        console.error("Firestore storeConfig listener error:", error);
+        if (error?.message?.includes('Quota') || (error as any)?.code === 'resource-exhausted') {
+          console.warn("Firestore quota limit reached for storeConfig, fallback to cached settings.");
+        } else {
+          console.warn("Firestore storeConfig listener warning:", error);
+        }
         set({ loading: false });
       });
     } catch (err) {

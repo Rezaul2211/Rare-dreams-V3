@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, getDocs, limit, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, limit, query, orderBy, onSnapshot, getCountFromServer } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuthStore } from '../../store/useAuthStore';
 import { 
@@ -28,101 +28,189 @@ import {
   ArrowRight,
   TrendingDown,
   Layers,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    totalSales: 0,
-    totalCustomers: 0,
-    totalProducts: 0,
+  const [stats, setStats] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cached_dashboard_stats');
+      if (cached) {
+        const d = JSON.parse(cached);
+        return {
+          totalOrders: d.totalOrders || 0,
+          totalSales: d.totalSales || 0,
+          totalCustomers: d.totalCustomers || 0,
+          totalProducts: d.totalProducts || 0,
+        };
+      }
+    } catch (e) {}
+    return {
+      totalOrders: 0,
+      totalSales: 0,
+      totalCustomers: 0,
+      totalProducts: 0,
+    };
   });
 
-  const [statusCounts, setStatusCounts] = useState({ 
-    pending: 0, 
-    processing: 0, 
-    shipped: 0, 
-    delivered: 0, 
-    cancelled: 0,
-    total: 0 
+  const [statusCounts, setStatusCounts] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cached_dashboard_stats');
+      if (cached) {
+        const d = JSON.parse(cached);
+        if (d.statusCounts) return d.statusCounts;
+      }
+    } catch (e) {}
+    return { 
+      pending: 0, 
+      processing: 0, 
+      shipped: 0, 
+      delivered: 0, 
+      cancelled: 0,
+      total: 0 
+    };
   });
 
-  const [allOrdersList, setAllOrdersList] = useState<any[]>([]);
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [allOrdersList, setAllOrdersList] = useState<any[]>(() => {
+    try {
+      const cached = localStorage.getItem('cached_admin_orders');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [recentOrders, setRecentOrders] = useState<any[]>(() => {
+    try {
+      const cached = localStorage.getItem('cached_admin_orders');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed.slice(0, 5);
+      }
+    } catch (e) {}
+    return [];
+  });
   const [allProductsList, setAllProductsList] = useState<any[]>([]);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        let productCount = 0;
-        let customerCount = 0;
-        let orderCount = 0;
-        let totalSalesVal = 0;
-        let pCount = 0, prCount = 0, sCount = 0, dCount = 0, cCount = 0;
-        let ordersData: any[] = [];
+    let unsubOrders: (() => void) | null = null;
 
-        // Parallel fetch for lightning-fast dashboard load
-        const [productsRes, usersRes, ordersRes] = await Promise.allSettled([
-          getDocs(collection(db, 'products')),
-          getDocs(collection(db, 'users')),
-          getDocs(query(collection(db, 'orders'), limit(300)))
+    // Fast static stats fetch for products and customers using server-side aggregation (only 1 read each!)
+    const fetchStaticStats = async () => {
+      try {
+        const [productsRes, usersRes] = await Promise.allSettled([
+          getCountFromServer(collection(db, 'products')),
+          getCountFromServer(collection(db, 'users'))
         ]);
 
+        let pCount = 0;
+        let cCount = 0;
+
         if (productsRes.status === 'fulfilled') {
-          productCount = productsRes.value.size;
-          const prods = productsRes.value.docs.map(d => ({ id: d.id, ...d.data() }));
-          setAllProductsList(prods);
+          pCount = productsRes.value.data().count;
         }
 
         if (usersRes.status === 'fulfilled') {
-          customerCount = usersRes.value.size;
+          cCount = usersRes.value.data().count;
         }
 
-        if (ordersRes.status === 'fulfilled') {
-          orderCount = ordersRes.value.size;
-          ordersRes.value.forEach((doc) => {
-            const data = doc.data();
-            const fullOrder = { id: doc.id, ...data };
-            ordersData.push(fullOrder);
-
-            const amt = Number(data.totalAmount || data.total || data.subtotal || 0);
-            totalSalesVal += amt;
-            
-            const status = (data.status || 'pending').toLowerCase();
-            if (status === 'pending') pCount++;
-            else if (status === 'processing') prCount++;
-            else if (status === 'shipped') sCount++;
-            else if (status === 'delivered') dCount++;
-            else if (status === 'cancelled') cCount++;
-          });
-
-          setStatusCounts({ 
-            pending: pCount, 
-            processing: prCount, 
-            shipped: sCount, 
-            delivered: dCount, 
-            cancelled: cCount,
-            total: orderCount 
-          });
-          setAllOrdersList(ordersData);
-          setRecentOrders(ordersData.slice(0, 5));
-        }
-
-        setStats({
-          totalOrders: orderCount,
-          totalSales: totalSalesVal,
-          totalCustomers: customerCount,
-          totalProducts: productCount
-        });
+        setStats(prev => ({
+          ...prev,
+          totalProducts: pCount || prev.totalProducts,
+          totalCustomers: cCount || prev.totalCustomers
+        }));
       } catch (err) {
-        console.error("Dashboard fetch error", err);
+        console.warn("Dashboard static stats aggregation error:", err);
       }
     };
 
-    fetchDashboardData();
+    fetchStaticStats();
+
+    // Real-Time Orders Listener across all devices
+    const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
+
+    const handleSnapshot = (snapshot: any) => {
+      setQuotaError(null);
+      let orderCount = snapshot.size;
+      let totalSalesVal = 0;
+      let pCount = 0, prCount = 0, sCount = 0, dCount = 0, cCount = 0;
+      let ordersData: any[] = [];
+
+      snapshot.forEach((docSnap: any) => {
+        const data = docSnap.data();
+        const fullOrder = { id: docSnap.id, ...data };
+        ordersData.push(fullOrder);
+
+        const amt = Number(data.totalAmount || data.total || data.subtotal || 0);
+        totalSalesVal += amt;
+
+        const status = (data.status || 'pending').toLowerCase();
+        if (status === 'pending') pCount++;
+        else if (status === 'processing') prCount++;
+        else if (status === 'shipped') sCount++;
+        else if (status === 'delivered') dCount++;
+        else if (status === 'cancelled') cCount++;
+      });
+
+      setStatusCounts({
+        pending: pCount,
+        processing: prCount,
+        shipped: sCount,
+        delivered: dCount,
+        cancelled: cCount,
+        total: orderCount
+      });
+      setAllOrdersList(ordersData);
+      setRecentOrders(ordersData.slice(0, 5));
+      setStats(prev => ({
+        ...prev,
+        totalOrders: orderCount,
+        totalSales: totalSalesVal
+      }));
+
+      try {
+        localStorage.setItem('cached_dashboard_stats', JSON.stringify({
+          statusCounts: {
+            pending: pCount,
+            processing: prCount,
+            shipped: sCount,
+            delivered: dCount,
+            cancelled: cCount,
+            total: orderCount
+          },
+          totalOrders: orderCount,
+          totalSales: totalSalesVal,
+        }));
+        localStorage.setItem('cached_admin_orders', JSON.stringify(ordersData));
+      } catch (e) {}
+    };
+
+    const handleError = (err: any) => {
+      console.error("Real-time dashboard orders error:", err);
+      if (err.message?.includes('Quota') || err.code === 'resource-exhausted') {
+        setQuotaError("Firebase Free Tier Quota Exceeded. Live order stats may be restricted.");
+      } else {
+        // Fallback fetch without orderBy in case index missing
+        getDocs(query(collection(db, 'orders'), limit(150))).then(handleSnapshot).catch(e => {
+          console.error("Fallback order fetch failed:", e);
+        });
+      }
+    };
+
+    try {
+      unsubOrders = onSnapshot(qOrders, handleSnapshot, handleError);
+    } catch (err) {
+      handleError(err);
+    }
+
+    return () => {
+      if (unsubOrders) unsubOrders();
+    };
   }, []);
 
   const cleanAdminName = (user?.displayName || 'Rezaul Karim')
@@ -251,6 +339,16 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {quotaError && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-start gap-3 w-full">
+          <AlertCircle className="text-red-600 mt-0.5 shrink-0" size={18} />
+          <div>
+            <h3 className="text-sm font-bold text-red-900">Database Connection Error</h3>
+            <p className="text-xs text-red-700 mt-1">{quotaError}</p>
+          </div>
+        </div>
+      )}
 
       {/* 2. ADMIN QUICK ACTIONS HUB (All Core Management Functions Cleanly Integrated) */}
       <div className="space-y-2.5 sm:space-y-3 w-full">

@@ -68,8 +68,11 @@ export const CustomerNotificationListener: React.FC = () => {
           }
         });
       },
-      (error) => {
-        console.warn('Campaign listener error:', error);
+      (error: any) => {
+        if (error?.message?.includes('Quota') || error?.code === 'resource-exhausted') {
+          return;
+        }
+        console.warn('Campaign listener warning:', error);
       }
     );
 

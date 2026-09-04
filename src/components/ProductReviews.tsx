@@ -8,7 +8,8 @@ import {
   updateDoc, 
   doc, 
   serverTimestamp, 
-  increment 
+  increment,
+  limit
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuthStore } from '../store/useAuthStore';
@@ -199,7 +200,7 @@ export const ProductReviews: React.FC<ProductReviewsProps> = ({
       
       // Fallback: Check if they bought as guest with same email
       if (!found && user.email) {
-        const snap2 = await getDocs(collection(db, 'orders'));
+        const snap2 = await getDocs(query(ordersRef, where('email', '==', user.email.trim().toLowerCase()), limit(10)));
         snap2.forEach((docSnap) => {
            const o = docSnap.data();
            if (o.email && o.email.toLowerCase() === user.email.toLowerCase()) {

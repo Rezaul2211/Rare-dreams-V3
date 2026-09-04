@@ -243,8 +243,13 @@ export async function seedProductsIfEmpty() {
     await batch.commit();
     localStorage.setItem('products_seeded_v1', 'true');
     console.log('Seeding complete.');
-  } catch (error) {
-    console.error('Error seeding products:', error);
+  } catch (error: any) {
+    if (error?.message?.includes('Quota') || error?.code === 'resource-exhausted') {
+      console.warn('Firestore quota limit reached during product seeding check. Fallback to existing products/cache.');
+      localStorage.setItem('products_seeded_v1', 'true');
+    } else {
+      console.warn('Could not seed products:', error);
+    }
   } finally {
     isSeeding = false;
   }

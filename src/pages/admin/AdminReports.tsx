@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { 
   BarChart3, 
@@ -18,7 +18,8 @@ import {
   Filter,
   CreditCard,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  AlertCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -50,25 +51,25 @@ interface OrderRecord {
 export default function AdminReports() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<'all' | 'month' | 'week' | 'today'>('all');
 
   const fetchReportsData = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const q = query(collection(db, 'orders'));
+      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(500));
       const snap = await getDocs(q);
       const fetched: OrderRecord[] = [];
       snap.forEach((doc) => {
         fetched.push({ id: doc.id, ...doc.data() } as OrderRecord);
       });
-      fetched.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
-        const timeB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
-        return timeB - timeA;
-      });
       setOrders(fetched);
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Could not fetch reports data:", e);
+      if (e.message?.includes('Quota') || e.code === 'resource-exhausted') {
+        setError("Firebase Free Tier Quota Exceeded. Some data could not be loaded.");
+      }
     } finally {
       setLoading(false);
     }
@@ -280,6 +281,15 @@ export default function AdminReports() {
           </button>
         </div>
       </div>
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-start gap-3 w-full">
+          <AlertCircle className="text-red-600 mt-0.5 shrink-0" size={18} />
+          <div>
+            <h3 className="text-sm font-bold text-red-900">Database Connection Error</h3>
+            <p className="text-xs text-red-700 mt-1">{error}</p>
+          </div>
+        </div>
+      )}
 
       {/* 1. Primary Metrics Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

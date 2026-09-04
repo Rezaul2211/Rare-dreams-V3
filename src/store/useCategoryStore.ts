@@ -106,7 +106,11 @@ export const useCategoryStore = create<CategoryState>((set, get) => {
             safeLocalStorageRemoveItem('rare_dreams_categories');
           }
         }, (error) => {
-          console.error("Firestore categories listener error:", error);
+          if (error?.message?.includes('Quota') || (error as any)?.code === 'resource-exhausted') {
+            console.warn("Firestore quota limit reached for categories, fallback to cached categories.");
+          } else {
+            console.warn("Firestore categories listener warning:", error);
+          }
           set({ loading: false });
         });
       } catch (err) {

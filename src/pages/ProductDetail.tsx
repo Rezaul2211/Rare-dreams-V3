@@ -193,15 +193,31 @@ export default function ProductDetail() {
     isDragging360.current = false;
   }, []);
 
-  // Extract real uploaded images only (No fake shirt variants)
+  // Extract real uploaded images only (Combining main image, images array, and colorImageMap)
   const displayImages = useMemo(() => {
-    if (product?.images && product.images.length > 0) {
-      return product.images;
+    const list: string[] = [];
+
+    if (product?.image && typeof product.image === 'string' && product.image.trim()) {
+      list.push(product.image.trim());
     }
-    if (product?.image) {
-      return [product.image];
+
+    if (product?.images && Array.isArray(product.images)) {
+      product.images.forEach(img => {
+        if (img && typeof img === 'string' && img.trim() && !list.includes(img.trim())) {
+          list.push(img.trim());
+        }
+      });
     }
-    return [];
+
+    if (product?.colorImageMap && typeof product.colorImageMap === 'object') {
+      Object.values(product.colorImageMap).forEach(imgUrl => {
+        if (imgUrl && typeof imgUrl === 'string' && imgUrl.trim() && !list.includes(imgUrl.trim())) {
+          list.push(imgUrl.trim());
+        }
+      });
+    }
+
+    return list;
   }, [product]);
 
   const activeImage = displayImages[selectedImageIndex] || displayImages[0] || '';
@@ -517,20 +533,21 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             </div>
           </div>
 
-          {/* Vertical Thumbnail Column (Left Side) - Stacked vertically */}
+          {/* Vertical Thumbnail Column (Left Side) - Multi-Image Album Gallery */}
           {displayImages.length > 1 && (
-            <div className="absolute top-14 left-3 z-20 flex flex-col gap-1.5 max-h-[220px] sm:max-h-[280px] overflow-y-auto no-scrollbar py-1">
+            <div className="absolute top-12 left-2.5 sm:left-3.5 z-30 flex flex-col gap-1.5 max-h-[230px] sm:max-h-[290px] overflow-y-auto no-scrollbar p-1 bg-white/80 backdrop-blur-md rounded-2xl border border-white/90 shadow-md">
               {displayImages.map((img, idx) => (
                 <button
                   key={idx}
                   type="button"
                   onClick={() => handleSelectImage(idx)}
                   className={clsx(
-                    "w-11 h-11 sm:w-13 sm:h-13 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0",
+                    "w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0 relative",
                     selectedImageIndex === idx && !is360Mode
-                      ? "border-2 border-[#5B46E8] ring-2 ring-purple-200 scale-105"
-                      : "border border-neutral-200/90 opacity-80 hover:opacity-100"
+                      ? "border-2 border-[#5B46E8] ring-2 ring-purple-300 scale-105 z-10"
+                      : "border border-neutral-200/90 opacity-75 hover:opacity-100"
                   )}
+                  title={`ছবি ${idx + 1}`}
                 >
                   <img
                     src={img}
@@ -538,6 +555,9 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                     className="w-full h-full object-cover rounded-lg"
                     loading="lazy"
                   />
+                  {selectedImageIndex === idx && !is360Mode && (
+                    <span className="absolute bottom-0.5 right-0.5 w-2 h-2 bg-[#5B46E8] rounded-full ring-1 ring-white" />
+                  )}
                 </button>
               ))}
             </div>
@@ -553,6 +573,35 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             onMouseMove={is360Mode ? handleTouchMove360 : undefined}
             onMouseUp={is360Mode ? handleTouchEnd360 : undefined}
           >
+            {/* Prev/Next Album Navigation Arrows */}
+            {displayImages.length > 1 && !is360Mode && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newIdx = (selectedImageIndex - 1 + displayImages.length) % displayImages.length;
+                    handleSelectImage(newIdx);
+                  }}
+                  className="absolute left-16 sm:left-20 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-9 sm:h-9 bg-white/80 backdrop-blur-md hover:bg-white text-neutral-800 rounded-full shadow-md border border-white flex items-center justify-center cursor-pointer active:scale-95 transition-all"
+                  title="পূর্ববর্তী ছবি"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newIdx = (selectedImageIndex + 1) % displayImages.length;
+                    handleSelectImage(newIdx);
+                  }}
+                  className="absolute right-3.5 sm:right-6 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-9 sm:h-9 bg-white/80 backdrop-blur-md hover:bg-white text-neutral-800 rounded-full shadow-md border border-white flex items-center justify-center cursor-pointer active:scale-95 transition-all"
+                  title="পরবর্তী ছবি"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </>
+            )}
             {/* Ambient Studio Lighting Glow */}
             <div className="absolute w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-radial from-purple-300/35 via-blue-200/20 to-transparent blur-2xl pointer-events-none" />
 
@@ -1078,7 +1127,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
       {typeof document !== 'undefined' && document.body && createPortal(
         <div 
           id="product-mobile-action-bar"
-          className="md:hidden fixed bottom-4 left-4 right-4 z-[995] bg-white border border-neutral-200 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+          className="md:hidden fixed bottom-4 left-4 right-4 z-[9999] bg-white border border-neutral-200/80 rounded-2xl shadow-2xl p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
         >
           <div className="max-w-md mx-auto flex items-center gap-2">
             

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, doc, updateDoc, orderBy, query, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, orderBy, query, addDoc, serverTimestamp, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Order } from '../../types';
 import { useStoreConfigStore } from '../../store/useStoreConfigStore';
@@ -283,8 +283,25 @@ OrderCard.displayName = 'OrderCard';
 
 export default function AdminOrders() {
   const { config } = useStoreConfigStore();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const cached = localStorage.getItem('cached_admin_orders');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cached_admin_orders');
+      return !cached;
+    } catch (e) {
+      return true;
+    }
+  });
+  const [error, setError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [activeTab, setActiveTab] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -351,30 +368,83 @@ export default function AdminOrders() {
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Remove orderBy from query to fetch all orders even if they lack createdAt field
-      const q = query(collection(db, 'orders'));
+      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
       const querySnapshot = await getDocs(q);
-      const ordersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      
-      // Client-side sorting to safely handle documents with or without createdAt
-      ordersData.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
-        const timeB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
+      const ordersData = querySnapshot.docs.map((docSnap: any) => ({ id: docSnap.id, ...docSnap.data() } as Order));
+      ordersData.sort((a: any, b: any) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         return timeB - timeA;
       });
-      
       setOrders(ordersData);
-    } catch (error) {
-      console.error("Error fetching orders", error);
+    } catch (err: any) {
+      console.error("Error manually refreshing orders:", err);
+      if (err.message?.includes('Quota') || err.code === 'resource-exhausted') {
+        setError("Firebase Free Tier Quota Exceeded. Order history may be temporarily restricted.");
+      } else {
+        setError("Failed to fetch orders. Please check your connection.");
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    setLoading(true);
+    setError(null);
+
+    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
+
+    const handleSnapshot = (snapshot: any) => {
+      const ordersData = snapshot.docs.map((docSnap: any) => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      } as Order));
+
+      // Client-side sort to guarantee reverse chronological order
+      ordersData.sort((a: any, b: any) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return timeB - timeA;
+      });
+
+      setOrders(ordersData);
+      try {
+        localStorage.setItem('cached_admin_orders', JSON.stringify(ordersData));
+      } catch (e) {}
+      setLoading(false);
+      setError(null);
+    };
+
+    const handleError = (err: any) => {
+      console.error("Error with real-time orders listener:", err);
+      if (err.message?.includes('Quota') || err.code === 'resource-exhausted') {
+        setError("Firebase Free Tier Quota Exceeded. Order history may be temporarily restricted.");
+      } else {
+        // Fallback fetch if index is missing
+        getDocs(query(collection(db, 'orders'), limit(150)))
+          .then(handleSnapshot)
+          .catch((e) => {
+            console.error("Orders fallback fetch failed:", e);
+            setError("Failed to fetch orders. Please check your connection.");
+          });
+      }
+      setLoading(false);
+    };
+
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onSnapshot(q, handleSnapshot, handleError);
+    } catch (e) {
+      handleError(e);
+    }
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const handleStatusChange = useCallback(async (orderId: string, newStatus: OrderStatus) => {
     setUpdatingId(orderId);
@@ -896,6 +966,16 @@ export default function AdminOrders() {
           <span>Refresh</span>
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-start gap-3">
+          <AlertCircle className="text-red-600 mt-0.5 shrink-0" size={18} />
+          <div>
+            <h3 className="text-sm font-bold text-red-900">Database Connection Error</h3>
+            <p className="text-xs text-red-700 mt-1">{error}</p>
+          </div>
+        </div>
+      )}
 
       {/* Metrics Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full min-w-0">

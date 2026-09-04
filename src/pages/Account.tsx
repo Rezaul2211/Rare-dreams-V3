@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, Link } from 'react-router-dom';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, limit, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
@@ -42,7 +42,8 @@ import {
   ShoppingBasket,
   Globe,
   Bell,
-  BellRing
+  BellRing,
+  AlertCircle
 } from 'lucide-react';
 
 interface ReviewItem {
@@ -80,6 +81,7 @@ export default function Account() {
   const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
   const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
   const [loadingWishlist, setLoadingWishlist] = useState<boolean>(false);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<string | null>(null);
 
   // Form States
@@ -144,7 +146,9 @@ export default function Account() {
         if (user?.uid) {
           const qOrders = query(
             collection(db, 'orders'),
-            where('userId', '==', user.uid)
+            where('userId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(50)
           );
           const ordersSnapshot = await getDocs(qOrders);
           const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
@@ -160,8 +164,11 @@ export default function Account() {
         } catch {
           // Non-critical background stat
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching background stats:", err);
+        if (err.message?.includes('Quota') || err.code === 'resource-exhausted') {
+          setQuotaError("Firebase Free Tier Quota Exceeded. History may be unavailable.");
+        }
       }
     };
 
@@ -440,7 +447,7 @@ export default function Account() {
             </button>
           )}
 
-          {/* Sales History */}
+          {/* Order History */}
           <button
             onClick={() => setActiveModal('orders_All')}
             className="w-full bg-white hover:bg-neutral-50 p-4 rounded-2xl border border-neutral-200/90 shadow-2xs flex items-center justify-between group transition-all text-left"
@@ -450,7 +457,7 @@ export default function Account() {
                 <Receipt size={20} strokeWidth={2} />
               </div>
               <span className="text-base font-bold text-neutral-900">
-                Sales History
+                Order History
               </span>
             </div>
             <ChevronRight size={18} className="text-neutral-400 group-hover:text-black transition-colors" />
@@ -837,7 +844,7 @@ export default function Account() {
                         </div>
                         <div>
                           <h3 className="text-base font-bold text-neutral-900">
-                            {filterStatus === 'All' ? 'Sales History & Orders' : `${filterStatus} Orders`}
+                            {filterStatus === 'All' ? 'Order History' : `${filterStatus} Orders`}
                           </h3>
                           <p className="text-xs text-neutral-400 font-medium">
                             Showing {filteredList.length} record{filteredList.length === 1 ? '' : 's'}
@@ -846,6 +853,14 @@ export default function Account() {
                       </div>
 
                       <div className="space-y-3">
+                        {quotaError && (
+                          <div className="bg-red-50 border border-red-200 p-3 rounded-xl flex items-start gap-2 mb-3">
+                            <AlertCircle className="text-red-600 mt-0.5 shrink-0" size={16} />
+                            <div>
+                              <p className="text-xs text-red-800 font-medium">{quotaError}</p>
+                            </div>
+                          </div>
+                        )}
                         {filteredList.length === 0 ? (
                           <div className="text-center py-10 bg-neutral-50 rounded-2xl border border-dashed border-neutral-200">
                             <ShoppingBasket className="mx-auto text-neutral-300 mb-2" size={36} />
