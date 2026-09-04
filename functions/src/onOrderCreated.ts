@@ -57,7 +57,7 @@ export const onOrderCreated = onDocumentCreated(
 
       console.log(`Found ${tokens.length} admin token(s). Sending FCM pushes...`);
 
-      // 2. Prepare Notification Payload
+      // 2. Prepare Notification Payload with proper webpush configuration
       const message = {
         notification: {
           title: `🛍️ New Order: ৳${totalAmount}`,
@@ -65,8 +65,20 @@ export const onOrderCreated = onDocumentCreated(
         },
         data: {
           orderId: orderId,
-          url: `/admin/orders`,
-          click_action: `/admin/orders`
+          url: `/admin/orders`
+        },
+        webpush: {
+          notification: {
+            icon: '/pwa-192x192.png',
+            badge: '/favicon-32x32.png',
+            vibrate: [350, 120, 350, 120, 350],
+            requireInteraction: true,
+            tag: `order_${orderId}`,
+            renotify: true
+          },
+          fcmOptions: {
+            link: '/admin/orders'
+          }
         },
         tokens: tokens,
       };
@@ -86,7 +98,6 @@ export const onOrderCreated = onDocumentCreated(
                 error?.code === 'messaging/registration-token-not-registered') {
               const failedToken = tokens[idx];
               console.log(`Removing invalid token: ${failedToken}`);
-              // Query to find the doc with this token to delete it
               invalidTokens.push(failedToken);
             }
           }

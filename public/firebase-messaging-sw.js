@@ -12,7 +12,7 @@ self.addEventListener('activate', (event) => {
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-// Active Firebase project configuration for Rare Dreams
+// Active Firebase project configuration
 const firebaseConfig = {
   apiKey: "AIzaSyC7ED5GJQyE1Q5ZH4A-pnMMzpq3KCoNCLg",
   authDomain: "lofty-theme-0nn32.firebaseapp.com",
@@ -26,66 +26,43 @@ try {
   if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
   }
+  
   const messaging = firebase.messaging();
-
+  
+  // Note: Since we send a `notification` payload from the server with `webpush` options,
+  // the Firebase Service Worker automatically displays the notification. 
+  // onBackgroundMessage is ONLY triggered if the payload is DATA-only.
+  // We keep it here just in case a data-only payload is ever sent.
   messaging.onBackgroundMessage((payload) => {
-    console.log('[firebase-messaging-sw.js] Received background message: ', payload);
-    const notificationTitle = payload.notification?.title || payload.data?.title || 'Rare Dreams Notification';
-    const notificationOptions = {
-      body: payload.notification?.body || payload.data?.body || payload.data?.message || 'আপনার নতুন নোটিফিকেশন এসেছে!',
-      icon: payload.notification?.icon || payload.data?.icon || '/pwa-192x192.png',
-      badge: '/favicon-32x32.png',
-      data: {
-        url: payload.data?.url || payload.notification?.click_action || '/admin/orders',
-        orderId: payload.data?.orderId || ''
-      },
-      vibrate: [350, 120, 350, 120, 350],
-      requireInteraction: true,
-      tag: payload.data?.tag || payload.data?.orderId || 'rare_dreams_' + Date.now(),
-      renotify: true
-    };
-
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    console.log('[firebase-messaging-sw.js] Received data-only background message: ', payload);
+    if (!payload.notification) {
+      const notificationTitle = payload.data?.title || 'Rare Dreams Notification';
+      const notificationOptions = {
+        body: payload.data?.body || payload.data?.message || 'আপনার নতুন নোটিফিকেশন এসেছে!',
+        icon: payload.data?.icon || '/pwa-192x192.png',
+        badge: '/favicon-32x32.png',
+        data: {
+          url: payload.data?.url || '/admin/orders',
+          orderId: payload.data?.orderId || ''
+        },
+        vibrate: [350, 120, 350, 120, 350],
+        requireInteraction: true,
+        tag: payload.data?.tag || payload.data?.orderId || 'rare_dreams_' + Date.now(),
+        renotify: true
+      };
+      self.registration.showNotification(notificationTitle, notificationOptions);
+    }
   });
+
 } catch (e) {
   console.warn("FCM Service worker setup note:", e);
 }
 
-// Fallback native web push listener
-self.addEventListener('push', (event) => {
-  if (event.data) {
-    try {
-      const data = event.data.json();
-      const title = data.title || data.notification?.title || data.data?.title || '🛍️ নতুন অর্ডার - Rare Dreams';
-      const options = {
-        body: data.body || data.notification?.body || data.data?.body || data.data?.message || 'একটি নতুন অর্ডার এসেছে!',
-        icon: data.icon || data.notification?.icon || '/pwa-192x192.png',
-        badge: '/favicon-32x32.png',
-        data: { 
-          url: data.url || data.data?.url || (data.targetRole === 'admin' ? '/admin/orders' : '/shop') 
-        },
-        vibrate: [350, 120, 350, 120, 350],
-        requireInteraction: true,
-        tag: data.tag || data.data?.tag || ('rare_dreams_push_' + Date.now()),
-        renotify: true
-      };
-      event.waitUntil(self.registration.showNotification(title, options));
-    } catch {
-      event.waitUntil(
-        self.registration.showNotification('Rare Dreams Update', {
-          body: event.data.text(),
-          icon: '/pwa-192x192.png',
-          badge: '/favicon-32x32.png',
-          vibrate: [300, 100, 300],
-          data: { url: '/admin/orders' }
-        })
-      );
-    }
-  }
-});
-
+// Ensure notification clicks route to the correct app URL
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  // Firebase SDK might handle the link natively via webpush.fcmOptions.link,
+  // but this is a fallback to guarantee our PWA focuses the tab.
   const urlToOpen = event.notification.data?.url || '/admin/orders';
   
   event.waitUntil(
