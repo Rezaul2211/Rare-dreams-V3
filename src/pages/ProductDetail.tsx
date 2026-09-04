@@ -787,7 +787,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
           )}
 
           {/* INLINE PRODUCT ACTIONS */}
-          <div className="space-y-2 pt-2">
+          <div className="hidden md:block space-y-2 pt-2">
             <div className="text-xs sm:text-sm font-bold text-neutral-900">
               পরিমাণ
             </div>
@@ -1078,7 +1078,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
       {typeof document !== 'undefined' && document.body && createPortal(
         <div 
           id="product-mobile-action-bar"
-          className="md:hidden fixed bottom-0 left-0 right-0 z-[995] bg-white border-t border-neutral-200 shadow-[0_-4px_24px_rgba(0,0,0,0.14)] px-3 py-2 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
+          className="md:hidden fixed bottom-4 left-4 right-4 z-[995] bg-white border border-neutral-200 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
         >
           <div className="max-w-md mx-auto flex items-center gap-2">
             

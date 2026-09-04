@@ -242,7 +242,7 @@ const OrderCard = memo(({
           ) : (
             <button
               type="button"
-              onClick={() => onBookCourier(order)}
+              onClick={(e) => { e.stopPropagation(); onBookCourier(order); }}
               className="px-2.5 py-1.5 bg-gradient-to-r from-[#FF6A00] to-[#EE0979] hover:brightness-105 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
               title="Steadfast Courier এ ১-ক্লিকে পার্সেল বুক করুন"
             >
@@ -352,9 +352,18 @@ export default function AdminOrders() {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+      // Remove orderBy from query to fetch all orders even if they lack createdAt field
+      const q = query(collection(db, 'orders'));
       const querySnapshot = await getDocs(q);
       const ordersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      
+      // Client-side sorting to safely handle documents with or without createdAt
+      ordersData.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
+        const timeB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
+        return timeB - timeA;
+      });
+      
       setOrders(ordersData);
     } catch (error) {
       console.error("Error fetching orders", error);
@@ -746,7 +755,7 @@ export default function AdminOrders() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => setBookingOrder(selectedOrder)}
+                  onClick={(e) => { e.stopPropagation(); setBookingOrder(selectedOrder); }}
                   className="inline-flex items-center gap-1.5 text-xs font-black text-white bg-gradient-to-r from-[#FF6A00] to-[#EE0979] hover:brightness-105 active:scale-95 px-3.5 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer"
                 >
                   <Truck size={14} />

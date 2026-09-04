@@ -68,7 +68,7 @@ export default function AdminDashboard() {
         const [productsRes, usersRes, ordersRes] = await Promise.allSettled([
           getDocs(collection(db, 'products')),
           getDocs(collection(db, 'users')),
-          getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150)))
+          getDocs(query(collection(db, 'orders'), limit(300)))
         ]);
 
         if (productsRes.status === 'fulfilled') {

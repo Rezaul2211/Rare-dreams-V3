@@ -55,11 +55,16 @@ export default function AdminReports() {
   const fetchReportsData = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+      const q = query(collection(db, 'orders'));
       const snap = await getDocs(q);
       const fetched: OrderRecord[] = [];
       snap.forEach((doc) => {
         fetched.push({ id: doc.id, ...doc.data() } as OrderRecord);
+      });
+      fetched.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || (typeof a.createdAt === 'number' ? a.createdAt : 0);
+        const timeB = b.createdAt?.toMillis?.() || (typeof b.createdAt === 'number' ? b.createdAt : 0);
+        return timeB - timeA;
       });
       setOrders(fetched);
     } catch (e) {
