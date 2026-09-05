@@ -1,0 +1,6 @@
+/firebase-messaging-sw.js
+  Service-Worker-Allowed: /
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*
+  X-Content-Type-Options: nosniff
