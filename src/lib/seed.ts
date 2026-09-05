@@ -217,40 +217,6 @@ const DUMMY_PRODUCTS = [
 let isSeeding = false;
 
 export async function seedProductsIfEmpty() {
-  if (isSeeding) return;
-  if (localStorage.getItem('products_seeded_v1') === 'true') return;
-
-  isSeeding = true;
-  try {
-    const productsRef = collection(db, 'products');
-    
-    // Quick check if we have products
-    const limitQuery = query(productsRef, limit(1));
-    const limitSnapshot = await getDocs(limitQuery);
-    
-    if (!limitSnapshot.empty) {
-      localStorage.setItem('products_seeded_v1', 'true');
-      isSeeding = false;
-      return; // Already has products, skip.
-    }
-    
-    console.log('Seeding dummy products...');
-    const batch = writeBatch(db);
-    
-    for (const product of DUMMY_PRODUCTS) {
-      batch.set(doc(db, 'products', product.id), product);
-    }
-    await batch.commit();
-    localStorage.setItem('products_seeded_v1', 'true');
-    console.log('Seeding complete.');
-  } catch (error: any) {
-    if (error?.message?.includes('Quota') || error?.code === 'resource-exhausted') {
-      console.warn('Firestore quota limit reached during product seeding check. Fallback to existing products/cache.');
-      localStorage.setItem('products_seeded_v1', 'true');
-    } else {
-      console.warn('Could not seed products:', error);
-    }
-  } finally {
-    isSeeding = false;
-  }
+  // Disabled: The store strictly uses only real user-uploaded products.
+  return;
 }

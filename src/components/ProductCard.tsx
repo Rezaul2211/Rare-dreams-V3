@@ -16,6 +16,20 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
   const favorited = isWishlisted(product.id);
   const discountPct = calculateDiscount(product);
 
+  const cardImage = React.useMemo(() => {
+    if (product.images && Array.isArray(product.images) && product.images.length > 0 && product.images[0]?.trim()) {
+      return product.images[0].trim();
+    }
+    if (product.image && typeof product.image === 'string' && product.image.trim()) {
+      return product.image.trim();
+    }
+    if (product.colorImageMap && typeof product.colorImageMap === 'object') {
+      const first = Object.values(product.colorImageMap).find(v => typeof v === 'string' && (v as string).trim());
+      if (typeof first === 'string') return first.trim();
+    }
+    return '';
+  }, [product]);
+
   const handleWishlistClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -29,10 +43,10 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({ product }) 
         
         {/* Top Image Container with Fixed 4/5 Aspect Ratio */}
         <Link to={`/product/${product.id}`} className="block relative w-full aspect-[4/5] overflow-hidden bg-[#F2F2F6]">
-          {product.images && product.images.length > 0 ? (
+          {cardImage ? (
             <>
               <LazyImage
-                src={product.images[0]}
+                src={cardImage}
                 alt={product.name}
                 className="w-full h-full object-cover object-top group-hover:scale-103 transition-transform duration-300 ease-out"
                 containerClassName="w-full h-full"

@@ -6,7 +6,7 @@ import {
   Image as ImageIcon, Save, Loader2, Sparkles, Upload, Check, RefreshCw, 
   AlertCircle, Phone, MessageCircle, Share2, CreditCard, ShieldCheck, 
   FileText, Plus, Trash2, Search, Globe, ExternalLink, Copy, ArrowLeft,
-  Truck, Key, Eye, EyeOff, CheckCircle2
+  Truck, Key, Eye, EyeOff, CheckCircle2, Download
 } from 'lucide-react';
 import { useStoreConfigStore, DEFAULT_STORE_CONFIG } from '../../store/useStoreConfigStore';
 import { useCategoryStore, CategoryItem } from '../../store/useCategoryStore';
@@ -122,11 +122,46 @@ export default function AdminSettings() {
   const [showSteadfastKeys, setShowSteadfastKeys] = useState(false);
   const [testingSteadfast, setTestingSteadfast] = useState(false);
   const [steadfastTestResult, setSteadfastTestResult] = useState<{ success: boolean; message: string; balance?: number } | null>(null);
+  const [availableLogos, setAvailableLogos] = useState<any[]>([]);
+  const [cachedRecoverableLogo, setCachedRecoverableLogo] = useState<string | null>(null);
 
   const { config, updateConfig } = useStoreConfigStore();
 
   useEffect(() => {
     fetchCategories();
+
+    // 1. Sync from server site-settings API (immune to Firestore quota limits)
+    fetch('/api/site-settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.availableLogos && Array.isArray(data.availableLogos)) {
+          setAvailableLogos(data.availableLogos);
+        }
+        if (data?.logoUrl) {
+          setStoreForm((prev) => (prev.logoUrl ? prev : { ...prev, logoUrl: data.logoUrl }));
+        }
+        if (data?.banners && Array.isArray(data.banners) && data.banners.length > 0) {
+          setBanners((prev) => (prev.length === 0 ? data.banners : prev));
+        }
+      })
+      .catch(() => {});
+
+    // 2. Detect any previously uploaded logo stored in browser cache
+    try {
+      const cached = localStorage.getItem('rare_dreams_custom_logo');
+      if (cached && cached.trim().length > 0) {
+        setCachedRecoverableLogo(cached.trim());
+      } else {
+        const storedConfig = localStorage.getItem('rare_dreams_cached_store_config');
+        if (storedConfig) {
+          const parsed = JSON.parse(storedConfig);
+          if (parsed?.logoUrl && typeof parsed.logoUrl === 'string' && parsed.logoUrl.trim().length > 0) {
+            setCachedRecoverableLogo(parsed.logoUrl.trim());
+          }
+        }
+      }
+    } catch {}
+
     const fetchSettings = async () => {
       try {
         const docRef = doc(db, 'settings', 'homepage');
@@ -149,7 +184,7 @@ export default function AdminSettings() {
           }
         }
       } catch {
-        // Fallback to defaults
+        // Fallback to defaults or server API
       } finally {
         setLoading(false);
       }
@@ -165,7 +200,19 @@ export default function AdminSettings() {
 
   useEffect(() => {
     if (config) {
-      setStoreForm(config);
+      setStoreForm((prev) => {
+        const next = { ...config };
+        // Preserve any custom logo if remote is empty
+        if (!next.logoUrl && prev.logoUrl) {
+          next.logoUrl = prev.logoUrl;
+        } else if (!next.logoUrl) {
+          try {
+            const cachedLogo = localStorage.getItem('rare_dreams_custom_logo');
+            if (cachedLogo) next.logoUrl = cachedLogo;
+          } catch {}
+        }
+        return next;
+      });
     }
   }, [config]);
 
@@ -329,8 +376,9 @@ export default function AdminSettings() {
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800;
-          const MAX_HEIGHT = 400;
+          // Constrain logo size to 360x120 max to preserve transparent sharpness while keeping base64 under 30KB
+          const MAX_WIDTH = 360;
+          const MAX_HEIGHT = 120;
           let width = img.width;
           let height = img.height;
 
@@ -355,16 +403,67 @@ export default function AdminSettings() {
             // Export as PNG to preserve transparent background
             const transparentPng = canvas.toDataURL('image/png');
             handleStoreFormChange('logoUrl', transparentPng);
+            setCachedRecoverableLogo(transparentPng);
+            try {
+              localStorage.setItem('rare_dreams_custom_logo', transparentPng);
+            } catch {}
+
+            // Save directly to server disk for permanent, zero-quota storage
+            fetch('/api/site-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ logoUrl: transparentPng }),
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data?.logoUrl) {
+                  handleStoreFormChange('logoUrl', data.logoUrl);
+                  try {
+                    localStorage.setItem('rare_dreams_custom_logo', data.logoUrl);
+                  } catch {}
+                }
+              })
+              .catch(() => {});
           }
         } catch (err) {
           console.error("Logo processing error:", err);
           handleStoreFormChange('logoUrl', dataUrl);
+          setCachedRecoverableLogo(dataUrl);
+          try {
+            localStorage.setItem('rare_dreams_custom_logo', dataUrl);
+          } catch {}
         }
       };
       img.src = dataUrl;
     };
 
     reader.readAsDataURL(file);
+  };
+
+  const handleSelectBrandLogo = (url: string) => {
+    handleStoreFormChange('logoUrl', url);
+    try {
+      localStorage.setItem('rare_dreams_custom_logo', url);
+    } catch {}
+
+    // Persist to server disk immediately
+    fetch('/api/site-settings/restore-logo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logoUrl: url }),
+    }).catch(() => {});
+
+    updateConfig({ ...storeForm, logoUrl: url });
+  };
+
+  const handleDownloadActiveLogo = () => {
+    const url = storeForm.logoUrl || '/brand_logos/rare_dreams_horizontal_transparent.png';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rare-dreams-brand-logo.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleResetCategories = () => {
@@ -448,30 +547,58 @@ export default function AdminSettings() {
     setSaving(true);
     setSavedSuccess(false);
     try {
-      // 1. Immediately cache banners locally for instant 0ms load
+      // 1. Save and cache Store Config (Logo, Social links, WhatsApp, Payment numbers, Licenses)
+      try {
+        if (storeForm.logoUrl && storeForm.logoUrl.trim()) {
+          localStorage.setItem('rare_dreams_custom_logo', storeForm.logoUrl.trim());
+        }
+        await updateConfig(storeForm);
+      } catch (cfgErr) {
+        console.error("Error updating store config/logo:", cfgErr);
+      }
+
+      // 2. Save Category Store
+      try {
+        localStorage.setItem('rare_dreams_categories', JSON.stringify(categories));
+        await saveCategories(categories);
+      } catch (catErr) {
+        console.error("Error saving categories:", catErr);
+      }
+
+      // 3. Save Homepage Banners & Categories to Firestore
       try {
         localStorage.setItem('rare_dreams_hero_slides', JSON.stringify(banners));
-      } catch {}
+        const docRef = doc(db, 'settings', 'homepage');
+        await setDoc(docRef, {
+          banners,
+          categories,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (hpErr) {
+        console.warn("Firestore error saving homepage settings:", hpErr);
+      }
 
-      // 2. Save Homepage Banners & Categories to Firestore
-      const docRef = doc(db, 'settings', 'homepage');
-      await setDoc(docRef, {
-        banners,
-        categories,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      // 3. Save Category Store
-      await saveCategories(categories);
-
-      // 4. Save Store Config (Social links, WhatsApp, Payment numbers, Licenses)
-      await updateConfig(storeForm);
+      // 4. Save everything to zero-quota permanent server disk (immune to Firestore quota limits!)
+      try {
+        await fetch('/api/site-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            config: storeForm,
+            logoUrl: storeForm.logoUrl,
+            banners,
+            categories
+          })
+        });
+      } catch (serverErr) {
+        console.warn("Server settings backup note:", serverErr);
+      }
 
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);
     } catch (error) {
       console.error("Error saving settings:", error);
-      alert("Failed to save settings. Please try again.");
+      alert("সেটিংস সংরক্ষণে সমস্যা হয়েছে। দয়া করে পুনরায় চেষ্টা করুন।");
     } finally {
       setSaving(false);
     }
@@ -552,16 +679,125 @@ export default function AdminSettings() {
             </p>
           </div>
 
-          {storeForm.logoUrl && (
+          <div className="flex items-center gap-2">
+            {storeForm.logoUrl && (
+              <button
+                type="button"
+                onClick={handleDownloadActiveLogo}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 bg-neutral-100 text-neutral-800 hover:text-black text-xs font-bold uppercase rounded-xl hover:bg-neutral-200 transition-colors cursor-pointer shrink-0 border border-neutral-200"
+                title="Download this logo file to your device"
+              >
+                <Download size={14} />
+                <span>Download Logo</span>
+              </button>
+            )}
+            {storeForm.logoUrl && (
+              <button
+                type="button"
+                onClick={() => handleStoreFormChange('logoUrl', '')}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 bg-neutral-100 text-red-600 hover:text-red-700 text-xs font-bold uppercase rounded-xl hover:bg-red-50 transition-colors cursor-pointer shrink-0 border border-neutral-200"
+              >
+                <Trash2 size={14} />
+                <span>Remove Custom Logo</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* RECOVERABLE LOGO DETECTED BANNER */}
+        {cachedRecoverableLogo && cachedRecoverableLogo !== storeForm.logoUrl && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white rounded-xl border border-amber-200 shrink-0">
+                <img
+                  src={cachedRecoverableLogo}
+                  alt="Recoverable Logo"
+                  className="h-9 max-w-[120px] object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-600" />
+                  <span>পূর্বে আপলোড করা লোগো ব্রাউজারে সংরক্ষিত রয়েছে! (Found Uploaded Logo)</span>
+                </p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  আপনার আগের আপলোড করা লোগোটি রিকভার করা সম্ভব। এখনই ১-ক্লিকে ফিরিয়ে আনুন।
+                </p>
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => handleStoreFormChange('logoUrl', '')}
-              className="inline-flex items-center space-x-1.5 px-3 py-2 bg-neutral-100 text-red-600 hover:text-red-700 text-xs font-bold uppercase rounded-xl hover:bg-red-50 transition-colors cursor-pointer shrink-0 border border-neutral-200"
+              onClick={() => handleSelectBrandLogo(cachedRecoverableLogo)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs transition-colors shrink-0"
             >
-              <Trash2 size={14} />
-              <span>Remove Custom Logo</span>
+              পূর্বের লোগো ফিরিয়ে আনুন (Restore Logo)
             </button>
-          )}
+          </div>
+        )}
+
+        {/* BRAND LOGO LIBRARY & INSTANT SELECTION */}
+        <div className="space-y-3 bg-neutral-50/70 p-4 sm:p-5 rounded-2xl border border-neutral-200/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-800 flex items-center gap-1.5">
+                <Sparkles size={14} className="text-amber-600" />
+                <span>ব্র্যান্ড লোগো লাইব্রেরি ও রিকভারি (Brand Logos & Instant Restore)</span>
+              </h3>
+              <p className="text-[11px] text-neutral-500 mt-0.5">
+                যদি আপনার কাছে ফাইল না থাকে, নিচের যেকোনো অফিশিয়াল হাই-রেজোলিউশন লোগো ১-ক্লিকে সিলেক্ট করুন:
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+            {availableLogos.map((logo) => {
+              const isSelected = storeForm.logoUrl === logo.url;
+              return (
+                <div
+                  key={logo.id}
+                  onClick={() => handleSelectBrandLogo(logo.url)}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                      : 'bg-white border-neutral-200 hover:border-neutral-400 hover:shadow-2xs'
+                  }`}
+                >
+                  <div className="p-3 bg-neutral-900 rounded-xl flex items-center justify-center min-h-[70px] mb-2.5 overflow-hidden">
+                    <img
+                      src={logo.url}
+                      alt={logo.name}
+                      className="max-h-10 w-auto object-contain"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-bold text-neutral-900 line-clamp-1">{logo.name}</span>
+                      {isSelected && (
+                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 bg-blue-600 text-white rounded-md shrink-0">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-neutral-500 line-clamp-1 mt-0.5">{logo.description}</p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectBrandLogo(logo.url);
+                      }}
+                      className={`w-full mt-2 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
+                      }`}
+                    >
+                      {isSelected ? '✓ সক্রিয় আছে (Selected)' : 'এই লোগো ব্যবহার করুন (Select)'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">

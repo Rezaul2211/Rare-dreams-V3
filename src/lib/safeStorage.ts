@@ -1,12 +1,10 @@
 import { StateStorage } from 'zustand/middleware';
 
-// Low-priority cache keys that can be purged if localStorage quota is exceeded
+// Low-priority ephemeral cache keys that can be purged if localStorage quota is exceeded
 const PURGEABLE_CACHE_KEYS = [
   'rare_dreams_products_cache_v3',
   'rare_dreams_products_cache_v2',
   'rare_dreams_products_cache_v1',
-  'rare_dreams_hero_slides',
-  'rare_dreams_categories',
   'rare_dreams_recently_viewed',
   'rare_dreams_voted_reviews',
   'rare_dreams_guest_price_alerts'

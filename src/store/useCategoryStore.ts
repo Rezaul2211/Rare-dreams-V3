@@ -70,6 +70,7 @@ interface CategoryState {
   addCategory: (category: Omit<CategoryItem, 'id'>) => Promise<void>;
   updateCategory: (index: number, category: Partial<CategoryItem>) => Promise<void>;
   deleteCategory: (index: number) => Promise<void>;
+  setCategoriesFromHomepage: (categories: CategoryItem[]) => void;
 }
 
 export const useCategoryStore = create<CategoryState>((set, get) => {
@@ -78,7 +79,9 @@ export const useCategoryStore = create<CategoryState>((set, get) => {
       const cached = safeLocalStorageGetItem('rare_dreams_categories');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return sortCategoriesByStandardOrder(parsed);
+        }
       }
     } catch {}
     return sortCategoriesByStandardOrder(DEFAULT_CATEGORIES);
@@ -86,7 +89,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => {
 
   return {
     categories: getInitialCategories(),
-    loading: true,
+    loading: false,
     fetchCategories: () => {
       try {
         const docRef = doc(db, 'settings', 'categories');
@@ -98,12 +101,22 @@ export const useCategoryStore = create<CategoryState>((set, get) => {
               set({ categories: sorted, loading: false });
               safeLocalStorageSetItem('rare_dreams_categories', JSON.stringify(sorted));
             } else {
-              set({ categories: sortCategoriesByStandardOrder(DEFAULT_CATEGORIES), loading: false });
-              safeLocalStorageRemoveItem('rare_dreams_categories');
+              // Remote list empty, keep existing categories if we have any
+              const current = get().categories;
+              if (!current || current.length === 0) {
+                set({ categories: sortCategoriesByStandardOrder(DEFAULT_CATEGORIES), loading: false });
+              } else {
+                set({ loading: false });
+              }
             }
           } else {
-            set({ categories: sortCategoriesByStandardOrder(DEFAULT_CATEGORIES), loading: false });
-            safeLocalStorageRemoveItem('rare_dreams_categories');
+            // If remote doesn't exist, keep current categories
+            const current = get().categories;
+            if (!current || current.length === 0) {
+              set({ categories: sortCategoriesByStandardOrder(DEFAULT_CATEGORIES), loading: false });
+            } else {
+              set({ loading: false });
+            }
           }
         }, (error) => {
           if (error?.message?.includes('Quota') || (error as any)?.code === 'resource-exhausted') {
@@ -118,12 +131,20 @@ export const useCategoryStore = create<CategoryState>((set, get) => {
         set({ loading: false });
       }
     },
+    setCategoriesFromHomepage: (cats: CategoryItem[]) => {
+      if (Array.isArray(cats) && cats.length > 0) {
+        const sorted = sortCategoriesByStandardOrder(cats);
+        set({ categories: sorted, loading: false });
+        safeLocalStorageSetItem('rare_dreams_categories', JSON.stringify(sorted));
+      }
+    },
     saveCategories: async (newCategories: CategoryItem[]) => {
-      set({ categories: newCategories });
-      safeLocalStorageSetItem('rare_dreams_categories', JSON.stringify(newCategories));
+      const sorted = sortCategoriesByStandardOrder(newCategories);
+      set({ categories: sorted });
+      safeLocalStorageSetItem('rare_dreams_categories', JSON.stringify(sorted));
       try {
         const docRef = doc(db, 'settings', 'categories');
-        await setDoc(docRef, { list: newCategories }, { merge: true });
+        await setDoc(docRef, { list: sorted }, { merge: true });
       } catch (error) {
         console.error("Error saving categories to Firestore:", error);
         throw error;

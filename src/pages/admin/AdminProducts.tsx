@@ -121,12 +121,36 @@ export default function AdminProducts() {
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
+
+    // 1. Primary Zero-Quota Server API Fetch
+    try {
+      const srvRes = await fetch('/api/products');
+      if (srvRes.ok) {
+        const srvData = await srvRes.json();
+        if (Array.isArray(srvData?.products) && srvData.products.length > 0) {
+          setProducts(srvData.products);
+          setLoading(false);
+        }
+      }
+    } catch (srvErr) {
+      console.warn("Server products fetch note:", srvErr);
+    }
+
+    // 2. Secondary Firestore Sync (if quota allows)
     try {
       const querySnapshot = await getDocs(collection(db, 'products'));
       const productsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-      setProducts(productsData);
+      if (productsData.length > 0) {
+        setProducts(productsData);
+        // Batch sync to server disk in background
+        fetch('/api/products/batch-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: productsData })
+        }).catch(() => {});
+      }
     } catch (error) {
-      console.error("Error fetching products", error);
+      console.warn("Firestore products fetch note:", error);
     } finally {
       setLoading(false);
     }
@@ -139,10 +163,18 @@ export default function AdminProducts() {
   const handleDelete = useCallback(async (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
       setProducts(prev => prev.filter(p => p.id !== id));
+
+      // Delete from server disk
+      try {
+        await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      } catch (e) {
+        console.warn("Server product delete note:", e);
+      }
+
       try {
         await deleteDoc(doc(db, 'products', id));
       } catch (error) {
-        console.error("Error deleting product from Firestore:", error);
+        console.warn("Firestore delete product note:", error);
       }
     }
   }, []);

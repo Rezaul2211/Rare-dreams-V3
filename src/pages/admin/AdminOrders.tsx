@@ -369,6 +369,26 @@ export default function AdminOrders() {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    // 1. First fetch from Zero-Quota Server API
+    let serverOrdersLoaded = false;
+    try {
+      const res = await fetch('/api/orders');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.orders)) {
+          setOrders(data.orders);
+          serverOrdersLoaded = true;
+          try {
+            localStorage.setItem('cached_admin_orders', JSON.stringify(data.orders));
+          } catch (e) {}
+        }
+      }
+    } catch (srvErr) {
+      console.warn("Server orders fetch notice:", srvErr);
+    }
+
+    // 2. Secondary fetch from Firestore (if available)
     try {
       const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
       const querySnapshot = await getDocs(q);
@@ -378,13 +398,22 @@ export default function AdminOrders() {
         const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         return timeB - timeA;
       });
-      setOrders(ordersData);
+      if (ordersData.length > 0) {
+        setOrders(ordersData);
+        try {
+          localStorage.setItem('cached_admin_orders', JSON.stringify(ordersData));
+        } catch (e) {}
+      }
     } catch (err: any) {
-      console.error("Error manually refreshing orders:", err);
-      if (err.message?.includes('Quota') || err.code === 'resource-exhausted') {
-        setError("Firebase Free Tier Quota Exceeded. Order history may be temporarily restricted.");
-      } else {
-        setError("Failed to fetch orders. Please check your connection.");
+      console.warn("Firestore orders fetch notice:", err);
+      // Only show error if we also have zero orders from server
+      if (!serverOrdersLoaded) {
+        try {
+          const cached = localStorage.getItem('cached_admin_orders');
+          if (cached) {
+            setOrders(JSON.parse(cached));
+          }
+        } catch (e) {}
       }
     } finally {
       setLoading(false);
@@ -394,6 +423,17 @@ export default function AdminOrders() {
   useEffect(() => {
     setLoading(true);
     setError(null);
+
+    // Initial load from server API
+    fetch('/api/orders')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d?.orders)) {
+          setOrders(d.orders);
+          setLoading(false);
+        }
+      })
+      .catch(() => {});
 
     const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
 
@@ -419,18 +459,8 @@ export default function AdminOrders() {
     };
 
     const handleError = (err: any) => {
-      console.error("Error with real-time orders listener:", err);
-      if (err.message?.includes('Quota') || err.code === 'resource-exhausted') {
-        setError("Firebase Free Tier Quota Exceeded. Order history may be temporarily restricted.");
-      } else {
-        // Fallback fetch if index is missing
-        getDocs(query(collection(db, 'orders'), limit(150)))
-          .then(handleSnapshot)
-          .catch((e) => {
-            console.error("Orders fallback fetch failed:", e);
-            setError("Failed to fetch orders. Please check your connection.");
-          });
-      }
+      console.warn("Real-time orders listener notice:", err);
+      // Don't show blocking error if server has orders
       setLoading(false);
     };
 
@@ -448,6 +478,21 @@ export default function AdminOrders() {
 
   const handleStatusChange = useCallback(async (orderId: string, newStatus: OrderStatus) => {
     setUpdatingId(orderId);
+
+    // Update local state immediately
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+
+    // Update server disk storage
+    try {
+      await fetch(`/api/orders/${orderId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+    } catch (e) {
+      console.warn("Server status update note:", e);
+    }
+
     try {
       await updateDoc(doc(db, 'orders', orderId), { status: newStatus });
 

@@ -197,16 +197,16 @@ export default function ProductDetail() {
   const displayImages = useMemo(() => {
     const list: string[] = [];
 
-    if (product?.image && typeof product.image === 'string' && product.image.trim()) {
-      list.push(product.image.trim());
-    }
-
     if (product?.images && Array.isArray(product.images)) {
       product.images.forEach(img => {
         if (img && typeof img === 'string' && img.trim() && !list.includes(img.trim())) {
           list.push(img.trim());
         }
       });
+    }
+
+    if (product?.image && typeof product.image === 'string' && product.image.trim() && !list.includes(product.image.trim())) {
+      list.push(product.image.trim());
     }
 
     if (product?.colorImageMap && typeof product.colorImageMap === 'object') {
@@ -220,7 +220,14 @@ export default function ProductDetail() {
     return list;
   }, [product]);
 
-  const activeImage = displayImages[selectedImageIndex] || displayImages[0] || '';
+  // Keep selected image index safely within range
+  useEffect(() => {
+    if (selectedImageIndex >= displayImages.length && displayImages.length > 0) {
+      setSelectedImageIndex(0);
+    }
+  }, [displayImages.length, selectedImageIndex]);
+
+  const activeImage = displayImages[selectedImageIndex] || displayImages[0] || product?.image || '';
 
   // Extract all real specifications provided by admin
   const activeSpecifications = useMemo(() => {
@@ -535,7 +542,11 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
 
           {/* Vertical Thumbnail Column (Left Side) - Multi-Image Album Gallery */}
           {displayImages.length > 1 && (
-            <div className="absolute top-12 left-2.5 sm:left-3.5 z-30 flex flex-col gap-1.5 max-h-[230px] sm:max-h-[290px] overflow-y-auto no-scrollbar p-1 bg-white/80 backdrop-blur-md rounded-2xl border border-white/90 shadow-md">
+            <div 
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              className="absolute top-12 left-2.5 sm:left-3.5 z-30 flex flex-col gap-1.5 max-h-[230px] sm:max-h-[290px] overflow-y-auto no-scrollbar p-1 bg-white/80 backdrop-blur-md rounded-2xl border border-white/90 shadow-md"
+            >
               {displayImages.map((img, idx) => (
                 <button
                   key={idx}
@@ -552,6 +563,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                   <img
                     src={img}
                     alt={`Thumbnail ${idx + 1}`}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover rounded-lg"
                     loading="lazy"
                   />
@@ -638,6 +650,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                 <img
                   src={activeImage}
                   alt={product.name}
+                  referrerPolicy="no-referrer"
                   className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_12px_22px_rgba(30,27,75,0.16)] rounded-xl select-none pointer-events-none"
                   loading="eager"
                 />

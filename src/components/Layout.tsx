@@ -7,6 +7,7 @@ import {
   User, 
   ChevronDown, 
   ChevronLeft,
+  ChevronRight,
   Search,
   Home, 
   Grid, 
@@ -34,74 +35,30 @@ import PullToRefresh from './PullToRefresh';
 // Navigation Subcategory Structure
 interface NavCategoryConfig {
   name: string;
+  nameBn?: string;
   path: string;
-  isSale?: boolean;
-  subcategories?: { title: string; link: string; isHot?: boolean }[];
 }
 
 const DESKTOP_NAV_ITEMS: NavCategoryConfig[] = [
   {
-    name: 'New In',
-    path: '/shop?filter=new',
-  },
-  {
     name: 'Women',
+    nameBn: 'মহিলা',
     path: '/category/Women',
-    subcategories: [
-      { title: 'All Women Collection', link: '/category/Women' },
-      { title: 'Dresses & Gowns', link: '/shop?category=Women&sub=dresses', isHot: true },
-      { title: 'Sarees & Traditional', link: '/shop?category=Women&sub=sarees' },
-      { title: 'Kurtis & Salwar Sets', link: '/shop?category=Women&sub=kurtis' },
-      { title: 'Abayas & Hijabs', link: '/shop?category=Women&sub=abayas' },
-      { title: 'Tops & T-Shirts', link: '/shop?category=Women&sub=tops' },
-      { title: 'Footwear & Heels', link: '/shop?category=Women&sub=footwear' },
-      { title: 'Handbags & Clutches', link: '/shop?category=Women&sub=bags' },
-    ]
   },
   {
     name: 'Men',
+    nameBn: 'পুরুষ',
     path: '/category/Men',
-    subcategories: [
-      { title: 'All Men Collection', link: '/category/Men' },
-      { title: 'Premium Panjabi & Kurta', link: '/shop?category=Men&sub=panjabi', isHot: true },
-      { title: 'Casual & Formal Shirts', link: '/shop?category=Men&sub=shirts' },
-      { title: 'Polo & Graphic T-Shirts', link: '/shop?category=Men&sub=tshirts' },
-      { title: 'Trousers & Chinos', link: '/shop?category=Men&sub=pants' },
-      { title: 'Blazers & Outerwear', link: '/shop?category=Men&sub=blazers' },
-      { title: 'Footwear & Loafers', link: '/shop?category=Men&sub=shoes' },
-    ]
   },
   {
     name: 'Kids',
+    nameBn: 'বাচ্চাদের',
     path: '/category/Kids',
-    subcategories: [
-      { title: 'All Kids Collection', link: '/category/Kids' },
-      { title: 'Boys Clothing', link: '/shop?category=Kids&sub=boys', isHot: true },
-      { title: 'Girls Frocks & Dresses', link: '/shop?category=Kids&sub=girls' },
-      { title: 'Baby & Toddler Wear', link: '/shop?category=Kids&sub=baby' },
-      { title: 'Traditional Festive Wear', link: '/shop?category=Kids&sub=traditional' },
-      { title: 'Kids Footwear', link: '/shop?category=Kids&sub=shoes' },
-    ]
   },
   {
     name: 'Footwear',
+    nameBn: 'জুতো',
     path: '/category/Footwear',
-    subcategories: [
-      { title: 'All Footwear', link: '/category/Footwear' },
-      { title: 'Sneakers & Sports', link: '/shop?category=Footwear&sub=sneakers', isHot: true },
-      { title: 'Formal Shoes & Loafers', link: '/shop?category=Footwear&sub=formal' },
-      { title: 'Casual & Sandal', link: '/shop?category=Footwear&sub=sandals' },
-      { title: 'Boots & Slippers', link: '/shop?category=Footwear&sub=boots' },
-    ]
-  },
-  {
-    name: 'Brands',
-    path: '/shop',
-  },
-  {
-    name: 'Sale',
-    path: '/shop?filter=sale',
-    isSale: true,
   }
 ];
 
@@ -401,69 +358,24 @@ function LayoutInner() {
             </div>
 
             {/* Bottom Sub-Navigation Bar */}
-            <div className="border-t border-[#F0F3F8] py-2.5 flex justify-center items-center space-x-8 lg:space-x-10 text-sm font-semibold text-neutral-800 relative">
+            {/* Desktop Navigation Items: Strictly 4 Main Categories */}
+            <div className="border-t border-[#F0F3F8] py-2.5 flex justify-center items-center space-x-10 text-sm font-bold text-neutral-800 relative">
               {DESKTOP_NAV_ITEMS.map((item) => {
-                const hasSub = item.subcategories && item.subcategories.length > 0;
-                const isSale = item.isSale;
-                const isHovered = activeDropdown === item.name;
-
+                const isActive = location.pathname === item.path;
                 return (
-                  <div
+                  <Link
                     key={item.name}
-                    className="relative py-1"
-                    onMouseEnter={() => hasSub && handleMouseEnter(item.name)}
-                    onMouseLeave={handleMouseLeave}
+                    to={item.path}
+                    onClick={scrollToTop}
+                    className={`inline-flex items-center gap-1.5 transition-colors cursor-pointer py-1 px-3 rounded-lg ${
+                      isActive 
+                        ? 'text-black font-extrabold bg-neutral-100' 
+                        : 'text-neutral-700 hover:text-black hover:bg-neutral-50'
+                    }`}
                   >
-                    <Link
-                      to={item.path}
-                      onClick={scrollToTop}
-                      className={`inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
-                        isSale 
-                          ? 'text-[#E53E3E] font-bold hover:text-red-700' 
-                          : isHovered 
-                          ? 'text-black font-bold' 
-                          : 'text-neutral-700 hover:text-black'
-                      }`}
-                    >
-                      <span>{item.name}</span>
-                      {hasSub && (
-                        <ChevronDown 
-                          size={14} 
-                          className={`transition-transform duration-200 ${isHovered ? 'rotate-180 text-black' : 'text-neutral-400'}`} 
-                        />
-                      )}
-                    </Link>
-
-                    {/* Subcategories Dropdown Card */}
-                    {hasSub && isHovered && (
-                      <div 
-                        className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-neutral-100 p-2 z-50 animate-in fade-in zoom-in-95 duration-150"
-                        onMouseEnter={() => handleMouseEnter(item.name)}
-                        onMouseLeave={handleMouseLeave}
-                      >
-                        <div className="py-1">
-                          {item.subcategories?.map((sub) => (
-                            <Link
-                              key={sub.title}
-                              to={sub.link}
-                              onClick={() => {
-                                setActiveDropdown(null);
-                                scrollToTop();
-                              }}
-                              className="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold text-neutral-700 hover:text-black hover:bg-neutral-50 transition-colors"
-                            >
-                              <span>{sub.title}</span>
-                              {sub.isHot && (
-                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-rose-50 text-rose-600">
-                                  HOT
-                                </span>
-                              )}
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    <span>{item.name}</span>
+                    {item.nameBn && <span className="text-xs text-neutral-400 font-normal">({item.nameBn})</span>}
+                  </Link>
                 );
               })}
             </div>
@@ -545,81 +457,40 @@ function LayoutInner() {
                       <span>Home (হোম)</span>
                     </Link>
 
-                    {/* 2. All Categories & Navigation Items */}
-                    {DESKTOP_NAV_ITEMS.map((navItem) => {
-                      const hasSub = navItem.subcategories && navItem.subcategories.length > 0;
-                      const isExpanded = activeDropdown === navItem.name;
-
-                      return (
-                        <div key={navItem.name} className="space-y-1">
-                          <div className="flex items-center justify-between rounded-xl hover:bg-neutral-50 transition-colors">
-                            <Link
-                              to={navItem.path}
-                              onClick={() => {
-                                setIsMobileMenuOpen(false);
-                                scrollToTop();
-                              }}
-                              className={`flex-1 py-3 px-3 text-sm font-bold flex items-center justify-between ${
-                                navItem.isSale ? 'text-[#E53E3E]' : 'text-neutral-900'
-                              }`}
-                            >
+                    {/* 2. Strictly 4 Main Categories Only (No subcategory groups) */}
+                    <div className="pt-2 pb-1 space-y-1">
+                      <div className="px-3.5 py-1 text-[11px] font-extrabold text-neutral-400 uppercase tracking-wider">
+                        Categories (ক্যাটাগরি)
+                      </div>
+                      {DESKTOP_NAV_ITEMS.map((navItem) => {
+                        const isActive = location.pathname === navItem.path;
+                        return (
+                          <Link
+                            key={navItem.name}
+                            to={navItem.path}
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              scrollToTop();
+                            }}
+                            className={`flex items-center justify-between py-3 px-3.5 text-sm font-bold rounded-xl transition-all ${
+                              isActive 
+                                ? 'bg-neutral-900 text-white shadow-xs' 
+                                : 'text-neutral-900 hover:bg-neutral-100'
+                            }`}
+                          >
+                            <span className="flex items-center space-x-2">
                               <span>{navItem.name}</span>
-                              {navItem.isSale && (
-                                <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-black uppercase">
-                                  HOT
+                              {navItem.nameBn && (
+                                <span className={isActive ? 'text-neutral-300 text-xs font-normal' : 'text-neutral-500 text-xs font-normal'}>
+                                  ({navItem.nameBn})
                                 </span>
                               )}
-                            </Link>
-
-                            {hasSub && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveDropdown(isExpanded ? null : navItem.name);
-                                }}
-                                className="p-3 text-neutral-400 hover:text-neutral-900 cursor-pointer"
-                                aria-label="Toggle subcategories"
-                              >
-                                <ChevronDown
-                                  size={18}
-                                  className={`transition-transform duration-200 ${isExpanded ? 'rotate-180 text-black' : ''}`}
-                                />
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Subcategories Accordion in Mobile */}
-                          {hasSub && isExpanded && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="pl-4 pr-2 py-1 space-y-1 bg-neutral-50 rounded-xl"
-                            >
-                              {navItem.subcategories?.map((sub) => (
-                                <Link
-                                  key={sub.title}
-                                  to={sub.link}
-                                  onClick={() => {
-                                    setIsMobileMenuOpen(false);
-                                    scrollToTop();
-                                  }}
-                                  className="flex items-center justify-between py-2 px-3 text-xs font-semibold text-neutral-700 hover:text-black rounded-lg transition-colors"
-                                >
-                                  <span>{sub.title}</span>
-                                  {sub.isHot && (
-                                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-rose-100 text-rose-600">
-                                      HOT
-                                    </span>
-                                  )}
-                                </Link>
-                              ))}
-                            </motion.div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            </span>
+                            <ChevronRight size={16} className={isActive ? 'text-white' : 'text-neutral-400'} />
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* Account, Wishlist, Order Tracking & Admin Section */}

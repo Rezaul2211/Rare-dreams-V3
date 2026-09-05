@@ -1047,7 +1047,7 @@ export default function Shop() {
     }
   }, [collectionKey, category, currentMeta]);
 
-  // Merge Firestore products with authentic fallback sample products
+  // Strictly real uploaded products (zero dummy items injected)
   const allCategoryProducts = useMemo(() => {
     let list: Product[] = [];
 
@@ -1066,15 +1066,8 @@ export default function Shop() {
       }
     }
 
-    // Supplement with sample products for rich initial catalog
-    if (list.length < 6 && currentMeta.sampleProducts) {
-      const existingIds = new Set(list.map(p => p.id));
-      const neededSamples = currentMeta.sampleProducts.filter(p => !existingIds.has(p.id));
-      list = [...list, ...neededSamples];
-    }
-
     return list;
-  }, [dbProducts, collectionKey, currentMeta]);
+  }, [dbProducts, collectionKey]);
 
   const { getSubcategories } = useSubcategoryStore();
 

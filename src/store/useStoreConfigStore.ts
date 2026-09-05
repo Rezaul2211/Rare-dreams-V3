@@ -43,18 +43,29 @@ interface StoreConfigState {
 }
 
 const STORAGE_KEY = 'rare_dreams_cached_store_config';
+const LOGO_KEY = 'rare_dreams_custom_logo';
 
 const getInitialConfig = (): StoreConfig => {
+  let baseConfig = { ...DEFAULT_STORE_CONFIG };
   try {
     const cached = safeLocalStorageGetItem(STORAGE_KEY);
     if (cached) {
       const parsed = JSON.parse(cached);
-      return { ...DEFAULT_STORE_CONFIG, ...parsed };
+      baseConfig = { ...baseConfig, ...parsed };
     }
   } catch (e) {
     console.warn("Could not read cached store config from storage", e);
   }
-  return DEFAULT_STORE_CONFIG;
+
+  // Check dedicated fast logo storage
+  try {
+    const customLogo = safeLocalStorageGetItem(LOGO_KEY);
+    if (customLogo && customLogo.trim().length > 0) {
+      baseConfig.logoUrl = customLogo.trim();
+    }
+  } catch (e) {}
+
+  return baseConfig;
 };
 
 export const useStoreConfigStore = create<StoreConfigState>((set, get) => ({
@@ -62,45 +73,126 @@ export const useStoreConfigStore = create<StoreConfigState>((set, get) => ({
   loading: false,
 
   fetchConfig: () => {
+    // 1. Sync with zero-quota server storage first (always works, fast, reliable)
+    try {
+      fetch('/api/site-settings')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.success) {
+            const currentConfig = get().config;
+            const serverLogo = data.logoUrl;
+            const serverSettings = data.settings;
+
+            const merged = { ...currentConfig, ...(serverSettings || {}) };
+
+            if (serverLogo && serverLogo.trim().length > 0) {
+              merged.logoUrl = serverLogo.trim();
+              safeLocalStorageSetItem(LOGO_KEY, serverLogo.trim());
+            } else if (currentConfig.logoUrl && currentConfig.logoUrl.trim().length > 0) {
+              // Automatically backup client's existing logo to server disk so it's never lost!
+              fetch('/api/site-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ config: currentConfig, logoUrl: currentConfig.logoUrl.trim() }),
+              }).catch(() => {});
+            }
+
+            set({ config: merged, loading: false });
+            safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(merged));
+          }
+        })
+        .catch((e) => {
+          console.warn("[StoreConfig] Server settings check note:", e);
+        });
+    } catch {}
+
+    // 2. Firestore real-time listener with quota exhaustion resilience
     try {
       const docRef = doc(db, 'settings', 'storeConfig');
-      // Set real-time listener so any update by Admin reflects instantly for all users
       onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data() as Partial<StoreConfig>;
-          const merged = { ...DEFAULT_STORE_CONFIG, ...data };
+          const currentConfig = get().config;
+          const merged = { ...DEFAULT_STORE_CONFIG, ...currentConfig, ...data };
+
+          // If current has a custom logo but remote doc is empty/null, preserve the custom logo
+          if (!merged.logoUrl && currentConfig.logoUrl) {
+            merged.logoUrl = currentConfig.logoUrl;
+          }
+
+          if (merged.logoUrl) {
+            safeLocalStorageSetItem(LOGO_KEY, merged.logoUrl);
+          }
+
           set({
             config: merged,
             loading: false,
           });
           safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(merged));
         } else {
-          set({ config: DEFAULT_STORE_CONFIG, loading: false });
+          const current = get().config;
+          set({ config: current, loading: false });
         }
       }, (error) => {
         if (error?.message?.includes('Quota') || (error as any)?.code === 'resource-exhausted') {
-          console.warn("Firestore quota limit reached for storeConfig, fallback to cached settings.");
+          console.warn("Firestore quota limit reached for storeConfig, fallback to server/cached settings.");
         } else {
           console.warn("Firestore storeConfig listener warning:", error);
         }
         set({ loading: false });
       });
     } catch (err) {
-      console.error("Error setting storeConfig listener:", err);
+      console.warn("Error setting storeConfig listener:", err);
       set({ loading: false });
     }
   },
 
   updateConfig: async (newConfig: Partial<StoreConfig>) => {
-    const updated = { ...get().config, ...newConfig };
+    const current = get().config;
+    const updated = { ...current, ...newConfig };
+    
+    if (newConfig.logoUrl !== undefined) {
+      if (newConfig.logoUrl && newConfig.logoUrl.trim().length > 0) {
+        safeLocalStorageSetItem(LOGO_KEY, newConfig.logoUrl.trim());
+      } else {
+        try {
+          localStorage.removeItem(LOGO_KEY);
+        } catch {}
+      }
+    }
+
     set({ config: updated });
     safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(updated));
+
+    // 1. Always save to persistent server disk (immune to Firestore quota limits)
+    try {
+      const serverRes = await fetch('/api/site-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: updated, logoUrl: updated.logoUrl }),
+      });
+      const serverData = await serverRes.json();
+      if (serverData?.logoUrl && serverData.logoUrl !== updated.logoUrl) {
+        // If server optimized base64 into a static file URL /uploads/custom_logo.png
+        const withStaticUrl = { ...updated, logoUrl: serverData.logoUrl };
+        set({ config: withStaticUrl });
+        safeLocalStorageSetItem(LOGO_KEY, serverData.logoUrl);
+        safeLocalStorageSetItem(STORAGE_KEY, JSON.stringify(withStaticUrl));
+      }
+    } catch (serverErr) {
+      console.warn("[StoreConfig] Could not save to server disk:", serverErr);
+    }
+
+    // 2. Also save to Firestore (if quota allows)
     try {
       const docRef = doc(db, 'settings', 'storeConfig');
       await setDoc(docRef, updated, { merge: true });
-    } catch (error) {
-      console.error("Error saving storeConfig to Firestore:", error);
-      throw error;
+    } catch (error: any) {
+      if (error?.message?.includes('Quota') || error?.code === 'resource-exhausted') {
+        console.warn("Firestore quota exceeded while saving storeConfig; saved locally & on server disk.");
+      } else {
+        console.error("Error saving storeConfig to Firestore:", error);
+      }
     }
   },
 }));

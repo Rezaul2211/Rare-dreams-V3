@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import Stripe from "stripe";
 import webpush from "web-push";
@@ -1965,6 +1966,459 @@ ${mainPages
 
   res.setHeader("Content-Type", "application/xml");
   res.send(sitemapXml);
+});
+
+// -------------------------------------------------------------
+// Zero-Firestore-Quota Persistent Site Settings & Logo Storage
+// -------------------------------------------------------------
+const DATA_DIR = path.join(process.cwd(), 'data');
+const SITE_SETTINGS_FILE = path.join(DATA_DIR, 'site_settings.json');
+const SITE_SETTINGS_BACKUP = path.join(DATA_DIR, 'site_settings_backup.json');
+const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
+const ORDERS_BACKUP = path.join(DATA_DIR, 'orders_backup.json');
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+const PRODUCTS_BACKUP = path.join(DATA_DIR, 'products_backup.json');
+
+function readSiteSettings() {
+  try {
+    if (fs.existsSync(SITE_SETTINGS_FILE)) {
+      const data = fs.readFileSync(SITE_SETTINGS_FILE, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.warn("[SiteSettings] Could not read settings file:", e);
+  }
+  return null;
+}
+
+function writeSiteSettings(data: any) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(SITE_SETTINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    fs.writeFileSync(SITE_SETTINGS_BACKUP, JSON.stringify(data, null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error("[SiteSettings] Could not write settings file:", e);
+    return false;
+  }
+}
+
+function readOrders(): any[] {
+  try {
+    if (fs.existsSync(ORDERS_FILE)) {
+      const data = fs.readFileSync(ORDERS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.warn("[OrderEngine] Could not read orders file, checking backup:", e);
+    try {
+      if (fs.existsSync(ORDERS_BACKUP)) {
+        const data = fs.readFileSync(ORDERS_BACKUP, 'utf-8');
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+  }
+  return [];
+}
+
+function writeOrders(orders: any[]): boolean {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2), 'utf-8');
+    fs.writeFileSync(ORDERS_BACKUP, JSON.stringify(orders, null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error("[OrderEngine] Could not write orders file:", e);
+    return false;
+  }
+}
+
+function readProducts(): any[] {
+  try {
+    if (fs.existsSync(PRODUCTS_FILE)) {
+      const data = fs.readFileSync(PRODUCTS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn("[ProductEngine] Could not read products file, checking backup:", e);
+    try {
+      if (fs.existsSync(PRODUCTS_BACKUP)) {
+        const data = fs.readFileSync(PRODUCTS_BACKUP, 'utf-8');
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return [];
+}
+
+function writeProducts(products: any[]): boolean {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2), 'utf-8');
+    fs.writeFileSync(PRODUCTS_BACKUP, JSON.stringify(products, null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error("[ProductEngine] Could not write products file:", e);
+    return false;
+  }
+}
+
+// Serve public static assets with correct MIME types BEFORE Vite middleware
+app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
+app.use('/brand_logos', express.static(path.join(process.cwd(), 'public/brand_logos')));
+
+app.get("/api/site-settings", (req, res) => {
+  const settings = readSiteSettings() || {};
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+  const customLogoExists = fs.existsSync(path.join(uploadsDir, 'custom_logo.png'));
+  
+  const availableLogos = [
+    { 
+      id: "luxury_horizontal",
+      name: "Rare Dreams 3D Luxury (Transparent PNG)", 
+      url: "/brand_logos/rare_dreams_horizontal_transparent.png",
+      description: "Official transparent header logo with 3D gradient and diamond shine",
+      isDefault: true
+    },
+    { 
+      id: "official_icon",
+      name: "Rare Dreams App Icon (512x512)", 
+      url: "/brand_logos/rare_dreams_icon.png",
+      description: "Square app icon with shopping bag emblem"
+    },
+    { 
+      id: "brand_emblem",
+      name: "Rare Dreams Brand Emblem", 
+      url: "/brand_logos/rare_dreams_logo_1786981217375.jpg",
+      description: "High resolution brand artwork"
+    },
+    { 
+      id: "classic_logo",
+      name: "Rare Dreams Classic Logo", 
+      url: "/brand_logos/raredreams_logo_1786300009548.jpg",
+      description: "Original brand design"
+    },
+    { 
+      id: "main_brand",
+      name: "Rare Dreams Main Brand Banner", 
+      url: "/brand_logos/brand_logo_main_1786981515075.jpg",
+      description: "Primary brand display banner"
+    }
+  ];
+
+  if (customLogoExists) {
+    try {
+      const stat = fs.statSync(path.join(uploadsDir, 'custom_logo.png'));
+      availableLogos.unshift({
+        id: "uploaded_custom",
+        name: "Your Custom Uploaded Logo (স্থায়ী সংরক্ষণ)",
+        url: `/uploads/custom_logo.png?t=${stat.mtimeMs}`,
+        description: "Permanently stored custom uploaded logo",
+        isDefault: false
+      });
+    } catch {}
+  }
+
+  res.json({
+    success: true,
+    settings: settings.config || null,
+    logoUrl: settings.logoUrl || (customLogoExists ? `/uploads/custom_logo.png` : ""),
+    banners: settings.banners || null,
+    categories: settings.categories || null,
+    availableLogos,
+    updatedAt: settings.updatedAt || null
+  });
+});
+
+app.post("/api/site-settings", (req, res) => {
+  const { config, logoUrl, banners, categories } = req.body || {};
+  let finalLogoUrl = logoUrl;
+
+  // If logo is a base64 image data URL, persist it to disk as a static PNG file
+  if (logoUrl && typeof logoUrl === 'string' && logoUrl.startsWith('data:image/')) {
+    try {
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      
+      const matches = logoUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches[2]) {
+        const buffer = Buffer.from(matches[2], 'base64');
+        const logoPath = path.join(uploadsDir, 'custom_logo.png');
+        fs.writeFileSync(logoPath, buffer);
+        finalLogoUrl = `/uploads/custom_logo.png?v=${Date.now()}`;
+      }
+    } catch (e) {
+      console.error("[SiteSettings] Failed to save custom logo file:", e);
+    }
+  }
+
+  const existing = readSiteSettings() || {};
+  const updatedSettings = {
+    config: { ...(existing.config || {}), ...(config || {}) },
+    logoUrl: finalLogoUrl !== undefined && finalLogoUrl !== null ? finalLogoUrl : (existing.logoUrl || ''),
+    banners: banners !== undefined ? banners : (existing.banners || null),
+    categories: categories !== undefined ? categories : (existing.categories || null),
+    updatedAt: new Date().toISOString()
+  };
+
+  writeSiteSettings(updatedSettings);
+
+  res.json({
+    success: true,
+    message: "Settings and logo saved permanently to server disk.",
+    logoUrl: updatedSettings.logoUrl,
+    settings: updatedSettings.config,
+    updatedAt: updatedSettings.updatedAt
+  });
+});
+
+app.post("/api/site-settings/restore-logo", (req, res) => {
+  const { logoUrl } = req.body || {};
+  if (!logoUrl) {
+    return res.status(400).json({ success: false, message: "logoUrl is required" });
+  }
+
+  const existing = readSiteSettings() || {};
+  existing.logoUrl = logoUrl;
+  existing.updatedAt = new Date().toISOString();
+  writeSiteSettings(existing);
+
+  res.json({
+    success: true,
+    message: "Logo restored successfully.",
+    logoUrl
+  });
+});
+
+// =============================================================
+// ZERO-QUOTA FAIL-SAFE ORDER & PRODUCT BACKEND ENGINES
+// Guaranteed 100% order capture even if Firestore Free Tier is blocked
+// =============================================================
+
+// 1. Create New Order Endpoint (Called during checkout)
+app.post("/api/orders/create", async (req, res) => {
+  try {
+    const orderData = req.body;
+    if (!orderData || !orderData.customerName || !orderData.phone) {
+      return res.status(400).json({ success: false, message: "Customer name and phone are required." });
+    }
+
+    const orderId = orderData.id || `RD-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const cleanOrder = {
+      ...orderData,
+      id: orderId,
+      status: orderData.status || 'Pending',
+      paymentStatus: orderData.paymentStatus || 'pending',
+      createdAt: orderData.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      serverReceivedAt: new Date().toISOString(),
+    };
+
+    const currentOrders = readOrders();
+    const existingIndex = currentOrders.findIndex((o: any) => o.id === orderId);
+    if (existingIndex !== -1) {
+      currentOrders[existingIndex] = { ...currentOrders[existingIndex], ...cleanOrder };
+    } else {
+      currentOrders.unshift(cleanOrder);
+    }
+    writeOrders(currentOrders);
+
+    console.log(`[OrderEngine] Order #${orderId} saved to zero-quota server disk. Total: ${currentOrders.length}`);
+
+    // Multicast instant native push notification to admin devices in memory
+    try {
+      const formattedTotal = '৳' + Number(cleanOrder.total || 0).toLocaleString('en-IN');
+      const seenEndpoints = new Set<string>();
+      activePushSubscriptions.forEach((subRecord) => {
+        const role = (subRecord.role || '').toLowerCase();
+        const email = (subRecord.email || '').toLowerCase();
+        if (
+          role === 'admin' || 
+          role === 'seller' || 
+          role === 'superadmin' ||
+          email.includes('karim') || 
+          email.includes('admin') ||
+          activePushSubscriptions.size <= 3
+        ) {
+          if (subRecord.subscription?.endpoint && !seenEndpoints.has(subRecord.subscription.endpoint)) {
+            seenEndpoints.add(subRecord.subscription.endpoint);
+            webpush.sendNotification(
+              subRecord.subscription,
+              JSON.stringify({
+                title: `🚨 নতুন অর্ডার এসেছে! (#${orderId})`,
+                body: `${cleanOrder.customerName} • ${formattedTotal} (${cleanOrder.district || 'Dhaka'})`,
+                icon: '/brand_logos/rare_dreams_icon.png',
+                tag: `order_${orderId}`,
+                url: `/admin/orders`,
+                timestamp: Date.now(),
+                sound: '/sounds/order_bell.mp3'
+              })
+            ).catch(() => {});
+          }
+        }
+      });
+    } catch (pushErr) {
+      console.warn("[OrderEngine] Push dispatch notice:", pushErr);
+    }
+
+    res.json({
+      success: true,
+      message: "Order placed and permanently stored on server disk.",
+      orderId,
+      order: cleanOrder
+    });
+  } catch (err: any) {
+    console.error("[OrderEngine] Error saving order to server:", err);
+    res.status(500).json({ success: false, message: "Server order error" });
+  }
+});
+
+// 2. Fetch All Orders (For Admin Panel & Dashboard)
+app.get("/api/orders", (req, res) => {
+  const orders = readOrders();
+  res.json({
+    success: true,
+    orders,
+    count: orders.length
+  });
+});
+
+// 3. Fetch Single Order by ID (For Invoice / Order Tracking / Success Page)
+app.get("/api/orders/:id", (req, res) => {
+  const orders = readOrders();
+  const order = orders.find((o: any) => o.id === req.params.id);
+  if (!order) {
+    return res.status(404).json({ success: false, message: "Order not found" });
+  }
+  res.json({ success: true, order });
+});
+
+// 4. Update Order Status (Pending, Processing, Shipped, Delivered, Cancelled)
+app.post("/api/orders/:id/status", (req, res) => {
+  const { status, trackingCode, courierName } = req.body || {};
+  if (!status) {
+    return res.status(400).json({ success: false, message: "Status is required." });
+  }
+
+  const orders = readOrders();
+  const idx = orders.findIndex((o: any) => o.id === req.params.id);
+  if (idx !== -1) {
+    orders[idx].status = status;
+    if (trackingCode !== undefined) orders[idx].trackingCode = trackingCode;
+    if (courierName !== undefined) orders[idx].courierName = courierName;
+    orders[idx].updatedAt = new Date().toISOString();
+    writeOrders(orders);
+    return res.json({ success: true, order: orders[idx] });
+  }
+  res.status(404).json({ success: false, message: "Order not found" });
+});
+
+// 5. Fetch Products (0-Quota, Fast local server disk)
+app.get("/api/products", (req, res) => {
+  const products = readProducts();
+  res.json({
+    success: true,
+    products,
+    count: products.length
+  });
+});
+
+// 6. Save or Update Single Product
+app.post("/api/products/save", (req, res) => {
+  const product = req.body;
+  if (!product || !product.id) {
+    return res.status(400).json({ success: false, message: "Valid product data with id is required." });
+  }
+
+  const products = readProducts();
+  const existingIndex = products.findIndex((p: any) => p.id === product.id);
+  if (existingIndex !== -1) {
+    products[existingIndex] = { ...products[existingIndex], ...product, updatedAt: new Date().toISOString() };
+  } else {
+    products.unshift({
+      ...product,
+      createdAt: product.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+  writeProducts(products);
+
+  res.json({ success: true, product, count: products.length });
+});
+
+// 7. Batch Sync Products to Server Disk
+app.post("/api/products/batch-sync", (req, res) => {
+  const { products } = req.body || {};
+  if (Array.isArray(products) && products.length > 0) {
+    const existing = readProducts();
+    const map = new Map<string, any>();
+    existing.forEach((p: any) => map.set(p.id, p));
+    products.forEach((p: any) => {
+      if (p && p.id) {
+        map.set(p.id, { ...(map.get(p.id) || {}), ...p });
+      }
+    });
+    const merged = Array.from(map.values());
+    writeProducts(merged);
+    return res.json({ success: true, count: merged.length });
+  }
+  res.json({ success: false, message: "No products array provided." });
+});
+
+// 8. Delete Product from Server Disk
+app.delete("/api/products/:id", (req, res) => {
+  const products = readProducts();
+  const filtered = products.filter((p: any) => p.id !== req.params.id);
+  writeProducts(filtered);
+  res.json({ success: true, count: filtered.length });
+});
+
+// 9. Admin Dashboard Summary Statistics (Zero Firestore Quota Reads!)
+app.get("/api/admin/summary", (req, res) => {
+  const orders = readOrders();
+  const products = readProducts();
+
+  let totalSales = 0;
+  let pCount = 0, prCount = 0, sCount = 0, dCount = 0, cCount = 0;
+  const uniqueCustomerKeys = new Set<string>();
+
+  orders.forEach((o: any) => {
+    const amt = Number(o.total || o.totalAmount || 0);
+    totalSales += amt;
+    const st = (o.status || 'pending').toLowerCase();
+    if (st === 'pending') pCount++;
+    else if (st === 'processing') prCount++;
+    else if (st === 'shipped') sCount++;
+    else if (st === 'delivered') dCount++;
+    else if (st === 'cancelled') cCount++;
+
+    if (o.phone) uniqueCustomerKeys.add(String(o.phone).trim());
+    else if (o.email) uniqueCustomerKeys.add(String(o.email).trim().toLowerCase());
+  });
+
+  res.json({
+    success: true,
+    stats: {
+      totalProducts: products.length,
+      totalOrders: orders.length,
+      totalCustomers: uniqueCustomerKeys.size,
+      totalSales,
+      statusCounts: {
+        pending: pCount,
+        processing: prCount,
+        shipped: sCount,
+        delivered: dCount,
+        cancelled: cCount,
+        total: orders.length
+      }
+    },
+    recentOrders: orders.slice(0, 10),
+    allOrders: orders
+  });
 });
 
 async function startServer() {

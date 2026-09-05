@@ -25,378 +25,11 @@ import SEO from '../components/SEO';
 import { usePublishedProducts } from '../hooks/usePublishedProducts';
 import { matchesCategoryGroup } from '../utils/productUtils';
 
-// Pristine showcase items matching the reference blueprint screenshot exactly
-const MEN_SHOWCASE: Product[] = [
-  {
-    id: 'men-suit-1',
-    name: 'Classic Suit Jacket',
-    category: 'Men',
-    subcategory: 'Clothing',
-    price: 4900,
-    comparePrice: 6790,
-    discount: 28,
-    stockQuantity: 25,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Tailored luxury suit jacket crafted with refined fabric.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'men-shoes-2',
-    name: 'Oxford Shoes',
-    category: 'Men',
-    subcategory: 'Shoes',
-    price: 1360,
-    comparePrice: 1560,
-    discount: 14,
-    stockQuantity: 30,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Classic genuine leather handcrafted Oxford shoes.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'men-denim-3',
-    name: 'Premium Denim Jacket',
-    category: 'Men',
-    subcategory: 'Clothing',
-    price: 2240,
-    comparePrice: 2800,
-    discount: 20,
-    stockQuantity: 20,
-    rating: 4.6,
-    images: ['https://images.unsplash.com/photo-1516257984-b1b4d707412e?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Timeless vintage wash premium denim jacket.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'men-watch-4',
-    name: 'Luxury Watch',
-    category: 'Men',
-    subcategory: 'Watches',
-    price: 3650,
-    comparePrice: 4450,
-    discount: 18,
-    stockQuantity: 15,
-    rating: 4.9,
-    images: ['https://images.unsplash.com/photo-1524805444758-089113d48a6d?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Precision chronograph timepiece with stainless steel band.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'men-polo-5',
-    name: 'Slim-Fit Cotton Polo',
-    category: 'Men',
-    subcategory: 'Clothing',
-    price: 1150,
-    comparePrice: 1450,
-    discount: 20,
-    stockQuantity: 22,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1618354691373-d851c5c3a990?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Breathable pique knit slim-fit polo with ribbed collar.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'men-sunglasses-6',
-    name: 'Aviator Dark Shades',
-    category: 'Men',
-    subcategory: 'Accessories',
-    price: 950,
-    comparePrice: 1200,
-    discount: 21,
-    stockQuantity: 28,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1511499767150-a48a237f0083?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'UV400 polarized classic gunmetal aviator sunglasses.',
-    createdAt: new Date(),
-    status: 'published'
-  }
-];
-
-const WOMEN_SHOWCASE: Product[] = [
-  {
-    id: 'women-bag-1',
-    name: 'Elegant Shoulder Bag',
-    category: 'Women',
-    subcategory: 'Bags',
-    price: 1490,
-    comparePrice: 2190,
-    discount: 32,
-    stockQuantity: 20,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Luxurious designer shoulder bag with golden hardware chain.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'women-dress-2',
-    name: 'Premium Maxi Dress',
-    category: 'Women',
-    subcategory: 'Dresses',
-    price: 1890,
-    comparePrice: 2250,
-    discount: 16,
-    stockQuantity: 18,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1496747611176-843222e1e57c?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Flowing silky evening maxi dress for special occasions.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'women-floral-3',
-    name: 'Floral Summer Dress',
-    category: 'Women',
-    subcategory: 'Dresses',
-    price: 1650,
-    comparePrice: 2200,
-    discount: 25,
-    stockQuantity: 24,
-    rating: 4.6,
-    images: ['https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Lightweight breathable cotton floral printed daytime dress.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'women-pinkbag-4',
-    name: 'Chic Pink Handbag',
-    category: 'Women',
-    subcategory: 'Bags',
-    price: 1280,
-    comparePrice: 1600,
-    discount: 20,
-    stockQuantity: 16,
-    rating: 4.9,
-    images: ['https://images.unsplash.com/photo-1566150905458-1bf1fc113f0d?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Chic structured pastel pink crossbody leather handbag.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'women-heels-5',
-    name: 'Velvet Stiletto Heels',
-    category: 'Women',
-    subcategory: 'Shoes',
-    price: 2100,
-    comparePrice: 2600,
-    discount: 19,
-    stockQuantity: 15,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1543163521-1bf539c55dd2?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Classic pointed-toe stiletto heels crafted with premium velvet.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'women-scarf-6',
-    name: 'Silk Patterned Scarf',
-    category: 'Women',
-    subcategory: 'Accessories',
-    price: 650,
-    comparePrice: 850,
-    discount: 23,
-    stockQuantity: 30,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1601924994987-69e26d50dc26?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Pure Mulberry silk floral patterned lightweight neck scarf.',
-    createdAt: new Date(),
-    status: 'published'
-  }
-];
-
-const KIDS_SHOWCASE: Product[] = [
-  {
-    id: 'kids-shirt-1',
-    name: 'Boys Casual Shirt',
-    category: 'Kids',
-    subcategory: 'Boys',
-    price: 890,
-    comparePrice: 1120,
-    discount: 20,
-    stockQuantity: 30,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1503945438517-f65904a52ce6?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Soft 100% cotton casual button-up shirt for boys.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'kids-dress-2',
-    name: 'Girls Party Dress',
-    category: 'Kids',
-    subcategory: 'Girls',
-    price: 1250,
-    comparePrice: 1470,
-    discount: 15,
-    stockQuantity: 25,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1621452773781-0f992fd1f5cb?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Sparkling tulle party frock with soft satin waistband.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'kids-sneakers-3',
-    name: 'Kids Sneakers',
-    category: 'Kids',
-    subcategory: 'Footwear',
-    price: 990,
-    comparePrice: 1200,
-    discount: 18,
-    stockQuantity: 35,
-    rating: 4.6,
-    images: ['https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Lightweight cushioned athletic sneakers with easy velcro strap.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'kids-backpack-4',
-    name: 'Kids Backpack',
-    category: 'Kids',
-    subcategory: 'Accessories',
-    price: 890,
-    comparePrice: 990,
-    discount: 10,
-    stockQuantity: 28,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Playful waterproof backpack with cushioned straps.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'kids-hoodie-5',
-    name: 'Cozy Fleece Hoodie',
-    category: 'Kids',
-    subcategory: 'Clothing',
-    price: 1050,
-    comparePrice: 1350,
-    discount: 22,
-    stockQuantity: 20,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Super-soft combed cotton fleece hoodie for everyday warmth.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'kids-sandals-6',
-    name: 'Summer Strap Sandals',
-    category: 'Kids',
-    subcategory: 'Footwear',
-    price: 750,
-    comparePrice: 950,
-    discount: 21,
-    stockQuantity: 24,
-    rating: 4.6,
-    images: ['https://images.unsplash.com/photo-1560769629-975ec94e6a86?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Flexible non-slip rubber sole summer sandals.',
-    createdAt: new Date(),
-    status: 'published'
-  }
-];
-
-const ACCESSORIES_SHOWCASE: Product[] = [
-  {
-    id: 'acc-bag-1',
-    name: 'Premium Handbag',
-    category: 'Accessories',
-    subcategory: 'Bags',
-    price: 1890,
-    comparePrice: 2390,
-    discount: 21,
-    stockQuantity: 25,
-    rating: 4.9,
-    images: ['https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Handcrafted luxury leather handbag with polished brass accents.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'acc-watch-2',
-    name: 'Classic Watch',
-    category: 'Accessories',
-    subcategory: 'Watches',
-    price: 3650,
-    comparePrice: 4450,
-    discount: 18,
-    stockQuantity: 20,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1524805444758-089113d48a6d?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Rose-gold trimmed quartz timepiece with dark brown leather strap.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'acc-sunglasses-3',
-    name: 'Sunglasses',
-    category: 'Accessories',
-    subcategory: 'Sunglasses',
-    price: 890,
-    comparePrice: 1190,
-    discount: 25,
-    stockQuantity: 40,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1511499767150-a48a237f0083?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Polarized UV400 classic aviator sunglasses.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'acc-belt-4',
-    name: 'Leather Belt',
-    category: 'Accessories',
-    subcategory: 'Belts',
-    price: 650,
-    comparePrice: 850,
-    discount: 21,
-    stockQuantity: 30,
-    rating: 4.6,
-    images: ['https://images.unsplash.com/photo-1624222247344-550fb60583dc?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Genuine full-grain cowhide leather belt with antique buckle.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'acc-wallet-5',
-    name: 'Bifold Leather Wallet',
-    category: 'Accessories',
-    subcategory: 'Wallets',
-    price: 790,
-    comparePrice: 990,
-    discount: 20,
-    stockQuantity: 35,
-    rating: 4.8,
-    images: ['https://images.unsplash.com/photo-1627123424574-724758594e93?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: 'Slim RFID blocking genuine leather bifold wallet.',
-    createdAt: new Date(),
-    status: 'published'
-  },
-  {
-    id: 'acc-cap-6',
-    name: 'Embroidered Baseball Cap',
-    category: 'Accessories',
-    subcategory: 'Hats',
-    price: 490,
-    comparePrice: 650,
-    discount: 25,
-    stockQuantity: 40,
-    rating: 4.7,
-    images: ['https://images.unsplash.com/photo-1588850561407-ed78c282e89b?q=80&w=400&q=60&auto=format&fit=crop'],
-    description: '100% cotton adjustable curved brim dad cap with custom embroidery.',
-    createdAt: new Date(),
-    status: 'published'
-  }
-];
+// Zero dummy showcases: Only real user-uploaded products are displayed
+const MEN_SHOWCASE: Product[] = [];
+const WOMEN_SHOWCASE: Product[] = [];
+const KIDS_SHOWCASE: Product[] = [];
+const ACCESSORIES_SHOWCASE: Product[] = [];
 
 interface ProductSectionSliderProps {
   title: string;
@@ -472,6 +105,11 @@ const ProductSectionSlider = React.memo(function ProductSectionSlider({ title, l
       });
     }
   }, [totalDots]);
+
+  // If loading has finished and no real products exist for this section, do not render empty section
+  if (!loading && displayProducts.length === 0) {
+    return null;
+  }
 
   return (
     <section className="space-y-1.5 sm:space-y-2.5">
@@ -585,19 +223,43 @@ export default function Home() {
     return DEFAULT_HERO_SLIDES;
   });
 
-  const { categories: storeCategories } = useCategoryStore();
+  const { categories: storeCategories, setCategoriesFromHomepage } = useCategoryStore();
   const { language } = useLanguageStore();
   const { products: allProducts, loading } = usePublishedProducts();
 
   // Fetch Homepage Customization Settings from Firestore & Cache in localStorage
   useEffect(() => {
     let isMounted = true;
+
+    // Zero-quota server fallback check (runs immediately and works even if Firestore quota exceeded)
+    fetch('/api/site-settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted || !data?.success) return;
+        if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
+          setCategoriesFromHomepage(data.categories);
+        }
+        if (data.banners && Array.isArray(data.banners) && data.banners.length > 0) {
+          setHeroSlides(data.banners);
+          try {
+            localStorage.setItem('rare_dreams_hero_slides', JSON.stringify(data.banners));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+
     const fetchHomepageSettings = async () => {
       try {
         const docRef = doc(db, 'settings', 'homepage');
         const docSnap = await getDoc(docRef);
         if (isMounted && docSnap.exists()) {
           const data = docSnap.data();
+
+          // Synchronize Categories from Homepage Settings if present
+          if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
+            setCategoriesFromHomepage(data.categories);
+          }
+
           if (data.banners && Array.isArray(data.banners) && data.banners.length > 0) {
             const legacyUrl1 = 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=2071&auto=format&fit=crop';
             const legacyUrl2 = 'https://images.unsplash.com/photo-1445205170230-053b83016050?q=80&w=2071&auto=format&fit=crop';
@@ -639,7 +301,7 @@ export default function Home() {
     };
     fetchHomepageSettings();
     return () => { isMounted = false; };
-  }, []);
+  }, [setCategoriesFromHomepage]);
 
   // Auto-slide timer for Hero Slider
   useEffect(() => {
@@ -650,25 +312,21 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [heroSlides.length]);
 
-  // Filter products by category or fall back to showcase items
+  // Filter products by category (strictly authentic uploaded products)
   const menProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'men'));
-    return matched.length > 0 ? matched : MEN_SHOWCASE;
+    return allProducts.filter(p => matchesCategoryGroup(p.category, 'men'));
   }, [allProducts]);
 
   const womenProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'women'));
-    return matched.length > 0 ? matched : WOMEN_SHOWCASE;
+    return allProducts.filter(p => matchesCategoryGroup(p.category, 'women'));
   }, [allProducts]);
 
   const kidsProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'kids'));
-    return matched.length > 0 ? matched : KIDS_SHOWCASE;
+    return allProducts.filter(p => matchesCategoryGroup(p.category, 'kids'));
   }, [allProducts]);
 
   const footwearProducts = React.useMemo(() => {
-    const matched = allProducts.filter(p => matchesCategoryGroup(p.category, 'footwear'));
-    return matched.length > 0 ? matched : ACCESSORIES_SHOWCASE;
+    return allProducts.filter(p => matchesCategoryGroup(p.category, 'footwear'));
   }, [allProducts]);
 
   // 4 Main Categories (Men, Women, Kids, Footwear)
@@ -676,6 +334,15 @@ export default function Home() {
     if (storeCategories && storeCategories.length > 0) {
       return storeCategories.slice(0, 4);
     }
+    try {
+      const cached = localStorage.getItem('rare_dreams_categories');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.slice(0, 4);
+        }
+      }
+    } catch {}
     return [
       { id: '1', title: 'Men', link: '/category/Men', image: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=400&q=60&auto=format&fit=crop' },
       { id: '2', title: 'Women', link: '/category/Women', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&q=60&auto=format&fit=crop' },
@@ -791,12 +458,22 @@ export default function Home() {
                 to={cat.link || `/category/${cat.title}`}
                 className="group flex flex-col items-center w-full text-center"
               >
-                <div className="w-full aspect-square rounded-2xl bg-gradient-to-b from-[#F5F5F8] via-[#ECECEF] to-[#E5E5EA] border border-white/80 p-2 sm:p-3 flex items-center justify-center overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.03),inset_0_1px_1.5px_rgba(255,255,255,0.95)] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] group-hover:scale-103 transition-all duration-300">
-                  <img
-                    src={cat.image}
-                    alt={cat.title}
-                    className="w-full h-full object-cover object-top rounded-xl mix-blend-multiply group-hover:scale-110 transition-transform duration-500"
-                  />
+                <div className="w-full aspect-square rounded-2xl bg-[#F5F5F8] border border-neutral-200/80 p-1.5 sm:p-2.5 flex items-center justify-center overflow-hidden shadow-2xs group-hover:shadow-md group-hover:scale-103 transition-all duration-300">
+                  {cat.image ? (
+                    <img
+                      src={cat.image}
+                      alt={cat.title}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=400&auto=format&fit=crop';
+                      }}
+                      className="w-full h-full object-cover object-top rounded-xl group-hover:scale-108 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="w-full h-full rounded-xl bg-neutral-200/70 flex items-center justify-center text-xs font-bold text-neutral-500">
+                      {cat.title}
+                    </div>
+                  )}
                 </div>
                 <span className="text-[11px] sm:text-xs font-semibold text-neutral-800 mt-1.5 group-hover:text-black truncate w-full">
                   {cat.title}
@@ -807,45 +484,55 @@ export default function Home() {
         </section>
 
         {/* 3. PRODUCT SHOWCASE SECTIONS (2-Card Responsive Grid Slider) */}
-        {/* Trending Now Slider */}
-        <ProductSectionSlider
-          title="Trending Now"
-          link="/shop"
-          products={allProducts.length > 0 ? allProducts.slice(0, 8) : womenProducts}
-          loading={loading}
-        />
+        {/* Trending Now Slider (Strictly authentic uploaded products) */}
+        {(loading || allProducts.length > 0) && (
+          <ProductSectionSlider
+            title="Trending Now"
+            link="/shop"
+            products={allProducts.slice(0, 8)}
+            loading={loading}
+          />
+        )}
 
         {/* Men's Collection Slider */}
-        <ProductSectionSlider
-          title="Men's Collection"
-          link="/category/Men"
-          products={menProducts}
-          loading={loading}
-        />
+        {(loading || menProducts.length > 0) && (
+          <ProductSectionSlider
+            title="Men's Collection"
+            link="/category/Men"
+            products={menProducts}
+            loading={loading}
+          />
+        )}
 
         {/* Women's Collection Slider */}
-        <ProductSectionSlider
-          title="Women's Collection"
-          link="/category/Women"
-          products={womenProducts}
-          loading={loading}
-        />
+        {(loading || womenProducts.length > 0) && (
+          <ProductSectionSlider
+            title="Women's Collection"
+            link="/category/Women"
+            products={womenProducts}
+            loading={loading}
+          />
+        )}
 
         {/* Kids Collection Slider */}
-        <ProductSectionSlider
-          title="Kids Collection"
-          link="/category/Kids"
-          products={kidsProducts}
-          loading={loading}
-        />
+        {(loading || kidsProducts.length > 0) && (
+          <ProductSectionSlider
+            title="Kids Collection"
+            link="/category/Kids"
+            products={kidsProducts}
+            loading={loading}
+          />
+        )}
 
         {/* Footwear Slider */}
-        <ProductSectionSlider
-          title="Footwear"
-          link="/category/Footwear"
-          products={footwearProducts}
-          loading={loading}
-        />
+        {(loading || footwearProducts.length > 0) && (
+          <ProductSectionSlider
+            title="Footwear"
+            link="/category/Footwear"
+            products={footwearProducts}
+            loading={loading}
+          />
+        )}
 
       </main>
     </div>

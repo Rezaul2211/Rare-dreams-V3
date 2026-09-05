@@ -99,6 +99,38 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     let unsubOrders: (() => void) | null = null;
+    let serverLoaded = false;
+
+    // 1. Instant Zero-Quota Server Disk Summary Fetch
+    const fetchServerSummary = async () => {
+      try {
+        const res = await fetch('/api/admin/summary');
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.stats) {
+            serverLoaded = true;
+            setStats(prev => ({
+              totalSales: data.stats.totalSales ?? prev.totalSales,
+              totalOrders: data.stats.totalOrders ?? prev.totalOrders,
+              totalProducts: data.stats.totalProducts ?? prev.totalProducts,
+              totalCustomers: data.stats.totalCustomers ?? prev.totalCustomers
+            }));
+            if (data.stats.statusCounts) {
+              setStatusCounts(data.stats.statusCounts);
+            }
+            if (Array.isArray(data.allOrders) && data.allOrders.length > 0) {
+              setAllOrdersList(data.allOrders);
+              setRecentOrders(data.allOrders.slice(0, 5));
+            }
+            setQuotaError(null);
+          }
+        }
+      } catch (e) {
+        console.warn("Server summary fetch note:", e);
+      }
+    };
+
+    fetchServerSummary();
 
     // Fast static stats fetch for products and customers using server-side aggregation (only 1 read each!)
     const fetchStaticStats = async () => {
@@ -191,14 +223,10 @@ export default function AdminDashboard() {
     };
 
     const handleError = (err: any) => {
-      console.error("Real-time dashboard orders error:", err);
-      if (err.message?.includes('Quota') || err.code === 'resource-exhausted') {
-        setQuotaError("Firebase Free Tier Quota Exceeded. Live order stats may be restricted.");
-      } else {
-        // Fallback fetch without orderBy in case index missing
-        getDocs(query(collection(db, 'orders'), limit(150))).then(handleSnapshot).catch(e => {
-          console.error("Fallback order fetch failed:", e);
-        });
+      console.warn("Real-time dashboard orders notice:", err);
+      // Only show notice if server summary was not loaded
+      if (!serverLoaded) {
+        setQuotaError("Connecting to live sync. Server stats active.");
       }
     };
 

@@ -14,6 +14,43 @@ export const Logo: React.FC<LogoProps> = ({
   className = '',
 }) => {
   const { config } = useStoreConfigStore();
+  const [imgError, setImgError] = React.useState(false);
+
+  // Synchronous immediate logo retrieval to prevent any 0-100ms flash
+  const effectiveLogoUrl = React.useMemo(() => {
+    // 1. Primary config logoUrl
+    if (config.logoUrl && config.logoUrl.trim().length > 0) return config.logoUrl.trim();
+
+    // 2. Dedicated custom logo cache
+    try {
+      const cached = localStorage.getItem('rare_dreams_custom_logo');
+      if (cached && cached.trim().length > 0) return cached.trim();
+    } catch {}
+
+    // 3. Stored JSON config cache
+    try {
+      const stored = localStorage.getItem('rare_dreams_cached_store_config');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.logoUrl && typeof parsed.logoUrl === 'string' && parsed.logoUrl.trim().length > 0) {
+          return parsed.logoUrl.trim();
+        }
+      }
+    } catch {}
+
+    // 4. Session storage fallback
+    try {
+      const sessionLogo = sessionStorage.getItem('rare_dreams_custom_logo');
+      if (sessionLogo && sessionLogo.trim().length > 0) return sessionLogo.trim();
+    } catch {}
+
+    return '';
+  }, [config.logoUrl]);
+
+  // Reset imgError whenever effectiveLogoUrl changes
+  React.useEffect(() => {
+    setImgError(false);
+  }, [effectiveLogoUrl]);
 
   const heightClasses = {
     sm: 'h-8 sm:h-9 max-w-[140px]',
@@ -22,14 +59,15 @@ export const Logo: React.FC<LogoProps> = ({
     xl: 'h-16 sm:h-20 max-w-[280px] sm:max-w-[340px]',
   }[size];
 
-  // If the user has uploaded a custom logo via Admin Settings
-  if (config.logoUrl && config.logoUrl.trim().length > 0) {
+  // If the user has uploaded or selected a custom logo and it hasn't errored
+  if (effectiveLogoUrl && !imgError) {
     return (
       <div className={`inline-flex items-center justify-center select-none bg-transparent ${className}`}>
         <img
-          src={config.logoUrl}
+          src={effectiveLogoUrl}
           alt="Rare Dreams"
           referrerPolicy="no-referrer"
+          onError={() => setImgError(true)}
           className={`${heightClasses} w-auto object-contain transition-transform duration-200 hover:scale-[1.02]`}
         />
       </div>

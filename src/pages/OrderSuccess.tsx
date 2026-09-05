@@ -57,6 +57,19 @@ export default function OrderSuccess() {
     const fetchOrder = async () => {
       if (!id) return;
       try {
+        // First try Zero-Quota Server API
+        try {
+          const srvRes = await fetch(`/api/orders/${id}`);
+          if (srvRes.ok) {
+            const srvData = await srvRes.json();
+            if (srvData?.order) {
+              setOrder(srvData.order);
+              return;
+            }
+          }
+        } catch (e) {}
+
+        // Fallback to Firestore
         const orderRef = doc(db, 'orders', id);
         const orderSnap = await getDoc(orderRef);
         if (orderSnap.exists()) {
