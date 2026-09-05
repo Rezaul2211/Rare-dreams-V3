@@ -896,10 +896,11 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               <button
                 type="button"
                 onClick={handleBuyNow}
-                className="h-11 rounded-xl bg-gradient-to-r from-[#FF0844] to-[#FF6A00] hover:brightness-105 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer whitespace-nowrap px-3"
+                className="relative overflow-hidden h-11 rounded-xl bg-gradient-to-r from-[#FF0844] via-[#FF3B30] to-[#FF6A00] hover:brightness-105 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 animate-[buy-now-glow_1.8s_infinite_ease-in-out] transition-all cursor-pointer whitespace-nowrap px-3"
               >
-                <Flame size={16} className="text-yellow-300 fill-yellow-400 shrink-0" />
-                <span className="truncate font-black tracking-wide">এখনই কিনুন</span>
+                <span className="absolute inset-0 -translate-x-full animate-[shimmer-sweep_2.2s_infinite_ease-in-out] bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
+                <Flame size={16} className="text-yellow-300 fill-yellow-400 shrink-0 animate-bounce" />
+                <span className="truncate font-black tracking-wide relative z-10">এখনই কিনুন</span>
               </button>
             </div>
           </div>
@@ -1185,10 +1186,11 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             <button
               type="button"
               onClick={handleBuyNow}
-              className="flex-1 h-11 rounded-xl bg-gradient-to-r from-[#FF0844] to-[#FF6A00] hover:brightness-105 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer whitespace-nowrap px-2"
+              className="relative overflow-hidden flex-1 h-11 rounded-xl bg-gradient-to-r from-[#FF0844] via-[#FF3B30] to-[#FF6A00] hover:brightness-105 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 animate-[buy-now-glow_1.8s_infinite_ease-in-out] transition-all cursor-pointer whitespace-nowrap px-2"
             >
-              <Flame size={16} className="text-yellow-300 fill-yellow-400 shrink-0" />
-              <span className="truncate">এখনই কিনুন</span>
+              <span className="absolute inset-0 -translate-x-full animate-[shimmer-sweep_2.2s_infinite_ease-in-out] bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
+              <Flame size={16} className="text-yellow-300 fill-yellow-400 shrink-0 animate-bounce" />
+              <span className="truncate font-black tracking-wide relative z-10">এখনই কিনুন</span>
             </button>
 
           </div>
