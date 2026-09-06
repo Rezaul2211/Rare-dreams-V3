@@ -36,7 +36,7 @@ import { ProductReviews } from '../components/ProductReviews';
 import SEO from '../components/SEO';
 import { calculateDiscount, formatPrice, parseVideoEmbedUrl } from '../utils/productUtils';
 import { getColorSwatch } from '../utils/colorUtils';
-import { usePublishedProducts, getCachedProductById } from '../hooks/usePublishedProducts';
+import { usePublishedProducts, getCachedProductById, fetchSingleProduct } from '../hooks/usePublishedProducts';
 import { safeRandomUUID } from '../lib/uuid';
 
 export default function ProductDetail() {
@@ -97,35 +97,66 @@ export default function ProductDetail() {
     const fetchProduct = async () => {
       if (!id) return;
       
-      // If we don't have product cached, show skeleton
+      // 1. If we have product cached in memory/localStorage, show immediately
       const cached = getCachedProductById(id);
-      if (cached) {
+      if (cached && isMounted) {
         setProduct(cached);
         setLoading(false);
       } else {
         setLoading(true);
       }
 
+      // 2. Fetch from ultra-fast server single product API
+      try {
+        const srvProd = await fetchSingleProduct(id);
+        if (srvProd && isMounted) {
+          setProduct(srvProd);
+          setLoading(false);
+
+          if (srvProd.rating !== undefined || srvProd.reviewsCount !== undefined) {
+            setReviewSummary({
+              avgRating: srvProd.rating || 0,
+              totalCount: srvProd.reviewsCount || 0
+            });
+          }
+
+          const availSizes = (srvProd.sizeOptions && srvProd.sizeOptions.length > 0) 
+            ? srvProd.sizeOptions 
+            : ((srvProd as any).sizes && Array.isArray((srvProd as any).sizes) && (srvProd as any).sizes.length > 0 ? (srvProd as any).sizes : []);
+          if (availSizes.length > 0) {
+            setSelectedSize(prev => prev || availSizes[0]);
+          }
+
+          const availColors = (srvProd.colorOptions && srvProd.colorOptions.length > 0) 
+            ? srvProd.colorOptions 
+            : ((srvProd as any).colors && Array.isArray((srvProd as any).colors) && (srvProd as any).colors.length > 0 ? (srvProd as any).colors : []);
+          if (availColors.length > 0) {
+            setSelectedColor(prev => prev || availColors[0]);
+          }
+
+          trackViewContent({
+            content_name: srvProd.name,
+            content_category: srvProd.category,
+            content_ids: [srvProd.id],
+            value: srvProd.price,
+          });
+        }
+      } catch (srvErr) {
+        console.warn("[RareDreams ProductDetail] Server fetch notice:", srvErr);
+      }
+
+      // 3. Firestore fallback / sync
       try {
         const docRef = doc(db, 'products', id);
-        
-        // Fetch with a 6-second timeout race
-        const getDocPromise = getDoc(docRef);
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Product fetch timeout')), 6000);
-        });
-
-        const docSnap: any = await Promise.race([getDocPromise, timeoutPromise]);
+        const docSnap = await getDoc(docRef);
         
         if (!isMounted) return;
 
         if (docSnap && docSnap.exists()) {
           const data = { id: docSnap.id, ...docSnap.data() } as Product;
           setProduct(data);
-          setSelectedImageIndex(0);
-          setQuantity(1);
+          setLoading(false);
 
-          // Authentic rating from DB if already persisted
           if (data.rating !== undefined || data.reviewsCount !== undefined) {
             setReviewSummary({
               avgRating: data.rating || 0,
@@ -137,29 +168,18 @@ export default function ProductDetail() {
             ? data.sizeOptions 
             : ((data as any).sizes && Array.isArray((data as any).sizes) && (data as any).sizes.length > 0 ? (data as any).sizes : []);
           if (availSizes.length > 0) {
-            setSelectedSize(availSizes[0]);
-          } else {
-            setSelectedSize('');
+            setSelectedSize(prev => prev || availSizes[0]);
           }
 
           const availColors = (data.colorOptions && data.colorOptions.length > 0) 
             ? data.colorOptions 
             : ((data as any).colors && Array.isArray((data as any).colors) && (data as any).colors.length > 0 ? (data as any).colors : []);
           if (availColors.length > 0) {
-            setSelectedColor(availColors[0]);
-          } else {
-            setSelectedColor('');
+            setSelectedColor(prev => prev || availColors[0]);
           }
-
-          trackViewContent({
-            content_name: data.name,
-            content_category: data.category,
-            content_ids: [data.id],
-            value: data.price,
-          });
         }
       } catch (error) {
-        console.warn("[RareDreams ProductDetail] Error/Timeout fetching product:", error);
+        console.warn("[RareDreams ProductDetail] Firestore fetch note:", error);
       } finally {
         if (isMounted) {
           setLoading(false);

@@ -5,7 +5,7 @@ import { StoreConfig } from '../types';
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from '../lib/safeStorage';
 
 export const DEFAULT_STORE_CONFIG: StoreConfig = {
-  logoUrl: '',
+  logoUrl: '/brand_logos/rare_dreams_horizontal_transparent.png',
   facebookUrl: 'https://facebook.com/raredreamsbd',
   instagramUrl: 'https://instagram.com/raredreamsbd',
   whatsappNumber: '+8801712345678',

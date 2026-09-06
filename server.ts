@@ -2317,6 +2317,69 @@ app.post("/api/orders/:id/status", (req, res) => {
   res.status(404).json({ success: false, message: "Order not found" });
 });
 
+// Helper to save base64 product images to static files on disk
+function sanitizeProductDiskImages(product: any): any {
+  if (!product || typeof product !== 'object') return product;
+  const uploadDir = path.join(process.cwd(), 'public/uploads/products');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const prodId = product.id || 'prod_' + Date.now();
+  const newImages: string[] = [];
+  const rawList = Array.isArray(product.images) && product.images.length > 0 
+    ? product.images 
+    : (product.image ? [product.image] : []);
+
+  rawList.forEach((imgStr: any, i: number) => {
+    if (typeof imgStr === 'string' && imgStr.startsWith('data:image/')) {
+      const match = imgStr.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (match) {
+        let ext = match[1].toLowerCase();
+        if (ext === 'jpeg') ext = 'jpg';
+        const filename = `${prodId}_${i}.${ext}`;
+        const filePath = path.join(uploadDir, filename);
+        fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
+        newImages.push(`/uploads/products/${filename}`);
+      } else {
+        newImages.push(imgStr);
+      }
+    } else if (imgStr && typeof imgStr === 'string') {
+      newImages.push(imgStr);
+    }
+  });
+
+  if (product.image && typeof product.image === 'string' && product.image.startsWith('data:image/')) {
+    product.image = newImages[0] || '';
+  } else if (newImages.length > 0 && !product.image) {
+    product.image = newImages[0];
+  }
+
+  if (newImages.length > 0) {
+    product.images = newImages;
+  }
+
+  // Also handle colorImageMap
+  if (product.colorImageMap && typeof product.colorImageMap === 'object') {
+    Object.keys(product.colorImageMap).forEach((colorKey, cIdx) => {
+      const cImg = product.colorImageMap[colorKey];
+      if (typeof cImg === 'string' && cImg.startsWith('data:image/')) {
+        const match = cImg.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (match) {
+          let ext = match[1].toLowerCase();
+          if (ext === 'jpeg') ext = 'jpg';
+          const filename = `${prodId}_color_${cIdx}.${ext}`;
+          const filePath = path.join(uploadDir, filename);
+          fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
+          product.colorImageMap[colorKey] = `/uploads/products/${filename}`;
+        }
+      }
+    });
+  }
+
+  return product;
+}
+
 // 5. Fetch Products (0-Quota, Fast local server disk)
 app.get("/api/products", (req, res) => {
   const products = readProducts();
@@ -2327,12 +2390,31 @@ app.get("/api/products", (req, res) => {
   });
 });
 
+// 5b. Fetch Single Product by ID (Ultra-fast direct product lookup)
+app.get("/api/products/:id", (req, res) => {
+  const products = readProducts();
+  const targetId = req.params.id;
+  const product = products.find((p: any) => p.id === targetId);
+  if (product) {
+    return res.json({
+      success: true,
+      product
+    });
+  }
+  res.status(404).json({
+    success: false,
+    message: "Product not found on server disk"
+  });
+});
+
 // 6. Save or Update Single Product
 app.post("/api/products/save", (req, res) => {
-  const product = req.body;
+  let product = req.body;
   if (!product || !product.id) {
     return res.status(400).json({ success: false, message: "Valid product data with id is required." });
   }
+
+  product = sanitizeProductDiskImages(product);
 
   const products = readProducts();
   const existingIndex = products.findIndex((p: any) => p.id === product.id);
@@ -2359,7 +2441,8 @@ app.post("/api/products/batch-sync", (req, res) => {
     existing.forEach((p: any) => map.set(p.id, p));
     products.forEach((p: any) => {
       if (p && p.id) {
-        map.set(p.id, { ...(map.get(p.id) || {}), ...p });
+        const sanitized = sanitizeProductDiskImages(p);
+        map.set(p.id, { ...(map.get(p.id) || {}), ...sanitized });
       }
     });
     const merged = Array.from(map.values());

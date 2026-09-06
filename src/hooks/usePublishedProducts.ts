@@ -77,7 +77,7 @@ function loadFromLocalStorage(): Product[] | null {
 function saveToLocalStorage(products: Product[]) {
   try {
     const realProducts = products.filter(isRealUploadedProduct);
-    const leanProducts = realProducts.slice(0, 50).map(p => {
+    const leanProducts = realProducts.slice(0, 100).map(p => {
       const sanitizedImages = (p.images || []).map(img => {
         if (typeof img === 'string' && img.startsWith('data:') && img.length > 50000) {
           return '';
@@ -88,8 +88,9 @@ function saveToLocalStorage(products: Product[]) {
       return {
         ...p,
         images: sanitizedImages.length > 0 ? sanitizedImages : (p.image ? [p.image] : []),
-        description: typeof p.description === 'string' && p.description.length > 500 
-          ? p.description.substring(0, 500) 
+        image: (typeof p.image === 'string' && p.image.startsWith('data:') && p.image.length > 50000) ? (sanitizedImages[0] || '') : (p.image || sanitizedImages[0] || ''),
+        description: typeof p.description === 'string' && p.description.length > 800 
+          ? p.description.substring(0, 800) 
           : p.description
       };
     });
@@ -102,6 +103,7 @@ function saveToLocalStorage(products: Product[]) {
 
 // Helper to get a single product from memory or local cache
 export function getCachedProductById(id: string): Product | null {
+  if (!id) return null;
   if (inMemoryProducts) {
     const found = inMemoryProducts.find(p => p.id === id);
     if (found && isRealUploadedProduct(found)) return found;
@@ -111,6 +113,60 @@ export function getCachedProductById(id: string): Product | null {
     const found = fromLocal.find(p => p.id === id);
     if (found && isRealUploadedProduct(found)) return found;
   }
+  return null;
+}
+
+// Dedicated single product fetcher (Memory -> LocalStorage -> /api/products/:id -> /api/products -> Firestore)
+export async function fetchSingleProduct(id: string): Promise<Product | null> {
+  if (!id) return null;
+
+  // 1. Memory / Local cache check (0ms instant)
+  const cached = getCachedProductById(id);
+  if (cached) return cached;
+
+  // 2. Direct Server Single Product API (/api/products/:id)
+  try {
+    const res = await fetch(`/api/products/${encodeURIComponent(id)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.success && data?.product && isRealUploadedProduct(data.product)) {
+        const prod: Product = {
+          ...data.product,
+          createdAt: data.product.createdAt ? new Date(data.product.createdAt) : new Date(),
+        };
+        // Update in-memory cache
+        if (inMemoryProducts) {
+          const idx = inMemoryProducts.findIndex(p => p.id === id);
+          if (idx !== -1) inMemoryProducts[idx] = prod;
+          else inMemoryProducts.unshift(prod);
+        } else {
+          inMemoryProducts = [prod];
+        }
+        return prod;
+      }
+    }
+  } catch (e) {
+    console.warn("[usePublishedProducts] Server single product check notice:", e);
+  }
+
+  // 3. Server All Products fallback (/api/products)
+  try {
+    const allRes = await fetch('/api/products');
+    if (allRes.ok) {
+      const allData = await allRes.json();
+      if (Array.isArray(allData?.products)) {
+        const match = allData.products.find((p: any) => p.id === id);
+        if (match && isRealUploadedProduct(match)) {
+          const prod: Product = {
+            ...match,
+            createdAt: match.createdAt ? new Date(match.createdAt) : new Date(),
+          };
+          return prod;
+        }
+      }
+    }
+  } catch (e) {}
+
   return null;
 }
 

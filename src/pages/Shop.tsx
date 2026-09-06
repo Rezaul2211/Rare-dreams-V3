@@ -218,11 +218,14 @@ export default function Shop() {
       if (collectionKey === 'all') {
         list = [...dbProducts];
       } else if (collectionKey === 'daily-drops') {
-        list = dbProducts.filter(p => p.daily_drop || p.isNew || p.subcategory === 'Streetwear' || matchesCategoryGroup(p.category, 'men') || matchesCategoryGroup(p.category, 'women'));
+        const filtered = dbProducts.filter(p => p.daily_drop || p.isNew || p.subcategory === 'Streetwear' || matchesCategoryGroup(p.category, 'men') || matchesCategoryGroup(p.category, 'women'));
+        list = filtered.length > 0 ? filtered : [...dbProducts];
       } else if (collectionKey === 'most-loved') {
-        list = dbProducts.filter(p => p.isMostLoved || (p.rating && p.rating >= 4.7) || (p.stockQuantity && p.stockQuantity > 20));
+        const filtered = dbProducts.filter(p => p.isMostLoved || (p.rating && p.rating >= 4.7) || (p.stockQuantity && p.stockQuantity > 20));
+        list = filtered.length > 0 ? filtered : [...dbProducts];
       } else if (collectionKey === 'best-sellers') {
-        list = dbProducts.filter(p => p.isBestSeller || calculateDiscount(p) > 0 || p.isFlashSale || p.mega_sale);
+        const filtered = dbProducts.filter(p => p.isBestSeller || calculateDiscount(p) > 0 || p.isFlashSale || p.mega_sale);
+        list = filtered.length > 0 ? filtered : [...dbProducts];
       } else {
         list = dbProducts.filter(p => matchesCategoryGroup(p.category, collectionKey as any));
       }
@@ -379,7 +382,7 @@ export default function Shop() {
   }, [allCategoryProducts, activeSubcat, selectedCategory, searchQuery, minPrice, maxPrice, selectedBrands, selectedSizes, minRating, onlyInStock, sortBy]);
 
   // Total items display count
-  const totalCount = Math.max(filteredProducts.length, currentMeta.defaultItemsCount);
+  const totalCount = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
 
   // Current page sliced products
