@@ -18,21 +18,23 @@ import {
   Star, 
   Truck, 
   ShieldCheck, 
-  Rotate3d, 
   X, 
   Ruler, 
   Clock,
   Check,
   MessageCircle,
   Share2,
-  Flame
+  Flame,
+  Play,
+  Video,
+  Image as ImageIcon
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx } from 'clsx';
 import { ProductDetailSkeleton } from '../components/ProductDetailSkeleton';
 import { ProductReviews } from '../components/ProductReviews';
 import SEO from '../components/SEO';
-import { calculateDiscount, formatPrice } from '../utils/productUtils';
+import { calculateDiscount, formatPrice, parseVideoEmbedUrl } from '../utils/productUtils';
 import { getColorSwatch } from '../utils/colorUtils';
 import { usePublishedProducts, getCachedProductById } from '../hooks/usePublishedProducts';
 import { safeRandomUUID } from '../lib/uuid';
@@ -56,6 +58,7 @@ export default function ProductDetail() {
   
   // Showcase state
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [isVideoActive, setIsVideoActive] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string>(() => {
     if (!initialCachedProduct) return '';
     const availSizes = (initialCachedProduct.sizeOptions && initialCachedProduct.sizeOptions.length > 0) 
@@ -71,10 +74,6 @@ export default function ProductDetail() {
     return availColors[0] || '';
   });
   const [quantity, setQuantity] = useState(1);
-  const [is360Mode, setIs360Mode] = useState(false);
-  const [rotationAngle, setRotationAngle] = useState(0);
-  const isDragging360 = useRef(false);
-  const startX360 = useRef(0);
 
   // Standard Size Guide Modal
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
@@ -175,24 +174,6 @@ export default function ProductDetail() {
     };
   }, [id]);
 
-  // 360 Rotation Mouse/Touch handlers
-  const handleTouchStart360 = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    isDragging360.current = true;
-    startX360.current = 'touches' in e ? e.touches[0].clientX : e.clientX;
-  }, []);
-
-  const handleTouchMove360 = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    if (!isDragging360.current) return;
-    const currentX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const delta = currentX - startX360.current;
-    startX360.current = currentX;
-    setRotationAngle((prev) => (prev + delta * 0.9) % 360);
-  }, []);
-
-  const handleTouchEnd360 = useCallback(() => {
-    isDragging360.current = false;
-  }, []);
-
   // Extract real uploaded images only (Combining main image, images array, and colorImageMap)
   const displayImages = useMemo(() => {
     const list: string[] = [];
@@ -219,6 +200,12 @@ export default function ProductDetail() {
 
     return list;
   }, [product]);
+
+  // Parse product video if available (YouTube / Vimeo / Direct video)
+  const parsedVideo = useMemo(() => {
+    if (!product?.videoUrl) return null;
+    return parseVideoEmbedUrl(product.videoUrl);
+  }, [product?.videoUrl]);
 
   // Keep selected image index safely within range
   useEffect(() => {
@@ -265,7 +252,7 @@ export default function ProductDetail() {
 
   const handleColorChange = useCallback((colorName: string, index: number) => {
     setSelectedColor(colorName);
-    setIs360Mode(false);
+    setIsVideoActive(false);
 
     // 1. Check if an explicit image URL is mapped for this color
     if (product?.colorImageMap && product.colorImageMap[colorName]) {
@@ -285,7 +272,7 @@ export default function ProductDetail() {
 
   const handleSelectImage = useCallback((idx: number) => {
     setSelectedImageIndex(idx);
-    setIs360Mode(false);
+    setIsVideoActive(false);
     const selectedImgUrl = displayImages[idx];
     if (!selectedImgUrl || !product) return;
 
@@ -318,18 +305,10 @@ export default function ProductDetail() {
 
   const galleryTouchStartX = useRef(0);
   const handleTouchStartGallery = (e: React.TouchEvent) => {
-    if (is360Mode) {
-      handleTouchStart360(e);
-      return;
-    }
     galleryTouchStartX.current = e.touches[0].clientX;
   };
 
   const handleTouchEndGallery = (e: React.TouchEvent) => {
-    if (is360Mode) {
-      handleTouchEnd360();
-      return;
-    }
     const touchEndX = e.changedTouches[0].clientX;
     const diff = galleryTouchStartX.current - touchEndX;
     if (diff > 45) {
@@ -540,12 +519,12 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
             </div>
           </div>
 
-          {/* Vertical Thumbnail Column (Left Side) - Multi-Image Album Gallery */}
-          {displayImages.length > 1 && (
+          {/* Vertical Thumbnail Column (Left Side) - Multi-Image Album Gallery & Video Tab (Hidden when video is playing) */}
+          {!isVideoActive && (displayImages.length > 1 || parsedVideo) && (
             <div 
               onTouchStart={(e) => e.stopPropagation()}
               onTouchMove={(e) => e.stopPropagation()}
-              className="absolute top-12 left-2.5 sm:left-3.5 z-30 flex flex-col gap-1.5 max-h-[230px] sm:max-h-[290px] overflow-y-auto no-scrollbar p-1 bg-white/80 backdrop-blur-md rounded-2xl border border-white/90 shadow-md"
+              className="absolute top-12 left-2.5 sm:left-3.5 z-30 flex flex-col gap-1.5 max-h-[230px] sm:max-h-[290px] overflow-y-auto no-scrollbar p-1 bg-white/85 backdrop-blur-md rounded-2xl border border-white/90 shadow-md"
             >
               {displayImages.map((img, idx) => (
                 <button
@@ -554,7 +533,7 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                   onClick={() => handleSelectImage(idx)}
                   className={clsx(
                     "w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden bg-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0 relative",
-                    selectedImageIndex === idx && !is360Mode
+                    selectedImageIndex === idx && !isVideoActive
                       ? "border-2 border-[#5B46E8] ring-2 ring-purple-300 scale-105 z-10"
                       : "border border-neutral-200/90 opacity-75 hover:opacity-100"
                   )}
@@ -567,26 +546,45 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
                     className="w-full h-full object-cover rounded-lg"
                     loading="lazy"
                   />
-                  {selectedImageIndex === idx && !is360Mode && (
+                  {selectedImageIndex === idx && !isVideoActive && (
                     <span className="absolute bottom-0.5 right-0.5 w-2 h-2 bg-[#5B46E8] rounded-full ring-1 ring-white" />
                   )}
                 </button>
               ))}
+
+              {/* Video Thumbnail Button if video is present */}
+              {parsedVideo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsVideoActive(true);
+                  }}
+                  className={clsx(
+                    "w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-2xs p-0.5 transition-all cursor-pointer shrink-0 relative flex flex-col items-center justify-center gap-0.5 group",
+                    isVideoActive
+                      ? "border-2 border-[#5B46E8] ring-2 ring-purple-300 scale-105 z-10"
+                      : "border border-red-200 opacity-90 hover:opacity-100"
+                  )}
+                  title="প্রোডাক্ট ভিডিও দেখুন"
+                >
+                  <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Play size={10} className="fill-white translate-x-0.5" />
+                  </div>
+                  <span className="text-[8.5px] font-black leading-tight tracking-tight uppercase">ভিডিও</span>
+                  {isVideoActive && (
+                    <span className="absolute bottom-0.5 right-0.5 w-2 h-2 bg-[#5B46E8] rounded-full ring-1 ring-white" />
+                  )}
+                </button>
+              )}
             </div>
           )}
 
           {/* 3D FLOATING PRODUCT PODIUM & STAGE */}
           <div 
             className="relative w-full h-[280px] sm:h-[350px] flex items-center justify-center px-4 touch-pan-y"
-            onTouchStart={is360Mode ? handleTouchStart360 : undefined}
-            onTouchMove={is360Mode ? handleTouchMove360 : undefined}
-            onTouchEnd={is360Mode ? handleTouchEnd360 : undefined}
-            onMouseDown={is360Mode ? handleTouchStart360 : undefined}
-            onMouseMove={is360Mode ? handleTouchMove360 : undefined}
-            onMouseUp={is360Mode ? handleTouchEnd360 : undefined}
           >
-            {/* Prev/Next Album Navigation Arrows */}
-            {displayImages.length > 1 && !is360Mode && (
+            {/* Prev/Next Album Navigation Arrows (when not playing video) */}
+            {displayImages.length > 1 && !isVideoActive && (
               <>
                 <button
                   type="button"
@@ -631,60 +629,67 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               </div>
             </div>
 
-            {/* Floating Product Image - Sized & Centered over Podium */}
-            <motion.div
-              animate={is360Mode ? {
-                rotateY: rotationAngle,
-              } : {
-                y: [0, -6, 0],
-              }}
-              transition={is360Mode ? { duration: 0 } : {
-                duration: 4.2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              className="relative z-10 w-[230px] sm:w-[290px] h-[230px] sm:h-[280px] flex items-center justify-center p-1"
-              style={{ perspective: 1000 }}
-            >
-              {activeImage ? (
-                <img
-                  src={activeImage}
-                  alt={product.name}
-                  referrerPolicy="no-referrer"
-                  className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_12px_22px_rgba(30,27,75,0.16)] rounded-xl select-none pointer-events-none"
-                  loading="eager"
-                />
-              ) : (
-                <div className="w-32 h-32 bg-purple-100 rounded-2xl flex items-center justify-center text-neutral-400 font-medium text-xs">
-                  কোন ছবি নেই
-                </div>
-              )}
-            </motion.div>
+            {/* Center Content: Video Embed Player OR Floating Product Image */}
+            {isVideoActive && parsedVideo ? (
+              <div className="relative z-20 w-full max-w-[340px] sm:max-w-[440px] aspect-video rounded-2xl overflow-hidden shadow-2xl bg-black border-2 border-white/90 ring-4 ring-[#5B46E8]/20">
+                {/* Clean Back-to-Photos Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsVideoActive(false)}
+                  className="absolute top-2 right-2 z-30 bg-black/75 hover:bg-black text-white text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-lg active:scale-95"
+                  title="ছবির গ্যালারিতে ফিরে যান"
+                >
+                  <ImageIcon size={12} className="text-purple-300" />
+                  <span>ছবি দেখুন</span>
+                  <X size={12} className="text-neutral-400" />
+                </button>
 
-            {/* 360 Interactive View Pill Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setIs360Mode(!is360Mode);
-                setRotationAngle(0);
-              }}
-              className={clsx(
-                "absolute bottom-2.5 right-3.5 z-20 rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-black shadow-md active:scale-95 transition-all cursor-pointer",
-                is360Mode
-                  ? "bg-[#5B46E8] text-white ring-2 ring-purple-300 shadow-purple-500/20"
-                  : "bg-white text-neutral-800 border border-neutral-200 hover:border-[#5B46E8]/40"
-              )}
-            >
-              <Rotate3d size={14} className={is360Mode ? "animate-spin text-white" : "text-[#5B46E8]"} />
-              <span>{is360Mode ? "3D চালু আছে" : "360° ভিউ"}</span>
-            </button>
-
-            {/* 360 Guide Overlay Tag */}
-            {is360Mode && (
-              <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-20 bg-black/90 text-white text-[10.5px] font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-pulse whitespace-nowrap">
-                <Rotate3d size={12} />
-                <span>ঘুরিয়ে দেখতে ডানে বা বামে টানুন</span>
+                {parsedVideo.type === 'youtube' || parsedVideo.type === 'vimeo' ? (
+                  <iframe
+                    src={parsedVideo.embedUrl}
+                    title={product?.name || "Product Video"}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    src={parsedVideo.embedUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-contain bg-black"
+                  >
+                    আপনার ব্রাউজারে ভিডিও প্লেব্যাক সাপোর্ট নেই।
+                  </video>
+                )}
               </div>
+            ) : (
+              <motion.div
+                animate={{
+                  y: [0, -6, 0],
+                }}
+                transition={{
+                  duration: 4.2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="relative z-10 w-[230px] sm:w-[290px] h-[230px] sm:h-[280px] flex items-center justify-center p-1"
+              >
+                {activeImage ? (
+                  <img
+                    src={activeImage}
+                    alt={product.name}
+                    referrerPolicy="no-referrer"
+                    className="max-w-full max-h-full object-contain filter contrast-[1.03] transition-all duration-300 drop-shadow-[0_12px_22px_rgba(30,27,75,0.16)] rounded-xl select-none pointer-events-none"
+                    loading="eager"
+                  />
+                ) : (
+                  <div className="w-32 h-32 bg-purple-100 rounded-2xl flex items-center justify-center text-neutral-400 font-medium text-xs">
+                    কোন ছবি নেই
+                  </div>
+                )}
+              </motion.div>
             )}
           </div>
         </div>
@@ -949,6 +954,53 @@ ${selectedColor ? `🎨 রং: ${selectedColor}\n` : ''}${selectedSize ? `📏 
               </div>
             </div>
           </div>
+
+          {/* ========================================================= */}
+          {/* PRODUCT VIDEO SHOWCASE (IF AVAILABLE)                     */}
+          {/* ========================================================= */}
+          {parsedVideo && (
+            <div className="bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900 rounded-2xl border border-neutral-800 p-4 sm:p-5 mt-3 text-white space-y-3 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-red-600/90 flex items-center justify-center">
+                    <Video size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white">
+                      প্রোডাক্ট ভিডিও
+                    </h3>
+                    <p className="text-[10px] text-neutral-400">
+                      পণ্যটির আসল লুক ও ব্যবহার দেখতে ভিডিওটি প্লে করুন
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                  {parsedVideo.type === 'youtube' ? 'YouTube' : parsedVideo.type === 'vimeo' ? 'Vimeo' : 'HD Video'}
+                </span>
+              </div>
+
+              <div className="w-full aspect-video rounded-xl overflow-hidden bg-black border border-neutral-700 shadow-md">
+                {parsedVideo.type === 'youtube' || parsedVideo.type === 'vimeo' ? (
+                  <iframe
+                    src={parsedVideo.embedUrl}
+                    title={product?.name || "Product Video Player"}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    src={parsedVideo.embedUrl}
+                    controls
+                    playsInline
+                    className="w-full h-full object-contain bg-black"
+                  >
+                    আপনার ব্রাউজারে ভিডিও প্লেব্যাক সাপোর্ট নেই।
+                  </video>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ========================================================= */}
           {/* PRODUCT DETAILS TABLE - RENDERED FROM REAL ADMIN SPECS    */}

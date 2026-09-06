@@ -27,6 +27,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { compressProductImage } from '../../lib/imageCompressor';
+import { parseVideoEmbedUrl, getYouTubeVideoId } from '../../utils/productUtils';
 
 // Strips undefined fields to prevent Firestore serialization errors
 function cleanFirestoreObject<T extends Record<string, any>>(obj: T): T {
@@ -1254,28 +1255,58 @@ export default function ProductForm() {
 
           {/* 5. PRODUCT VIDEO */}
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-neutral-200 shadow-xs space-y-3 w-full min-w-0">
-            <h2 className="text-base sm:text-lg font-bold flex items-center gap-2 text-neutral-900">
-              <Video size={20} className="text-red-500" />
-              <span>প্রোডাক্ট ভিডিও (ঐচ্ছিক)</span>
-            </h2>
-            <div className="grid grid-cols-1 gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base sm:text-lg font-bold flex items-center gap-2 text-neutral-900">
+                <Video size={20} className="text-red-500" />
+                <span>প্রোডাক্ট ভিডিও (YouTube / ভিডিও লিংক)</span>
+              </h2>
+              {formData.videoUrl && (
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, videoUrl: '' }))}
+                  className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <Trash2 size={13} />
+                  <span>ভিডিও সরান</span>
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-neutral-500">
+              YouTube ভিডিও লিংক (যেমন: ওয়াচ লিংক, Shorts, বা youtu.be) অথবা সরাসরি কোনো ভিডিও লিংক পেস্ট করুন। এটি প্রোডাক্ট পেজে কাস্টমারদের সরাসরি প্লে করে দেখানো হবে।
+            </p>
+
+            <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-neutral-600 mb-1">YouTube / Video URL:</label>
-                <input
-                  type="url"
-                  name="videoUrl"
-                  value={formData.videoUrl || ''}
-                  onChange={handleChange}
-                  placeholder="https://www.youtube.com/watch?v=... বা ভিডিও লিংক"
-                  className="w-full border border-neutral-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-black outline-none"
-                />
+                <label className="block text-xs font-bold text-neutral-700 mb-1.5">
+                  YouTube / Video URL:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    name="videoUrl"
+                    value={formData.videoUrl || ''}
+                    onChange={handleChange}
+                    placeholder="যেমন: https://www.youtube.com/watch?v=dQw4w9WgXcQ অথবা https://youtu.be/..."
+                    className="flex-1 border border-neutral-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm focus:ring-2 focus:ring-[#5B46E8] outline-none"
+                  />
+                  {formData.videoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, videoUrl: '' }))}
+                      className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 rounded-xl text-xs font-bold shrink-0 cursor-pointer"
+                    >
+                      মুছুন
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-neutral-400 uppercase">অথবা</span>
-                <label htmlFor="video-upload" className="cursor-pointer inline-flex items-center gap-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold px-3.5 py-2 rounded-xl border border-neutral-200 transition-colors">
-                  <Video size={14} />
-                  <span>ভিডিও ফাইল আপলোড (MP4)</span>
+              {/* Direct file upload option as secondary */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-neutral-500">
+                <span className="font-semibold">অথবা ফাইল থাকলে:</span>
+                <label htmlFor="video-upload" className="cursor-pointer inline-flex items-center gap-1.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 font-bold px-3 py-1.5 rounded-xl border border-neutral-200 transition-colors">
+                  <Video size={13} />
+                  <span>ভিডিও ফাইল নির্বাচন করুন (MP4)</span>
                   <input
                     type="file"
                     id="video-upload"
@@ -1284,16 +1315,50 @@ export default function ProductForm() {
                     className="hidden"
                   />
                 </label>
-                {formData.videoUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, videoUrl: '' }))}
-                    className="text-xs font-bold text-red-600 hover:underline cursor-pointer"
-                  >
-                    ভিডিও মুছুন
-                  </button>
-                )}
               </div>
+
+              {/* LIVE VIDEO PREVIEW IN ADMIN */}
+              {(() => {
+                if (!formData.videoUrl) return null;
+                const parsed = parseVideoEmbedUrl(formData.videoUrl);
+
+                return (
+                  <div className="mt-3 p-3 bg-neutral-50 border border-neutral-200 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-neutral-800 flex items-center gap-1.5">
+                        <CheckCircle2 size={14} className="text-emerald-600" />
+                        <span>ভিডিও প্রিভিউ (লাইভ):</span>
+                      </span>
+                      <span className="text-[11px] font-semibold text-neutral-500 uppercase px-2 py-0.5 bg-white rounded-md border border-neutral-200">
+                        {parsed.type === 'youtube' ? 'YouTube Video' : (parsed.type === 'vimeo' ? 'Vimeo' : 'Direct Video')}
+                      </span>
+                    </div>
+
+                    <div className="relative aspect-video w-full max-w-lg mx-auto rounded-xl overflow-hidden bg-black shadow-inner">
+                      {parsed.type === 'youtube' || parsed.type === 'vimeo' ? (
+                        <iframe
+                          src={parsed.embedUrl}
+                          title="Product Video Preview"
+                          className="w-full h-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      ) : parsed.type === 'direct' ? (
+                        <video
+                          src={parsed.embedUrl}
+                          controls
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-white text-xs p-4 text-center">
+                          <AlertCircle size={24} className="text-amber-400 mb-1" />
+                          <span>ইউআরএলটি ইউটিউব বা সমর্থিত ভিডিও ফরম্যাট হিসেবে শনাক্ত করা যায়নি। সঠিক লিংক দিন।</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

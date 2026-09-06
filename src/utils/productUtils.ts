@@ -62,3 +62,84 @@ export function matchesCategoryGroup(category: string | undefined | null, group:
       return true;
   }
 }
+
+/**
+ * Extracts YouTube Video ID from various link formats:
+ * - https://www.youtube.com/watch?v=VIDEO_ID
+ * - https://youtu.be/VIDEO_ID
+ * - https://www.youtube.com/shorts/VIDEO_ID
+ * - https://www.youtube.com/embed/VIDEO_ID
+ * - https://m.youtube.com/watch?v=VIDEO_ID
+ */
+export function getYouTubeVideoId(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+
+  // youtube.com/shorts/ID
+  const shortsMatch = trimmed.match(/(?:youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (shortsMatch && shortsMatch[1]) return shortsMatch[1];
+
+  // youtu.be/ID
+  const youtuBeMatch = trimmed.match(/(?:youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (youtuBeMatch && youtuBeMatch[1]) return youtuBeMatch[1];
+
+  // youtube.com/watch?v=ID or /embed/ID or /v/ID
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = trimmed.match(regExp);
+  if (match && match[2] && match[2].length === 11) {
+    return match[2];
+  }
+
+  return null;
+}
+
+/**
+ * Parses video URL to embeddable player or direct stream info.
+ */
+export function parseVideoEmbedUrl(url: string | null | undefined): {
+  type: 'youtube' | 'direct' | 'vimeo' | 'invalid';
+  embedUrl: string;
+  videoId?: string;
+  originalUrl: string;
+} {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return { type: 'invalid', embedUrl: '', originalUrl: '' };
+  }
+  const clean = url.trim();
+
+  const ytId = getYouTubeVideoId(clean);
+  if (ytId) {
+    return {
+      type: 'youtube',
+      embedUrl: `https://www.youtube-nocookie.com/embed/${ytId}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1`,
+      videoId: ytId,
+      originalUrl: clean
+    };
+  }
+
+  // Vimeo support
+  const vimeoMatch = clean.match(/(?:vimeo\.com\/)(\d+)/);
+  if (vimeoMatch && vimeoMatch[1]) {
+    return {
+      type: 'vimeo',
+      embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}`,
+      videoId: vimeoMatch[1],
+      originalUrl: clean
+    };
+  }
+
+  // Direct MP4 / WebM video link or data URL
+  if (clean.startsWith('data:video/') || clean.startsWith('blob:') || /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(clean)) {
+    return {
+      type: 'direct',
+      embedUrl: clean,
+      originalUrl: clean
+    };
+  }
+
+  return {
+    type: 'invalid',
+    embedUrl: clean,
+    originalUrl: clean
+  };
+}
